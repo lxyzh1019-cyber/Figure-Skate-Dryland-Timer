@@ -3,28 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Swimmer Hub V6</title>
+    <title>Swimmer Hub V7</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; text-align: center; background: #0f172a; color: #f1f5f9; padding: 15px; }
         .card { background: #1e293b; border-radius: 20px; padding: 25px; max-width: 550px; margin: 0 auto; border: 1px solid #334155; }
         .day-badge { background: #38bdf8; color: #0f172a; padding: 6px 18px; border-radius: 25px; font-weight: 800; }
-        .display { font-size: 7rem; font-weight: 900; margin: 5px 0; color: #38bdf8; }
-        .exercise-highlight { background: #334155; padding: 15px; border-radius: 12px; margin: 15px 0; border-left: 5px solid #fbbf24; min-height: 120px; }
+        .display { font-size: 7rem; font-weight: 900; margin: 5px 0; color: #38bdf8; line-height: 1; }
+        .exercise-highlight { background: #334155; padding: 15px; border-radius: 12px; margin: 15px 0; border-left: 5px solid #fbbf24; min-height: 130px; }
         .current-ex { font-size: 1.8rem; font-weight: bold; color: #fbbf24; display: block; }
         .cue { font-size: 1.1rem; color: #94a3b8; font-style: italic; margin-top: 8px; }
-        .btn-group { display: flex; gap: 10px; }
+        .btn-group { display: flex; gap: 10px; margin-top: 15px; }
         .start-btn { background: #22c55e; color: white; padding: 20px; flex: 2; border-radius: 12px; font-size: 1.5rem; font-weight: bold; border: none; cursor: pointer; }
         .pause-btn { background: #64748b; color: white; padding: 20px; flex: 1; border-radius: 12px; font-size: 1.2rem; font-weight: bold; border: none; cursor: pointer; }
-        #edit-panel { display: none; background: #0f172a; padding: 15px; border-radius: 10px; margin-top: 20px; text-align: left; }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <div id="rest-day-ui" style="display:none"><h1>☀️ Sunday Rest</h1><p>Recovery IS training.</p></div>
         <div id="workout-ui">
             <span class="day-badge" id="current-day-name">---</span>
-            <h2 id="workout-title">Loading Plan...</h2>
+            <h2 id="workout-title">Loading...</h2>
             <div class="display" id="timer-display">--</div>
             <div class="exercise-highlight">
                 <span class="current-ex" id="current-ex-name">Ready?</span>
@@ -35,12 +33,6 @@
                 <button class="pause-btn" id="pause-btn" onclick="togglePause()" style="display:none">PAUSE</button>
             </div>
         </div>
-        <button style="background:none; border:none; color:#475569; margin-top:20px; cursor:pointer;" onclick="toggleEdit()">⚙️ Edit Today</button>
-        <div id="edit-panel">
-            Work: <input type="number" id="e-work" style="width:40px">s 
-            Rest: <input type="number" id="e-rest" style="width:40px">s 
-            <button onclick="applyEdits()" style="background:#38bdf8; border:none; padding:5px; border-radius:4px;">Save</button>
-        </div>
     </div>
 
 <script>
@@ -48,37 +40,25 @@
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     let session = null, running = false, paused = false;
 
+    // DATA FROM PDF: Exercises, Coaching Cues, and Tempo Logic
     const trainingData = {
-        "Monday": { title: "Power Day A", work: 30, rest: 10, rounds: 4, ex: [
-            {n: "Box Jump", c: "Push off like the pool wall!"},
-            {n: "Squat Jump", c: "Land softly. Quiet feet!"},
-            {n: "Bosu Squat", c: "3s down, then up", tempo: {type: "cycle", up: 1, hold: 0, down: 3}},
-            {n: "Lateral Bound", c: "Hold landing for 2 seconds", tempo: {type: "cycle", up: 0, hold: 2, down: 1}}
+        "Monday": { title: "Power Day A", work: 30, rest: 10, roundRest: 35, rounds: 4, ex: [
+            {n: "Box Jump", c: "Push off like the pool wall! Max drive"},
+            {n: "Squat Jump", c: "Land softly. Quiet feet = absorption"},
+            {n: "Bosu Squat", c: "3s controlled descent. Knees out", t: {type: "cycle", up: 1, hold: 0, down: 3}},
+            {n: "Lateral Bound", c: "Stillness IS training. Hold landing", t: {type: "cycle", up: 0, hold: 2, down: 1}}
         ]},
-        "Tuesday": { title: "Core Day A", work: 30, rest: 15, rounds: 3, ex: [
-            {n: "Ball Prone Stroke Sim", c: "Shoulders DOWN. Feel the lats"},
+        "Tuesday": { title: "Core Day A", work: 30, rest: 15, roundRest: 45, rounds: 3, ex: [
+            {n: "Ball Prone Stroke Sim", c: "Shoulders DOWN. Lat works"},
             {n: "Dead Bug", c: "Lower back pressed to floor"},
-            {n: "Wide-Grip Pull-Up", c: "1s Up, 4s Down", tempo: {type: "cycle", up: 1, hold: 0, down: 4}},
+            {n: "Wide-Grip Pull-Up", c: "4s lowering phase. No swinging", t: {type: "cycle", up: 1, hold: 0, down: 4}},
             {n: "Band Single-Arm Pull", c: "Torso STILL. Resist rotation"}
         ]},
-        "Thursday": { title: "Core Recovery", work: 25, rest: 15, rounds: 3, ex: [
-            {n: "Dead Bug", c: "Focus on recovery"},
-            {n: "Hollow Body Hold", c: "Streamline position!", tempo: {type: "static", hold: 20, relax: 5}},
-            {n: "Superman Hold", c: "Lift together", tempo: {type: "static", hold: 5, relax: 5}},
-            {n: "Bird Dog", c: "Opposite arm and leg", tempo: {type: "static", hold: 5, relax: 2}}
-        ]},
-        "Friday": { title: "Combined Day", work: 30, rest: 12, rounds: 4, ex: [
-            {n: "Box Jump / Bound", c: "Max power!"},
-            {n: "Ball Stroke Sim", c: "Shoulders first"},
-            {n: "Wide Pull-Up", c: "4s lowering phase", tempo: {type: "cycle", up: 1, hold: 0, down: 4}},
-            {n: "Fast Step", c: "Arms drive rhythm"},
-            {n: "Straight-Arm Pulldown", c: "Feel back", tempo: {type: "cycle", up: 2, hold: 1, down: 2}}
-        ]},
-        "Saturday": { title: "Core C + Stretch", work: 25, rest: 15, rounds: 3, ex: [
-            {n: "Superman Hold", c: "5s hold, then relax", tempo: {type: "static", hold: 5, relax: 5}},
-            {n: "Streamline Wall Hold", c: "10s hold, then reset", tempo: {type: "static", hold: 10, relax: 5}},
-            {n: "Glute Bridge Slow", c: "2s up, 2s hold, 2s down", tempo: {type: "cycle", up: 2, hold: 2, down: 2}},
-            {n: "W-Raise", c: "Squeeze 2s, then down", tempo: {type: "cycle", up: 1, hold: 2, down: 1}}
+        "Saturday": { title: "Core C", work: 25, rest: 15, roundRest: 45, rounds: 3, ex: [
+            {n: "Superman Hold", c: "Squeeze glutes and upper back", t: {type: "static", hold: 5, relax: 5}},
+            {n: "Streamline Wall Hold", c: "Press back, arms, and head against wall", t: {type: "static", hold: 10, relax: 5}},
+            {n: "Glute Bridge Slow", c: "Hips fully extended. No arching", t: {type: "cycle", up: 2, hold: 2, down: 2}},
+            {n: "W-Raise", c: "Pull blades together and DOWN", t: {type: "cycle", up: 1, hold: 2, down: 1}}
         ]}
     };
 
@@ -86,21 +66,14 @@
         const d = new Date().getDay();
         const today = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][d];
         document.getElementById('current-day-name').innerText = today;
-        if(d === 0 || d === 3) { // Sunday/Wednesday Logic adjusted per doc [cite: 3, 6, 74]
-            if(d===0) document.getElementById('workout-ui').innerHTML = "<h1>☀️ Rest Day</h1>";
-            else session = trainingData["Monday"]; // Simple fallback for demo
-        } else {
-            session = trainingData[today];
-            document.getElementById('workout-title').innerText = session.title;
-            document.getElementById('e-work').value = session.work;
-            document.getElementById('e-rest').value = session.rest;
-        }
+        session = trainingData[today] || trainingData["Monday"]; // Default to Mon for demo
+        document.getElementById('workout-title').innerText = session.title;
     }
 
-    function speak(m) {
+    function speak(m, slow = false) {
         speech.cancel();
         const u = new SpeechSynthesisUtterance(m);
-        u.rate = 0.8; // 20% slower
+        u.rate = slow ? 0.5 : 0.8; // Use 0.5 for movement indicator to match speed
         speech.speak(u);
     }
 
@@ -117,24 +90,34 @@
         if(running) return; running = true;
         document.getElementById('main-btn').style.display = 'none';
         document.getElementById('pause-btn').style.display = 'block';
-        speak("Ready. I am strong. I am fast.");
-        await new Promise(r => setTimeout(r, 4000));
+        speak("I am strong. I am fast. Get ready.");
+        await wait(4000);
 
         for (let r = 1; r <= session.rounds; r++) {
             for (let i = 0; i < session.ex.length; i++) {
                 const ex = session.ex[i];
                 const next = session.ex[i+1] || (r < session.rounds ? session.ex[0] : null);
 
+                // WORK PHASE
                 updateUI(ex.n, ex.c, session.work);
                 speak("Go. " + ex.n);
                 await countdown(session.work, "work", ex);
 
+                // REST PHASE
                 updateUI("Rest", "Break and breathe", session.rest);
-                speak("Break and breathe.");
+                if (next) {
+                    speak("Break and breathe. Get ready for " + next.n + ". Watch out: " + next.c);
+                }
                 await countdown(session.rest, "rest", next);
             }
+            if (r < session.rounds) {
+                speak("Congratulations, round " + r + " complete. " + (session.rounds - r) + " rounds to go. Long rest.");
+                updateUI("Round Rest", "Great job!", session.roundRest);
+                await countdown(session.roundRest, "round-rest", session.ex[0]);
+            }
         }
-        speak("Training complete."); resetUI();
+        speak("Training complete. Recovery is training.");
+        resetUI();
     }
 
     function countdown(sec, mode, data) {
@@ -145,43 +128,37 @@
                 t--;
                 document.getElementById('timer-display').innerText = t;
 
-                if (mode === "rest" && t === (sec - 3) && data) {
-                    speak("Get ready for " + data.n);
+                // Rest logic: Call out next exercise 3s before start
+                if(mode === "rest" && t === 3 && data) { speak("Get ready."); }
+
+                // Movement Pace logic
+                if(mode === "work" && data.t && t > 3) {
+                    const elapsed = sec - t - 1;
+                    if (data.t.type === "static") {
+                        const cycle = data.t.hold + data.t.relax;
+                        const pos = elapsed % cycle;
+                        if (pos === 0) speak("Hold", true);
+                        if (pos === data.t.hold) speak("Relax", true);
+                    } else {
+                        const cycle = data.t.up + data.t.hold + data.t.down;
+                        const pos = elapsed % cycle;
+                        if (pos === 0) speak("Uuuuuuup", true);
+                        else if (pos === data.t.up) speak("Hooooold", true);
+                        else if (pos === (data.t.up + data.t.hold)) speak("Doooooown", true);
+                    }
                 }
 
-                if (mode === "work" && data.tempo && t > 3) {
-                    handleTempo(t, sec, data.tempo);
-                }
+                // Restore Beep Indicator for last 3 seconds
+                if(t <= 3 && t > 0) beep(t === 1 ? 880 : 440);
 
-                if (t <= 3 && t > 0) beep(t === 1 ? 880 : 440);
-                if (t <= 0) { clearInterval(timer); resolve(); }
+                if(t <= 0) { clearInterval(timer); resolve(); }
             }, 1000);
         });
     }
 
-    function handleTempo(t, total, tempo) {
-        const elapsed = total - t - 1;
-        if (tempo.type === "static") {
-            const cycle = tempo.hold + tempo.relax;
-            const pos = elapsed % cycle;
-            if (pos === 0) speak("Hold");
-            if (pos === tempo.hold) speak("Relax");
-        } else if (tempo.type === "cycle") {
-            const cycle = tempo.up + tempo.hold + tempo.down;
-            const pos = elapsed % cycle;
-            if (pos === 0 && tempo.up > 0) speak("Up");
-            else if (pos === tempo.up && tempo.hold > 0) speak("Hold");
-            else if (pos === (tempo.up + tempo.hold)) speak("Down");
-        }
-    }
-
-    function updateUI(n, c, t) {
-        document.getElementById('current-ex-name').innerText = n;
-        document.getElementById('coaching-cue').innerText = c;
-        document.getElementById('timer-display').innerText = t;
-    }
-
+    function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
     function togglePause() { paused = !paused; speak(paused ? "Paused" : "Resuming"); }
+    function updateUI(n, c, t) { document.getElementById('current-ex-name').innerText = n; document.getElementById('coaching-cue').innerText = c; document.getElementById('timer-display').innerText = t; }
     function resetUI() { running = false; document.getElementById('main-btn').style.display = 'block'; document.getElementById('pause-btn').style.display = 'none'; init(); }
     init();
 </script>
