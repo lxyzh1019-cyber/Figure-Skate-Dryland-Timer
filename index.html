@@ -980,6 +980,9 @@ const ENCOURAGEMENTS = [
   "That round looked solid.",
   "High quality effort right there."
 ];
+const PRONUNCIATION_MAP = {
+  "Pallof Press": "Pal-off Press"
+};
 const DEFAULT_SETTINGS = {
   voiceStyle: "fun",
   exerciseRestSeconds: 12,
@@ -1078,6 +1081,19 @@ function nextEncouragement() {
   return chosen;
 }
 
+function escapeRegex(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function applyPronunciationMap(msg) {
+  let spoken = msg;
+  for (const [raw, spokenAs] of Object.entries(PRONUNCIATION_MAP)) {
+    const pattern = new RegExp(escapeRegex(raw), "gi");
+    spoken = spoken.replace(pattern, spokenAs);
+  }
+  return spoken;
+}
+
 function buildUtterance(msg, kind = "default") {
   const u = new SpeechSynthesisUtterance(msg);
   if (appSettings.voiceStyle === "quiet" && kind === "encouragement") {
@@ -1101,7 +1117,7 @@ function ensureAudio() {
 function speak(msg) {
   if (!speech) return;
   speech.cancel();
-  const u = buildUtterance(msg);
+  const u = buildUtterance(applyPronunciationMap(msg));
   speech.speak(u);
 }
 
@@ -1383,7 +1399,8 @@ function speakAndWait(msg) {
   return new Promise(resolve => {
     if (!speech) { resolve(); return; }
     speech.cancel();
-    const u = buildUtterance(msg);
+    const spokenMsg = applyPronunciationMap(msg);
+    const u = buildUtterance(spokenMsg);
     u.onend = () => {
       // Small buffer after speech ends to prevent overlap with beeps
       setTimeout(resolve, 200);
@@ -1392,7 +1409,7 @@ function speakAndWait(msg) {
       setTimeout(resolve, 200);
     };
     // Failsafe: if onend never fires (known browser bug), resolve after estimated duration
-    const estimatedMs = Math.max(msg.length * 80, 2000);
+    const estimatedMs = Math.max(spokenMsg.length * 80, 2000);
     const failsafe = setTimeout(() => resolve(), estimatedMs);
     u.onend = () => { clearTimeout(failsafe); setTimeout(resolve, 200); };
     u.onerror = () => { clearTimeout(failsafe); setTimeout(resolve, 200); };
