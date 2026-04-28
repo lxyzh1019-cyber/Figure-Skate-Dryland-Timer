@@ -222,6 +222,36 @@
     opacity: 0.5;
     cursor: not-allowed;
   }
+  .modal-settings {
+    text-align: left;
+    background: var(--bg);
+    border: 2px solid var(--ink);
+    border-radius: var(--radius-sm);
+    padding: 0.8rem;
+    margin-bottom: 1rem;
+    box-shadow: 2px 2px 0 var(--ink);
+  }
+  .modal-settings h3 {
+    font-family: 'Gochi Hand', cursive;
+    font-size: 1.35rem;
+    margin-bottom: 0.4rem;
+  }
+  .settings-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.4rem 0.7rem;
+    align-items: center;
+    margin-bottom: 0.45rem;
+    font-size: 1rem;
+  }
+  .settings-row input,
+  .settings-row select {
+    font-family: 'Nunito', sans-serif;
+    border: 2px solid var(--ink);
+    border-radius: 8px;
+    padding: 0.25rem 0.4rem;
+    width: 96px;
+  }
 
   /* Main page (hidden until modal closes) */
   .page-content {
@@ -432,6 +462,48 @@
     background: var(--bg2); border-radius: var(--radius-sm);
     border: 2px dashed var(--paper-line);
   }
+  .tracker {
+    background: var(--bg2);
+    border: 2px solid var(--ink);
+    border-radius: var(--radius-sm);
+    padding: 0.7rem;
+    margin-top: 0.8rem;
+    box-shadow: 2px 2px 0 var(--ink);
+  }
+  .tracker h4 {
+    font-size: 1.35rem;
+    margin-bottom: 0.4rem;
+  }
+  .tracker-form {
+    display: grid;
+    grid-template-columns: 1fr 90px 1fr auto;
+    gap: 0.4rem;
+    margin-bottom: 0.5rem;
+  }
+  .tracker-form input {
+    border: 2px solid var(--ink);
+    border-radius: 8px;
+    padding: 0.35rem 0.45rem;
+    font-family: 'Nunito', sans-serif;
+  }
+  .tracker-form button {
+    border: 2px solid var(--ink);
+    border-radius: 8px;
+    background: var(--accent-green);
+    font-family: 'Nunito', sans-serif;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0.35rem 0.5rem;
+  }
+  .tracker-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 1rem;
+  }
+  .tracker-list li {
+    padding: 0.2rem 0;
+  }
 
   @media (max-width: 480px) {
     body { font-size: 1.05rem; padding: 0.6rem; }
@@ -443,6 +515,7 @@
     .btn { font-size: 1rem; padding: 0.7rem 0.4rem; }
     .modal { padding: 1.5rem; }
     .modal h2 { font-size: 1.8rem; }
+    .tracker-form { grid-template-columns: 1fr; }
   }
 
   /* Landscape iPad optimization (wide screens, shorter height) */
@@ -891,6 +964,28 @@ const EVENING_FLEX = {
 const DAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const DAY_LONG = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const SETTINGS_KEY = "landTrainingSettingsV1";
+const PROGRESS_KEY = "landTrainingProgressV1";
+const SKIP_HISTORY_KEY = "landTrainingSkipHistoryV1";
+const SKIP_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const ENCOURAGEMENTS = [
+  "Strong finish. Great focus.",
+  "That was awesome effort.",
+  "You are leveling up.",
+  "Sharp round. Keep rolling.",
+  "Big energy. Nice work.",
+  "That control was excellent.",
+  "Power and calm. Great combo.",
+  "You stayed disciplined. Love it.",
+  "That round looked solid.",
+  "High quality effort right there."
+];
+const DEFAULT_SETTINGS = {
+  voiceStyle: "fun",
+  exerciseRestSeconds: 12,
+  roundRestSeconds: 35,
+  secondsPerRep: 3
+};
 
 /* ============================================================
    STATE & AUDIO
@@ -903,11 +998,100 @@ let closeModalAborted = false;
 let session = {
   running: false, paused: false, abort: false, skipExercise: false,
   currentTimer: null, byRepsResolver: null,
-  calmMode: false, currentEx: null, weather: null
+  calmMode: false, currentEx: null, weather: null, skipped: []
 };
+let appSettings = loadSettings();
+let progressEntries = loadProgressEntries();
+let skipHistory = loadSkipHistory();
+let lastEncouragement = "";
 
 const speech = window.speechSynthesis;
 let audioCtx = null;
+
+function readStorage(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  } catch (_err) {
+    return fallback;
+  }
+}
+
+function writeStorage(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function loadSettings() {
+  const stored = readStorage(SETTINGS_KEY, {});
+  return { ...DEFAULT_SETTINGS, ...stored };
+}
+
+function saveSettings() {
+  writeStorage(SETTINGS_KEY, appSettings);
+}
+
+function loadProgressEntries() {
+  return readStorage(PROGRESS_KEY, []);
+}
+
+function saveProgressEntries() {
+  writeStorage(PROGRESS_KEY, progressEntries);
+}
+
+function pruneSkipHistory(items) {
+  const cutoff = Date.now() - SKIP_RETENTION_MS;
+  return (items || []).filter(item => item.createdAt >= cutoff);
+}
+
+function loadSkipHistory() {
+  const cleaned = pruneSkipHistory(readStorage(SKIP_HISTORY_KEY, []));
+  writeStorage(SKIP_HISTORY_KEY, cleaned);
+  return cleaned;
+}
+
+function saveSkipHistory() {
+  skipHistory = pruneSkipHistory(skipHistory);
+  writeStorage(SKIP_HISTORY_KEY, skipHistory);
+}
+
+function parseRepCount(repsDetail) {
+  if (!repsDetail) return null;
+  const match = repsDetail.match(/^(\d+)/);
+  if (!match) return null;
+  return Number(match[1]);
+}
+
+function repsDetailWithEstimate(ex) {
+  if (!ex.byReps) return ex.eachSide ? `${Math.floor(ex.work / 2)}s each side` : `${ex.work}s`;
+  const reps = parseRepCount(ex.repsDetail);
+  if (!reps) return ex.repsDetail;
+  const totalReps = ex.repsDetail.toLowerCase().includes("each side") ? reps * 2 : reps;
+  const estimate = Math.round(totalReps * appSettings.secondsPerRep);
+  return `${ex.repsDetail} · ~${estimate}s guide`;
+}
+
+function nextEncouragement() {
+  const options = ENCOURAGEMENTS.filter(msg => msg !== lastEncouragement);
+  const chosen = options[Math.floor(Math.random() * options.length)] || ENCOURAGEMENTS[0];
+  lastEncouragement = chosen;
+  return chosen;
+}
+
+function buildUtterance(msg, kind = "default") {
+  const u = new SpeechSynthesisUtterance(msg);
+  if (appSettings.voiceStyle === "quiet" && kind === "encouragement") {
+    u.volume = 0;
+  }
+  if (appSettings.voiceStyle === "fun" && kind === "encouragement") {
+    u.rate = 0.95 + Math.random() * 0.15;
+    u.pitch = 1 + Math.random() * 0.35;
+  } else {
+    u.rate = 0.9;
+    u.pitch = 1.05;
+  }
+  return u;
+}
 
 function ensureAudio() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -917,9 +1101,7 @@ function ensureAudio() {
 function speak(msg) {
   if (!speech) return;
   speech.cancel();
-  const u = new SpeechSynthesisUtterance(msg);
-  u.rate = 0.9;
-  u.pitch = 1.05;
+  const u = buildUtterance(msg);
   speech.speak(u);
 }
 
@@ -1004,6 +1186,49 @@ function initModal() {
   const confirmBtn = document.getElementById("modal-confirm-btn");
   const msgEl = document.getElementById("modal-msg");
   const sessionPicker = document.getElementById("modal-session-picker");
+  const settingsBox = document.createElement("div");
+  settingsBox.className = "modal-settings";
+  settingsBox.innerHTML = `
+    <h3>Session options</h3>
+    <div class="settings-row">
+      <label for="voice-style">Voice style</label>
+      <select id="voice-style">
+        <option value="classic">Classic</option>
+        <option value="fun">Fun</option>
+        <option value="quiet">Quiet</option>
+      </select>
+    </div>
+    <div class="settings-row">
+      <label for="exercise-rest">Rest between exercises (s)</label>
+      <input id="exercise-rest" type="number" min="8" max="120" />
+    </div>
+    <div class="settings-row">
+      <label for="round-rest">Rest between rounds (s)</label>
+      <input id="round-rest" type="number" min="8" max="180" />
+    </div>
+  `;
+  document.getElementById("modal-msg").before(settingsBox);
+  document.getElementById("voice-style").value = appSettings.voiceStyle;
+  document.getElementById("exercise-rest").value = appSettings.exerciseRestSeconds;
+  document.getElementById("round-rest").value = appSettings.roundRestSeconds;
+  document.getElementById("voice-style").onchange = (e) => {
+    appSettings.voiceStyle = e.target.value;
+    saveSettings();
+  };
+  document.getElementById("exercise-rest").onchange = (e) => {
+    const parsed = Number(e.target.value);
+    if (!Number.isFinite(parsed)) return;
+    appSettings.exerciseRestSeconds = Math.max(8, Math.round(parsed));
+    e.target.value = appSettings.exerciseRestSeconds;
+    saveSettings();
+  };
+  document.getElementById("round-rest").onchange = (e) => {
+    const parsed = Number(e.target.value);
+    if (!Number.isFinite(parsed)) return;
+    appSettings.roundRestSeconds = Math.max(8, Math.round(parsed));
+    e.target.value = appSettings.roundRestSeconds;
+    saveSettings();
+  };
 
   const order = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
   
@@ -1158,9 +1383,7 @@ function speakAndWait(msg) {
   return new Promise(resolve => {
     if (!speech) { resolve(); return; }
     speech.cancel();
-    const u = new SpeechSynthesisUtterance(msg);
-    u.rate = 0.9;
-    u.pitch = 1.05;
+    const u = buildUtterance(msg);
     u.onend = () => {
       // Small buffer after speech ends to prevent overlap with beeps
       setTimeout(resolve, 200);
@@ -1325,7 +1548,7 @@ function renderBrief(data) {
   const circuitsHtml = data.circuits.map(c => {
     const exHtml = c.exercises.map(ex => {
       const meta = ex.byReps
-        ? "by reps"
+        ? repsDetailWithEstimate(ex)
         : (ex.eachSide ? `${Math.floor(ex.work/2)}s × 2 sides` : `${ex.work}s`);
       return `<li class="ex-line"><span>${ex.name}</span><span class="ex-meta">${meta}</span></li>`;
     }).join("");
@@ -1572,7 +1795,7 @@ async function startSession() {
   session = {
     running: true, paused: false, abort: false, skipExercise: false,
     currentTimer: null, byRepsResolver: null,
-    calmMode: !!data.isCalmDay, currentEx: null, weather: session.weather
+    calmMode: !!data.isCalmDay, currentEx: null, weather: session.weather, skipped: []
   };
 
   // Apply skipGreetingOnStart if set
@@ -1654,9 +1877,7 @@ async function startSession() {
           { text: `Exercise ${ei + 1}/${circuit.exercises.length}` }
         ]);
 
-        const detail = ex.byReps
-          ? ex.repsDetail
-          : (ex.eachSide ? `${Math.floor(ex.work/2)}s each side` : `${ex.work}s`);
+        const detail = repsDetailWithEstimate(ex);
 
         setExercise({ name: ex.name, detail, cue: ex.cue });
 
@@ -1734,15 +1955,19 @@ async function startSession() {
             await speakAndWait(roundProgress);
 
             const leadTime = upcomingEx && HARD_EXERCISES.has(upcomingEx.name) ? 8 : 5;
-            const result = await countdown(circuit.roundRest, {
+            const roundRestDuration = Math.max(MIN_REST, appSettings.roundRestSeconds);
+            const result = await countdown(roundRestDuration, {
               onTick: (rem) => {
                 if (rem === leadTime && upcomingEx) speak("Get ready for " + upcomingEx.name);
               }
             });
             if (result === "abort") return finalize(false);
+            if (result !== "skip" && appSettings.voiceStyle !== "quiet") {
+              speak(nextEncouragement());
+            }
           } else {
             // Inter-exercise rest
-            const restDuration = Math.max(ex.rest, MIN_REST);
+            const restDuration = Math.max(MIN_REST, appSettings.exerciseRestSeconds);
             setZone("rest");
             setStatus("Rest");
             setExercise({
@@ -1808,6 +2033,13 @@ function formCheck() {
 
 function skipExercise() {
   if (!confirm("Skip this exercise and move on?")) return;
+  if (session.currentEx) {
+    session.skipped.push({
+      name: session.currentEx.name,
+      round: document.getElementById("progress")?.innerText || "",
+      at: Date.now()
+    });
+  }
   session.skipExercise = true;
   if (session.byRepsResolver) {
     const r = session.byRepsResolver;
@@ -1861,6 +2093,17 @@ function finalize(completed) {
       setUpNext("");
       speak("Training complete. Fantastic effort.");
     }
+    if (session.skipped.length) {
+      const skippedNames = session.skipped.map(item => item.name).join(", ");
+      setUpNext(`<span class="label">Skipped this session:</span> <span class="name">${skippedNames}</span>`);
+      skipHistory.unshift({
+        createdAt: Date.now(),
+        sessionDate: new Date().toISOString(),
+        sessionType: selectedSession,
+        skippedItems: session.skipped
+      });
+      saveSkipHistory();
+    }
     showReflection();
   } else {
     setZone("");
@@ -1896,7 +2139,7 @@ function showReflection() {
       <div class="reflect">
         <h3>How did that feel?</h3>
         <div style="font-family: 'Caveat', cursive; font-size: 1.1rem; color: var(--ink-light);">
-          Just for you to notice — nothing is saved.
+          Saved locally on this device.
         </div>
         <div class="reflect-buttons">
           <button data-feel="easy">Easy</button>
@@ -1904,6 +2147,21 @@ function showReflection() {
           <button data-feel="hard">Hard</button>
         </div>
         <div id="reflect-thanks" class="reflect-thanks" style="display:none;"></div>
+        <div id="skip-summary" style="margin-top:0.6rem; font-family:'Caveat',cursive; color:var(--ink-light);"></div>
+        <div class="tracker">
+          <h4>Progress tracker</h4>
+          <div class="tracker-form">
+            <input id="track-movement" placeholder="Movement (e.g. Pull-Up)" />
+            <input id="track-value" type="number" min="0" placeholder="Count" />
+            <input id="track-note" placeholder="Note (optional)" />
+            <button id="track-add">Add</button>
+          </div>
+          <ul class="tracker-list" id="tracker-list"></ul>
+        </div>
+        <div class="tracker" style="margin-top:0.5rem;">
+          <h4>Skipped in last 7 days</h4>
+          <ul class="tracker-list" id="skip-history-list"></ul>
+        </div>
         <div style="margin-top: 1rem;">
           <button class="btn btn-primary" id="btn-restart">DONE</button>
         </div>
@@ -1921,6 +2179,38 @@ function showReflection() {
       t.style.display = "block";
     };
   });
+  const skipSummary = document.getElementById("skip-summary");
+  if (session.skipped.length) {
+    skipSummary.textContent = `Skipped this session: ${session.skipped.map(s => s.name).join(", ")}`;
+  } else {
+    skipSummary.textContent = "No skipped exercises this session.";
+  }
+  const list = document.getElementById("tracker-list");
+  const recent = progressEntries.slice(-8).reverse();
+  list.innerHTML = recent.length
+    ? recent.map(item => `<li>${item.date} · ${item.movement}: ${item.value}${item.note ? ` (${item.note})` : ""}</li>`).join("")
+    : "<li>No entries yet.</li>";
+  document.getElementById("track-add").onclick = () => {
+    const movement = document.getElementById("track-movement").value.trim();
+    const value = Number(document.getElementById("track-value").value);
+    const note = document.getElementById("track-note").value.trim();
+    if (!movement || !Number.isFinite(value)) return;
+    progressEntries.push({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      movement,
+      value,
+      note,
+      date: new Date().toISOString().slice(0, 10),
+      createdAt: Date.now()
+    });
+    saveProgressEntries();
+    showReflection();
+  };
+  const skipHistoryList = document.getElementById("skip-history-list");
+  const recentSkips = skipHistory.slice(0, 8);
+  skipHistoryList.innerHTML = recentSkips.length
+    ? recentSkips.map(entry => `<li>${entry.sessionDate.slice(0, 10)} · ${entry.skippedItems.map(item => item.name).join(", ")}</li>`).join("")
+    : "<li>No skipped content in the last 7 days.</li>";
   document.getElementById("btn-restart").onclick = () => renderCard();
 }
 
