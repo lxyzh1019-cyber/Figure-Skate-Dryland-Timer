@@ -339,6 +339,13 @@
     line-height: 1; color: var(--ink); letter-spacing: -3px; transition: color 0.2s;
   }
   .timer.urgent { color: var(--accent-orange); }
+  .timer.label {
+    font-size: 1.6rem;
+    letter-spacing: 0;
+    line-height: 1.2;
+    padding: 0 0.5rem;
+    white-space: normal;
+  }
 
   .progress {
     display: flex; justify-content: center; gap: 0.5rem; flex-wrap: wrap;
@@ -980,12 +987,16 @@ const ENCOURAGEMENTS = [
   "That round looked solid.",
   "High quality effort right there."
 ];
+const PRONUNCIATION_MAP = {
+  "Pallof Press": "Pal-off Press"
+};
 const DEFAULT_SETTINGS = {
   voiceStyle: "fun",
   exerciseRestSeconds: 12,
   roundRestSeconds: 35,
   secondsPerRep: 3
 };
+const DONE_HOLD_MS = 1000;
 
 /* ============================================================
    STATE & AUDIO
@@ -998,7 +1009,8 @@ let closeModalAborted = false;
 let session = {
   running: false, paused: false, abort: false, skipExercise: false,
   currentTimer: null, byRepsResolver: null,
-  calmMode: false, currentEx: null, weather: null, skipped: []
+  calmMode: false, currentEx: null, weather: null, skipped: [],
+  doneHoldTimeout: null, doneHoldTriggered: false
 };
 let appSettings = loadSettings();
 let progressEntries = loadProgressEntries();
@@ -1078,6 +1090,19 @@ function nextEncouragement() {
   return chosen;
 }
 
+function escapeRegex(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function applyPronunciationMap(msg) {
+  let spoken = msg;
+  for (const [raw, spokenAs] of Object.entries(PRONUNCIATION_MAP)) {
+    const pattern = new RegExp(escapeRegex(raw), "gi");
+    spoken = spoken.replace(pattern, spokenAs);
+  }
+  return spoken;
+}
+
 function buildUtterance(msg, kind = "default") {
   const u = new SpeechSynthesisUtterance(msg);
   if (appSettings.voiceStyle === "quiet" && kind === "encouragement") {
@@ -1101,7 +1126,7 @@ function ensureAudio() {
 function speak(msg) {
   if (!speech) return;
   speech.cancel();
-  const u = buildUtterance(msg);
+  const u = buildUtterance(applyPronunciationMap(msg));
   speech.speak(u);
 }
 
@@ -1383,7 +1408,8 @@ function speakAndWait(msg) {
   return new Promise(resolve => {
     if (!speech) { resolve(); return; }
     speech.cancel();
-    const u = buildUtterance(msg);
+    const spokenMsg = applyPronunciationMap(msg);
+    const u = buildUtterance(spokenMsg);
     u.onend = () => {
       // Small buffer after speech ends to prevent overlap with beeps
       setTimeout(resolve, 200);
@@ -1392,7 +1418,7 @@ function speakAndWait(msg) {
       setTimeout(resolve, 200);
     };
     // Failsafe: if onend never fires (known browser bug), resolve after estimated duration
-    const estimatedMs = Math.max(msg.length * 80, 2000);
+    const estimatedMs = Math.max(spokenMsg.length * 80, 2000);
     const failsafe = setTimeout(() => resolve(), estimatedMs);
     u.onend = () => { clearTimeout(failsafe); setTimeout(resolve, 200); };
     u.onerror = () => { clearTimeout(failsafe); setTimeout(resolve, 200); };
@@ -1674,8 +1700,10 @@ function renderSessionShell(data) {
 function setZone(mode) { document.getElementById("timer-zone").className = "timer-zone " + mode; }
 function setTimer(s, urgent = false) {
   const t = document.getElementById("timer");
+  const isLabel = typeof s === "string" && !/^\d{1,2}(:\d{2})?$/.test(s);
   t.textContent = fmt(s);
   t.classList.toggle("urgent", urgent);
+  t.classList.toggle("label", isLabel);
 }
 function setStatus(msg) { document.getElementById("status").textContent = msg; }
 function setProgress(chips) {
@@ -1713,14 +1741,50 @@ function setDoneControls() {
     <button class="btn btn-form"  id="btn-form">FORM</button>
     <button class="btn btn-skip"  id="btn-skip">SKIP EX</button>
     <button class="btn btn-stop"  id="btn-stop">STOP</button>`;
-  document.getElementById("btn-done").onclick = () => {
-    if (session.byRepsResolver) {
-      const r = session.byRepsResolver;
-      session.byRepsResolver = null;
-      beep(880, 0.15);
-      r("done");
-    }
+  const doneBtn = document.getElementById("btn-done");
+  const resetDoneLabel = () => {
+    if (doneBtn) doneBtn.textContent = "DONE ✓";
   };
+  const clearDoneHold = () => {
+    if (session.doneHoldTimeout) {
+      clearTimeout(session.doneHoldTimeout);
+      session.doneHoldTimeout = null;
+    }
+    session.doneHoldTriggered = false;
+    resetDoneLabel();
+  };
+  const startDoneHold = (ev) => {
+    if (ev) ev.preventDefault();
+    if (!session.byRepsResolver || session.doneHoldTimeout) return;
+    session.doneHoldTriggered = false;
+    doneBtn.textContent = "HOLD...";
+    session.doneHoldTimeout = setTimeout(() => {
+      session.doneHoldTimeout = null;
+      session.doneHoldTriggered = true;
+      if (session.byRepsResolver) {
+        const r = session.byRepsResolver;
+        session.byRepsResolver = null;
+        beep(880, 0.15);
+        r("done");
+      }
+      resetDoneLabel();
+    }, DONE_HOLD_MS);
+  };
+  const cancelDoneHold = (ev) => {
+    if (ev) ev.preventDefault();
+    if (session.doneHoldTriggered) {
+      session.doneHoldTriggered = false;
+      resetDoneLabel();
+      return;
+    }
+    clearDoneHold();
+  };
+  doneBtn.onpointerdown = startDoneHold;
+  doneBtn.onpointerup = cancelDoneHold;
+  doneBtn.onpointerleave = cancelDoneHold;
+  doneBtn.onpointercancel = cancelDoneHold;
+  doneBtn.ondragstart = (ev) => ev.preventDefault();
+  doneBtn.onclick = (ev) => ev.preventDefault();
   document.getElementById("btn-pause").onclick = togglePause;
   document.getElementById("btn-form").onclick = formCheck;
   document.getElementById("btn-skip").onclick = skipExercise;
@@ -1753,18 +1817,28 @@ function countdown(seconds, opts = {}) {
   });
 }
 
-function waitForDone() {
+function waitForDone(timerLabel) {
   return new Promise(resolve => {
     session.byRepsResolver = resolve;
-    setTimer("✓");
+    setTimer(timerLabel || "REPS");
     setDoneControls();
     const watchdog = setInterval(() => {
       if (session.abort) {
         clearInterval(watchdog);
+        if (session.doneHoldTimeout) {
+          clearTimeout(session.doneHoldTimeout);
+          session.doneHoldTimeout = null;
+          session.doneHoldTriggered = false;
+        }
         if (session.byRepsResolver) { const r = session.byRepsResolver; session.byRepsResolver = null; r("abort"); }
       }
       if (session.skipExercise) {
         clearInterval(watchdog);
+        if (session.doneHoldTimeout) {
+          clearTimeout(session.doneHoldTimeout);
+          session.doneHoldTimeout = null;
+          session.doneHoldTriggered = false;
+        }
         if (session.byRepsResolver) { const r = session.byRepsResolver; session.byRepsResolver = null; r("skip"); }
       }
     }, 200);
@@ -1795,7 +1869,8 @@ async function startSession() {
   session = {
     running: true, paused: false, abort: false, skipExercise: false,
     currentTimer: null, byRepsResolver: null,
-    calmMode: !!data.isCalmDay, currentEx: null, weather: session.weather, skipped: []
+    calmMode: !!data.isCalmDay, currentEx: null, weather: session.weather, skipped: [],
+    doneHoldTimeout: null, doneHoldTriggered: false
   };
 
   // Apply skipGreetingOnStart if set
@@ -1887,7 +1962,7 @@ async function startSession() {
         if (ex.byReps) {
           // Voice cue completes FIRST, then show DONE button
           await speakAndWait(ex.name + ". " + ex.repsDetail + ". Go.");
-          const result = await waitForDone();
+          const result = await waitForDone(detail);
           if (result === "abort") return finalize(false);
           setSessionControls();
         } else {
