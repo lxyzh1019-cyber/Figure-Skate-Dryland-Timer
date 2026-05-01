@@ -28,7 +28,19 @@
     --radius-sm: 10px;
   }
 
-  * { box-sizing: border-box; }
+  .caveat-note {
+    font-family: 'Caveat', cursive;
+    font-size: 1rem;
+    color: var(--ink-light);
+    margin: 0.5rem 0;
+    text-align: left;
+  }
+  .btn-evening {
+    background: var(--evening) !important;
+    color: white !important;
+  }
+
+
   html, body { margin: 0; padding: 0; }
 
   body {
@@ -477,6 +489,47 @@
     .btn { padding: 0.9rem 0.8rem; font-size: 1.3rem; }
   }
 
+  /* ===== Settings panel (restored) ===== */
+  .modal-settings {
+    text-align: left;
+    background: var(--bg);
+    border: 2px solid var(--ink);
+    border-radius: var(--radius-sm);
+    padding: 0.8rem;
+    margin-bottom: 1rem;
+    box-shadow: 2px 2px 0 var(--ink);
+  }
+  .modal-settings h3 {
+    font-family: 'Gochi Hand', cursive;
+    font-size: 1.35rem;
+    margin-bottom: 0.4rem;
+  }
+  .settings-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.4rem 0.7rem;
+    align-items: center;
+    margin-bottom: 0.45rem;
+    font-size: 1rem;
+  }
+  .settings-row input,
+  .settings-row select {
+    font-family: 'Nunito', sans-serif;
+    border: 2px solid var(--ink);
+    border-radius: 8px;
+    padding: 0.25rem 0.4rem;
+    width: 96px;
+  }
+
+  /* ===== Equipment reminder line ===== */
+  .equipment-line {
+    font-family: 'Caveat', cursive;
+    font-size: 1.05rem;
+    color: var(--ink-light);
+    margin: 0.3rem 0 0.6rem;
+    min-height: 1.4em;
+  }
+
   /* ===== Pass 2: session elapsed timer ===== */
   .elapsed-bar {
     display: flex; justify-content: space-between; align-items: center;
@@ -527,6 +580,29 @@
   }
 
   /* ===== Pass 2: tracker reminder + tracker view ===== */
+  /* ===== Skip history + free-form tracker (restored) ===== */
+  .tracker {
+    background: var(--bg2);
+    border: 2px solid var(--ink);
+    border-radius: var(--radius-sm);
+    padding: 0.7rem;
+    margin-top: 0.8rem;
+    box-shadow: 2px 2px 0 var(--ink);
+  }
+  .tracker h4 {
+    font-size: 1.35rem;
+    margin-bottom: 0.4rem;
+  }
+  .tracker-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 1rem;
+  }
+  .tracker-list li {
+    padding: 0.2rem 0;
+  }
+
   .tracker-reminder {
     background: var(--accent-yellow); border: 2px solid var(--ink);
     border-radius: var(--radius-sm); padding: 0.7rem 0.9rem;
@@ -610,14 +686,54 @@
     border-radius: var(--radius-sm); font-family: 'Patrick Hand', sans-serif;
     font-size: 1rem; background: var(--paper); box-sizing: border-box;
   }
+  /* ---- 7-Day History ---- */
+  .history-list { display: flex; flex-direction: column; gap: 8px; margin: 0.8rem 0; }
+  .history-card {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg2); border: 2px solid var(--paper-line);
+    border-radius: var(--radius-sm); padding: 0.5rem 0.8rem;
+    font-family: 'Patrick Hand', sans-serif; font-size: 1rem;
+  }
+  .history-card .h-mood  { font-size: 1.5rem; flex-shrink: 0; }
+  .history-card .h-date  { color: var(--ink-light); font-size: 0.9rem; min-width: 70px; }
+  .history-card .h-day   { font-weight: bold; flex: 1; color: var(--ink); }
+  .history-card .h-dur   { color: var(--jess-deep); font-size: 0.95rem; font-family: 'Caveat', cursive; }
+  .history-card .h-type  { font-size: 0.8rem; color: var(--ink-light); }
+  .history-empty { font-family: 'Caveat', cursive; color: var(--ink-light); font-size: 1.1rem; text-align: center; padding: 1rem 0; }
+
+  /* ---- Achievement Board ---- */
+  #modal-achievements { max-width: 580px; }
+  .ach-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    margin: 1rem 0;
+  }
+  .ach-card {
+    background: var(--bg2); border: 2px solid var(--paper-line);
+    border-radius: var(--radius-sm); padding: 0.7rem 0.8rem;
+    text-align: center;
+  }
+  .ach-card .ach-icon  { font-size: 1.8rem; display: block; }
+  .ach-card .ach-val   { font-size: 1.5rem; font-family: 'Gochi Hand', cursive; color: var(--jess-deep); }
+  .ach-card .ach-label { font-size: 0.85rem; color: var(--ink-light); font-family: 'Caveat', cursive; }
+  .milestone-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 0.5rem 0; }
+  .milestone-badge {
+    background: var(--accent-yellow); color: var(--ink);
+    border-radius: 20px; padding: 4px 12px;
+    font-family: 'Patrick Hand', sans-serif; font-size: 0.9rem;
+    border: 2px solid var(--ink);
+  }
+  .milestone-badge.locked { background: var(--paper-line); color: var(--ink-light); border-style: dashed; }
+  .ach-section-title {
+    font-family: 'Gochi Hand', cursive; font-size: 1.3rem;
+    color: var(--ink); margin: 0.8rem 0 0.3rem; text-align: left;
+  }
 </style>
-</head>
-<body>
+
 
 <!-- Day picker modal (shows on load) -->
-<div class="modal-overlay show" id="modal-overlay">
-  <div class="modal" id="modal-main">
-    <h2>Which day are you training?</h2>
+<div class="modal-overlay show" id="modal-overlay" role="presentation">
+  <div class="modal" id="modal-main" role="dialog" aria-modal="true" aria-labelledby="modal-main-title">
+    <h2 id="modal-main-title">Which day are you training?</h2>
     <p>Pick your workout below</p>
     
     <div class="modal-day-buttons" id="modal-days"></div>
@@ -646,39 +762,61 @@
 
     <div class="modal-secondary-btns">
       <button id="btn-open-tracker">📊 4-Week Progress</button>
+      <button id="btn-open-history">📅 Last 7 Sessions</button>
+      <button id="btn-open-achievements">🏅 Achievements</button>
       <button id="btn-reset-week" title="Clear this week's session times">🔄 Reset Week</button>
     </div>
   </div>
 
-  <!-- Tracker view (hidden, shown when Progress is opened) -->
-  <div class="modal" id="modal-tracker" style="display:none; max-width: 560px;">
-    <h2>📊 4-Week Progress</h2>
+  <!-- Tracker view -->
+  <div class="modal" id="modal-tracker" role="dialog" aria-modal="true" aria-labelledby="modal-tracker-title" style="display:none; max-width: 560px;">
+    <h2 id="modal-tracker-title">📊 4-Week Progress</h2>
     <p>Self-check every Sunday — are you a little deeper this week?</p>
 
     <div id="self-check-banner-slot"></div>
 
     <table class="tracker-table" id="tracker-table"></table>
 
-    <div style="font-family: 'Caveat', cursive; font-size: 1rem; color: var(--ink-light); margin: 0.5rem 0; text-align: left;">
+    <div class="caveat-note">
       💡 Tip: hold the same position deeper this week than last? The protocol is working. No change for 3 weeks → bump splits hold to 75s.
     </div>
 
     <div class="modal-secondary-btns">
       <button id="btn-tracker-back">← Back</button>
-      <button id="btn-tracker-save" style="background: var(--accent-green);">Save</button>
+      <button id="btn-tracker-save" class="btn-evening">Save</button>
+    </div>
+  </div>
+
+  <!-- History view: last 7 sessions from Firestore -->
+  <div class="modal" id="modal-history" role="dialog" aria-modal="true" aria-labelledby="modal-history-title" style="display:none; max-width: 540px;">
+    <h2 id="modal-history-title">📅 Last 7 Sessions</h2>
+    <p>Your recent training, pulled from the cloud.</p>
+    <div id="history-list-slot"><div class="history-empty">Loading…</div></div>
+    <div class="modal-secondary-btns" style="margin-top:1rem;">
+      <button id="btn-history-back">← Back</button>
+    </div>
+  </div>
+
+  <!-- Achievements view -->
+  <div class="modal" id="modal-achievements" role="dialog" aria-modal="true" aria-labelledby="modal-ach-title" style="display:none; max-width: 580px; overflow-y: auto; max-height: 90vh;">
+    <h2 id="modal-ach-title">🏅 Achievements</h2>
+    <p>Keep going — every session counts!</p>
+    <div id="ach-content"><div class="history-empty">Loading…</div></div>
+    <div class="modal-secondary-btns" style="margin-top:1rem;">
+      <button id="btn-ach-back">← Back</button>
     </div>
   </div>
 </div>
 
 <!-- Main page (hidden until day is selected) -->
-<div class="page-content" id="page-content">
+<main class="page-content" id="page-content">
   <div class="wrap">
-    <div class="header">
+    <header class="header">
       <h1>⛸ Land Training</h1>
-      <div class="sub">Jen · 7-day skating plan · v8</div>
-    </div>
+      <div class="sub">Jen · 7-day skating plan · v10</div>
+    </header>
 
-    <div class="day-tabs" id="day-tabs"></div>
+    <nav class="day-tabs" id="day-tabs" aria-label="Day picker"></nav>
 
     <details class="schedule">
       <summary>This week's plan</summary>
@@ -690,14 +828,77 @@
       </div>
     </details>
 
-    <div class="card" id="main-card"></div>
+    <section class="card" id="main-card" aria-label="Training session"></section>
   </div>
-</div>
+</main>
 
-<script>
+<script type="module">
+import { initializeApp }                            from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, collection, addDoc, getDocs,
+         query, orderBy, limit, where, updateDoc,
+         doc, serverTimestamp }                     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
 /* ============================================================
-   PLAN DATA
+   FIREBASE INIT
    ============================================================ */
+
+const _fbApp = initializeApp({
+  apiKey:            "AIzaSyBvasH4OqU76196ZmZSXX_e8-L2PYnvyaY",
+  authDomain:        "chore-tracker-a461b.firebaseapp.com",
+  projectId:         "chore-tracker-a461b",
+  storageBucket:     "chore-tracker-a461b.firebasestorage.app",
+  messagingSenderId: "282740057913",
+  appId:             "1:282740057913:web:72defcf2e53ae13237eae8"
+});
+const db = getFirestore(_fbApp);
+const SESSIONS_COL = "jen_skating_sessions"; // dedicated collection for this app
+
+/* ---- Fire-and-forget Firestore helpers ---- */
+// Returns the new doc ID (or null on failure) — caller decides whether to store it
+async function fsAddSession(entry) {
+  try {
+    const ref = await addDoc(collection(db, SESSIONS_COL), {
+      ...entry,
+      createdAt: serverTimestamp()
+    });
+    return ref.id;
+  } catch (e) {
+    console.warn("Firestore write failed:", e);
+    return null;
+  }
+}
+async function fsUpdateSession(fsId, patch) {
+  if (!fsId) return;
+  try {
+    await updateDoc(doc(db, SESSIONS_COL, fsId), patch);
+  } catch (e) {
+    console.warn("Firestore update failed:", e);
+  }
+}
+async function fsGetRecent(n = 7) {
+  try {
+    const q = query(collection(db, SESSIONS_COL), orderBy("createdAt", "desc"), limit(n));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (e) {
+    console.warn("Firestore read failed:", e);
+    return [];
+  }
+}
+async function fsGetAll() {
+  try {
+    const q = query(collection(db, SESSIONS_COL), orderBy("createdAt", "asc"));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (e) {
+    console.warn("Firestore read failed:", e);
+    return [];
+  }
+}
+
+// Pending Firestore doc ID for the session just saved (set in finalize, used in reflection save)
+let _pendingFsId = null;
+
 
 const MANTRA = "I am STRONG. I am SHARP. I can SKATE THIS.";
 
@@ -717,6 +918,33 @@ const HARD_EXERCISES = new Set([
   "Lateral Bound", "Box Jump or Skater Jump", "Bosu Single-Leg Squat",
   "Single-Leg RDL", "Copenhagen Plank", "Squat Jump", "Split Jump"
 ]);
+
+const SETTINGS_KEY       = "landTrainingSettingsV1";
+const PROGRESS_KEY       = "landTrainingProgressV1";
+const SKIP_HISTORY_KEY   = "landTrainingSkipHistoryV1";
+const SKIP_RETENTION_MS  = 7 * 24 * 60 * 60 * 1000;
+const DONE_HOLD_MS       = 1000;
+const ENCOURAGEMENTS = [
+  "Strong finish. Great focus.",
+  "That was awesome effort.",
+  "You are leveling up.",
+  "Sharp round. Keep rolling.",
+  "Big energy. Nice work.",
+  "That control was excellent.",
+  "Power and calm. Great combo.",
+  "You stayed disciplined. Love it.",
+  "That round looked solid.",
+  "High quality effort right there."
+];
+const PRONUNCIATION_MAP = {
+  "Pallof Press": "Pal-off Press"
+};
+const DEFAULT_SETTINGS = {
+  voiceStyle: "fun",
+  exerciseRestSeconds: 12,
+  roundRestSeconds: 35,
+  secondsPerRep: 3
+};
 
 const MIN_REST = 12;
 const SIDE_SWITCH_BUFFER = 5;
@@ -1059,6 +1287,17 @@ const DAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "frida
 const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const DAY_LONG = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
+// Equipment needed per day (morning session)
+const DAY_EQUIPMENT = {
+  monday:    "Plyo box, Resistance band",
+  tuesday:   "Pull-up bar, Resistance band",
+  wednesday: "Plyo box, Resistance band",
+  thursday:  "Mat",
+  friday:    "Pull-up bar, Plyo box",
+  saturday:  "Mat",
+  sunday:    null  // rest day
+};
+
 /* ============================================================
    STATE & AUDIO
    ============================================================ */
@@ -1070,8 +1309,13 @@ let closeModalAborted = false;
 let session = {
   running: false, paused: false, abort: false, skipExercise: false,
   currentTimer: null, byRepsResolver: null,
-  calmMode: false, currentEx: null, weather: null
+  calmMode: false, currentEx: null, weather: null,
+  skipped: [], doneHoldTimeout: null, doneHoldTriggered: false
 };
+let appSettings     = loadSettings();
+let progressEntries = loadProgressEntries();
+let skipHistory     = loadSkipHistory();
+let lastEncouragement = "";
 
 const speech = window.speechSynthesis;
 let audioCtx = null;
@@ -1203,9 +1447,11 @@ function initModal() {
           document.getElementById("btn-evening").classList.add("selected");
           selectedSession = "evening";
           msgEl.textContent = "Rest day — evening gentle flexibility only.";
+          { const eq = DAY_EQUIPMENT[key]; const el = document.getElementById("modal-equipment"); if (el) el.textContent = ""; }
         } else {
           sessionPicker.classList.remove("show");
           msgEl.textContent = "Rest day — recovery is training.";
+          { const el = document.getElementById("modal-equipment"); if (el) el.textContent = ""; }
         }
         confirmBtn.disabled = false;
       } else if (key === "saturday") {
@@ -1213,6 +1459,7 @@ function initModal() {
         sessionPicker.classList.remove("show");
         selectedSession = "morning";
         msgEl.textContent = `${data.title} — ${data.subtitle}`;
+        { const eq = DAY_EQUIPMENT[key]; const el = document.getElementById("modal-equipment"); if (el) el.textContent = eq ? "📦 You'll need: " + eq : ""; }
         confirmBtn.disabled = false;
       } else {
         // Normal day: show session picker
@@ -1221,12 +1468,61 @@ function initModal() {
         document.getElementById("btn-morning").classList.add("selected");
         selectedSession = "morning";
         msgEl.textContent = `${data.title} — ${data.subtitle}`;
+        { const eq = DAY_EQUIPMENT[key]; const el = document.getElementById("modal-equipment"); if (el) el.textContent = eq ? "📦 You'll need: " + eq : ""; }
         confirmBtn.disabled = false;
       }
     };
     
     modalDays.appendChild(btn);
   });
+
+  // Settings panel
+  const settingsBox = document.createElement("div");
+  settingsBox.className = "modal-settings";
+  settingsBox.innerHTML = `
+    <h3>Session options</h3>
+    <div class="settings-row">
+      <label for="voice-style">Voice style</label>
+      <select id="voice-style">
+        <option value="classic">Classic</option>
+        <option value="fun">Fun</option>
+        <option value="quiet">Quiet</option>
+      </select>
+    </div>
+    <div class="settings-row">
+      <label for="exercise-rest">Rest between exercises (s)</label>
+      <input id="exercise-rest" type="number" min="8" max="120" />
+    </div>
+    <div class="settings-row">
+      <label for="round-rest">Rest between rounds (s)</label>
+      <input id="round-rest" type="number" min="8" max="180" />
+    </div>
+  `;
+  document.getElementById("modal-msg").before(settingsBox);
+  document.getElementById("voice-style").value = appSettings.voiceStyle;
+  document.getElementById("exercise-rest").value = appSettings.exerciseRestSeconds;
+  document.getElementById("round-rest").value = appSettings.roundRestSeconds;
+  document.getElementById("voice-style").onchange = (e) => {
+    appSettings.voiceStyle = e.target.value; saveSettings();
+  };
+  document.getElementById("exercise-rest").onchange = (e) => {
+    const parsed = Number(e.target.value);
+    if (!Number.isFinite(parsed)) return;
+    appSettings.exerciseRestSeconds = Math.max(8, Math.round(parsed));
+    e.target.value = appSettings.exerciseRestSeconds; saveSettings();
+  };
+  document.getElementById("round-rest").onchange = (e) => {
+    const parsed = Number(e.target.value);
+    if (!Number.isFinite(parsed)) return;
+    appSettings.roundRestSeconds = Math.max(8, Math.round(parsed));
+    e.target.value = appSettings.roundRestSeconds; saveSettings();
+  };
+
+  // Equipment reminder line (injected after modal-msg)
+  const equipEl = document.createElement("div");
+  equipEl.className = "equipment-line";
+  equipEl.id = "modal-equipment";
+  document.getElementById("modal-msg").after(equipEl);
 
   confirmBtn.onclick = async () => await closeModal();
 
@@ -1235,14 +1531,18 @@ function initModal() {
   renderModalTrackerReminder();
 
   // Wire secondary buttons
-  document.getElementById("btn-open-tracker").onclick = openTrackerView;
+  document.getElementById("btn-open-tracker").onclick     = openTrackerView;
+  document.getElementById("btn-open-history").onclick     = openHistoryView;
+  document.getElementById("btn-open-achievements").onclick = openAchievementsView;
   document.getElementById("btn-reset-week").onclick = () => {
     if (!confirm("Reset this week's session times? (Tracker data is kept.)")) return;
     clearThisWeekSessions();
     renderModalWeekSummary();
   };
-  document.getElementById("btn-tracker-back").onclick = closeTrackerView;
+  document.getElementById("btn-tracker-back").onclick = closeAllSubViews;
   document.getElementById("btn-tracker-save").onclick = saveTrackerFromUI;
+  document.getElementById("btn-history-back").onclick = closeAllSubViews;
+  document.getElementById("btn-ach-back").onclick     = closeAllSubViews;
 }
 
 /* ===== Pass 2: weekly summary in modal ===== */
@@ -1304,17 +1604,200 @@ function renderModalTrackerReminder() {
   document.getElementById("tracker-reminder").innerHTML = reminderBody;
 }
 
-/* ===== Pass 2: tracker view ===== */
-function openTrackerView() {
+/* ===== Sub-view navigation ===== */
+const SUB_VIEWS = ["modal-tracker", "modal-history", "modal-achievements"];
+function showSubView(id) {
   document.getElementById("modal-main").style.display = "none";
-  document.getElementById("modal-tracker").style.display = "block";
-  renderTrackerTable();
+  SUB_VIEWS.forEach(v => {
+    document.getElementById(v).style.display = v === id ? "block" : "none";
+  });
 }
-function closeTrackerView() {
-  document.getElementById("modal-tracker").style.display = "none";
+function closeAllSubViews() {
+  SUB_VIEWS.forEach(v => { document.getElementById(v).style.display = "none"; });
   document.getElementById("modal-main").style.display = "block";
   renderModalTrackerReminder();
 }
+function openTrackerView() {
+  showSubView("modal-tracker");
+  renderTrackerTable();
+}
+
+/* ===== History view ===== */
+const MOOD_EMOJI = { easy: "😎", just: "✅", hard: "💪", null: "—", undefined: "—" };
+function openHistoryView() {
+  showSubView("modal-history");
+  const slot = document.getElementById("history-list-slot");
+  slot.innerHTML = `<div class="history-empty">Loading…</div>`;
+  fsGetRecent(7).then(docs => {
+    if (!docs.length) {
+      slot.innerHTML = `<div class="history-empty">No cloud sessions yet — complete a session to see history here!</div>`;
+      return;
+    }
+    const cards = docs.map(d => {
+      const date = d.isoDate ? d.isoDate.slice(0, 10) : "—";
+      const day  = d.dayKey  ? d.dayKey[0].toUpperCase() + d.dayKey.slice(1) : "—";
+      const dur  = d.durationSecs ? fmtMMSS(d.durationSecs) : "—";
+      const type = d.session === "evening" ? "🌙 Flexibility" : "☀️ Morning";
+      const mood = MOOD_EMOJI[d.mood] ?? "—";
+      return `
+        <div class="history-card">
+          <span class="h-mood" title="Mood: ${d.mood || 'not logged'}">${mood}</span>
+          <span class="h-date">${date}</span>
+          <span class="h-day">${day}</span>
+          <span class="h-type">${type}</span>
+          <span class="h-dur">${dur}</span>
+        </div>`;
+    }).join("");
+    slot.innerHTML = `<div class="history-list">${cards}</div>`;
+  });
+}
+
+/* ===== Achievements view ===== */
+function openAchievementsView() {
+  showSubView("modal-achievements");
+  const slot = document.getElementById("ach-content");
+  slot.innerHTML = `<div class="history-empty">Calculating…</div>`;
+  fsGetAll().then(docs => renderAchievements(docs, slot));
+}
+
+function renderAchievements(docs, slot) {
+  if (!docs.length) {
+    slot.innerHTML = `<div class="history-empty">Complete your first session to unlock achievements!</div>`;
+    return;
+  }
+
+  const mornings = docs.filter(d => d.session !== "evening" && d.completedFully);
+  const evenings  = docs.filter(d => d.session === "evening" && d.completedFully);
+  const all       = docs.filter(d => d.completedFully);
+
+  // ---- Streak (consecutive calendar days with ≥1 session) ----
+  const uniqueDays = [...new Set(all.map(d => (d.isoDate || "").slice(0, 10)))].sort();
+  let streak = 0;
+  if (uniqueDays.length) {
+    let cur = new Date(uniqueDays[uniqueDays.length - 1]);
+    const today = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Edmonton" }));
+    // Allow today or yesterday as the anchor
+    const anchor = new Date(today); anchor.setDate(anchor.getDate() - 1);
+    if (cur >= anchor) {
+      streak = 1;
+      for (let i = uniqueDays.length - 2; i >= 0; i--) {
+        const prev = new Date(uniqueDays[i]);
+        const diff = Math.round((cur - prev) / 86400000);
+        if (diff === 1) { streak++; cur = prev; } else break;
+      }
+    }
+  }
+
+  // ---- This week ----
+  const monday = mondayOfThisWeek();
+  const weekSessions = all.filter(d => d.isoDate && new Date(d.isoDate) >= monday);
+
+  // ---- This month ----
+  const now = new Date();
+  const monthSessions = all.filter(d => {
+    if (!d.isoDate) return false;
+    const dt = new Date(d.isoDate);
+    return dt.getFullYear() === now.getFullYear() && dt.getMonth() === now.getMonth();
+  });
+
+  // ---- Totals ----
+  const totalSecs  = all.reduce((s, d) => s + (d.durationSecs || 0), 0);
+  const longestSec = Math.max(0, ...all.map(d => d.durationSecs || 0));
+
+  // ---- Personal best week (max sessions in any Mon–Sun window) ----
+  const sessionsByWeek = {};
+  all.forEach(d => {
+    if (!d.isoDate) return;
+    const dt = new Date(d.isoDate);
+    const dow = dt.getDay();
+    const mon = new Date(dt); mon.setDate(dt.getDate() - (dow === 0 ? 6 : dow - 1));
+    const key = mon.toISOString().slice(0, 10);
+    sessionsByWeek[key] = (sessionsByWeek[key] || 0) + 1;
+  });
+  const bestWeek = Math.max(0, ...Object.values(sessionsByWeek));
+
+  // ---- Mood breakdown ----
+  const moods = { easy: 0, just: 0, hard: 0 };
+  all.forEach(d => { if (d.mood && moods[d.mood] !== undefined) moods[d.mood]++; });
+
+  // ---- Stats grid ----
+  const statsHtml = `
+    <div class="ach-grid">
+      <div class="ach-card">
+        <span class="ach-icon">🔥</span>
+        <div class="ach-val">${streak}</div>
+        <div class="ach-label">Day streak</div>
+      </div>
+      <div class="ach-card">
+        <span class="ach-icon">📅</span>
+        <div class="ach-val">${weekSessions.length}</div>
+        <div class="ach-label">Sessions this week</div>
+      </div>
+      <div class="ach-card">
+        <span class="ach-icon">🗓️</span>
+        <div class="ach-val">${monthSessions.length}</div>
+        <div class="ach-label">Sessions this month</div>
+      </div>
+      <div class="ach-card">
+        <span class="ach-icon">⏱</span>
+        <div class="ach-val">${fmtHHMM(totalSecs)}</div>
+        <div class="ach-label">Total training time</div>
+      </div>
+      <div class="ach-card">
+        <span class="ach-icon">🏆</span>
+        <div class="ach-val">${longestSec ? fmtMMSS(longestSec) : "—"}</div>
+        <div class="ach-label">Longest session</div>
+      </div>
+      <div class="ach-card">
+        <span class="ach-icon">📈</span>
+        <div class="ach-val">${bestWeek}</div>
+        <div class="ach-label">Best week ever</div>
+      </div>
+      <div class="ach-card">
+        <span class="ach-icon">🌙</span>
+        <div class="ach-val">${evenings.length}</div>
+        <div class="ach-label">Flexibility sessions</div>
+      </div>
+      <div class="ach-card">
+        <span class="ach-icon">☀️</span>
+        <div class="ach-val">${mornings.length}</div>
+        <div class="ach-label">Morning sessions</div>
+      </div>
+    </div>`;
+
+  // ---- Mood breakdown ----
+  const moodHtml = `
+    <div class="ach-section-title">How sessions felt</div>
+    <div class="ach-grid" style="grid-template-columns:1fr 1fr 1fr;">
+      <div class="ach-card"><span class="ach-icon">😎</span><div class="ach-val">${moods.easy}</div><div class="ach-label">Easy</div></div>
+      <div class="ach-card"><span class="ach-icon">✅</span><div class="ach-val">${moods.just}</div><div class="ach-label">Just right</div></div>
+      <div class="ach-card"><span class="ach-icon">💪</span><div class="ach-val">${moods.hard}</div><div class="ach-label">Hard</div></div>
+    </div>`;
+
+  // ---- Milestones ----
+  const totalCount = all.length;
+  const MILESTONES = [
+    { n: 1,   label: "First session! 🎉" },
+    { n: 5,   label: "5 sessions 🌟" },
+    { n: 10,  label: "10 sessions 💫" },
+    { n: 20,  label: "20 sessions 🚀" },
+    { n: 30,  label: "30 sessions 🏅" },
+    { n: 50,  label: "50 sessions 👑" },
+    { n: 3,   label: "3-day streak 🔥",   check: () => streak >= 3 },
+    { n: 7,   label: "7-day streak 🌊",   check: () => streak >= 7 },
+    { n: 5,   label: "5 in one week 💥",  check: () => bestWeek >= 5 },
+  ];
+  const badgesHtml = MILESTONES.map(m => {
+    const unlocked = m.check ? m.check() : totalCount >= m.n;
+    return `<span class="milestone-badge ${unlocked ? "" : "locked"}">${unlocked ? "" : "🔒 "}${m.label}</span>`;
+  }).join("");
+
+  slot.innerHTML = statsHtml + moodHtml + `
+    <div class="ach-section-title">Milestones</div>
+    <div class="milestone-list">${badgesHtml}</div>`;
+}
+
+
 function renderTrackerTable() {
   const t = loadTracker();
   const currentWk = getCurrentTrackerWeek();
@@ -1750,9 +2233,9 @@ function renderSessionShell(data) {
       <span class="label">⏱ Session time</span>
       <span class="elapsed-time" id="elapsed-time">00:00</span>
     </div>
-    <div class="status" id="status">Get ready…</div>
+    <div class="status" id="status" role="status" aria-live="polite">Get ready…</div>
     <div class="timer-zone" id="timer-zone">
-      <div class="timer" id="timer">--:--</div>
+      <div class="timer" id="timer" aria-live="off">--:--</div>
       <div class="progress" id="progress"></div>
     </div>
     <div class="exercise" id="exercise"></div>
@@ -2004,6 +2487,59 @@ async function runRepsWithVoice(ex) {
 const LS_SESSIONS = "skate_sessions_v1";
 const LS_TRACKER  = "skate_tracker_v1";
 
+/* ============================================================
+   SETTINGS + SKIP HISTORY + PROGRESS (restored)
+   ============================================================ */
+
+function readStorage(key, fallback) {
+  try { const v = localStorage.getItem(key); return v !== null ? JSON.parse(v) : fallback; }
+  catch { return fallback; }
+}
+function writeStorage(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+function loadSettings() {
+  return { ...DEFAULT_SETTINGS, ...readStorage(SETTINGS_KEY, {}) };
+}
+function saveSettings() {
+  writeStorage(SETTINGS_KEY, appSettings);
+}
+function loadProgressEntries() {
+  return readStorage(PROGRESS_KEY, []);
+}
+function saveProgressEntries() {
+  writeStorage(PROGRESS_KEY, progressEntries);
+}
+function pruneSkipHistory(items) {
+  const cutoff = Date.now() - SKIP_RETENTION_MS;
+  return (items || []).filter(item => item.createdAt >= cutoff);
+}
+function loadSkipHistory() {
+  const cleaned = pruneSkipHistory(readStorage(SKIP_HISTORY_KEY, []));
+  writeStorage(SKIP_HISTORY_KEY, cleaned);
+  return cleaned;
+}
+function saveSkipHistory() {
+  skipHistory = pruneSkipHistory(skipHistory);
+  writeStorage(SKIP_HISTORY_KEY, skipHistory);
+}
+function nextEncouragement() {
+  const options = ENCOURAGEMENTS.filter(msg => msg !== lastEncouragement);
+  const chosen = options[Math.floor(Math.random() * options.length)] || ENCOURAGEMENTS[0];
+  lastEncouragement = chosen;
+  return chosen;
+}
+function escapeRegex(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function applyPronunciationMap(msg) {
+  let out = msg;
+  for (const [word, pron] of Object.entries(PRONUNCIATION_MAP)) {
+    out = out.replace(new RegExp(escapeRegex(word), "gi"), pron);
+  }
+  return out;
+}
+
 // Sessions log: array of { dayKey, isoDate, durationSecs, session: 'morning'|'evening' }
 function loadSessions() {
   try { return JSON.parse(localStorage.getItem(LS_SESSIONS) || "[]"); }
@@ -2112,7 +2648,8 @@ async function startSession() {
   session = {
     running: true, paused: false, abort: false, skipExercise: false,
     currentTimer: null, byRepsResolver: null,
-    calmMode: !!data.isCalmDay, currentEx: null, weather: session.weather
+    calmMode: !!data.isCalmDay, currentEx: null, weather: session.weather,
+    skipped: [], doneHoldTimeout: null, doneHoldTriggered: false
   };
 
   // Apply skipGreetingOnStart if set
@@ -2275,15 +2812,18 @@ async function startSession() {
             await speakAndWait(roundProgress);
 
             const leadTime = upcomingEx && HARD_EXERCISES.has(upcomingEx.name) ? 8 : 5;
-            const result = await countdown(circuit.roundRest, {
+            const result = await countdown(Math.max(circuit.roundRest, appSettings.roundRestSeconds, MIN_REST), {
               onTick: (rem) => {
                 if (rem === leadTime && upcomingEx) speak("Get ready for " + upcomingEx.name);
               }
             });
             if (result === "abort") return finalize(false);
+            if (result !== "skip" && appSettings.voiceStyle !== "quiet") {
+              speak(nextEncouragement());
+            }
           } else {
             // Inter-exercise rest
-            const restDuration = Math.max(ex.rest, MIN_REST);
+            const restDuration = Math.max(ex.rest, appSettings.exerciseRestSeconds, MIN_REST);
             setZone("rest");
             setStatus("Rest");
             setExercise({
@@ -2351,6 +2891,13 @@ function formCheck() {
 
 function skipExercise() {
   if (!confirm("Skip this exercise and move on?")) return;
+  if (session.currentEx) {
+    session.skipped.push({
+      name: session.currentEx.name,
+      round: document.getElementById("progress")?.innerText || "",
+      at: Date.now()
+    });
+  }
   session.skipExercise = true;
   if (session.byRepsResolver) {
     session.byRepsResolver("skip"); // wrapper handles null + clearInterval
@@ -2383,13 +2930,19 @@ function finalize(completed) {
   const isEvening = selectedSession === "evening";
 
   if (completed) {
-    // Save session record (morning sessions count toward weekly total; evening tracked too)
-    saveSession({
+    // Save session record — localStorage (source of truth) + Firestore (cloud record)
+    const sessionEntry = {
       dayKey: selectedDay,
       isoDate: new Date().toISOString(),
       durationSecs: elapsedSecs,
-      session: isEvening ? "evening" : "morning"
-    });
+      session: isEvening ? "evening" : "morning",
+      skippedCount: session.skipped.length,
+      completedFully: true
+    };
+    saveSession(sessionEntry);
+    // Cloud write — store returned doc ID so reflection can patch mood later
+    _pendingFsId = null;
+    fsAddSession(sessionEntry).then(id => { _pendingFsId = id; });
 
     setZone("");
     if (isEvening) {
@@ -2410,6 +2963,15 @@ function finalize(completed) {
       });
       setUpNext("");
       speak("Training complete. Fantastic effort.");
+    }
+    if (session.skipped.length) {
+      skipHistory.unshift({
+        createdAt: Date.now(),
+        sessionDate: new Date().toISOString(),
+        sessionType: selectedSession,
+        skippedItems: session.skipped
+      });
+      saveSkipHistory();
     }
     showReflection();
   } else {
@@ -2479,7 +3041,12 @@ function showReflection() {
           <button data-feel="hard">Hard</button>
         </div>
         <div id="reflect-thanks" class="reflect-thanks" style="display:none;"></div>
+        <div id="skip-summary" style="margin-top:0.6rem; font-family:'Caveat',cursive; color:var(--ink-light);"></div>
         ${inputsHtml}
+        <div class="tracker" style="margin-top:0.5rem;">
+          <h4>Skipped in last 7 days</h4>
+          <ul class="tracker-list" id="skip-history-list"></ul>
+        </div>
         <div style="margin-top: 1rem;">
           <button class="btn btn-primary" id="btn-restart">SAVE & DONE</button>
         </div>
@@ -2501,8 +3068,19 @@ function showReflection() {
       t.style.display = "block";
     };
   });
+  const skipSummary = document.getElementById("skip-summary");
+  if (session.skipped.length) {
+    skipSummary.textContent = `Skipped this session: ${session.skipped.map(s => s.name).join(", ")}`;
+  } else {
+    skipSummary.textContent = "No skipped exercises this session.";
+  }
+  const skipHistoryList = document.getElementById("skip-history-list");
+  const recentSkips = skipHistory.slice(0, 8);
+  skipHistoryList.innerHTML = recentSkips.length
+    ? recentSkips.map(entry => `<li>${entry.sessionDate.slice(0, 10)} · ${entry.skippedItems.map(item => item.name).join(", ")}</li>`).join("")
+    : "<li>No skipped content in the last 7 days.</li>";
   document.getElementById("btn-restart").onclick = () => {
-    // Save metrics if any were entered
+    // Save metrics to localStorage tracker
     const t = loadTracker();
     const w = `week${week}`;
     t[w] = t[w] || {};
@@ -2514,6 +3092,16 @@ function showReflection() {
     if (bj && bj.value) t[w].boxjump = bj.value;
     if (sp && sp.value) t[w].splits = sp.value;
     saveTracker(t);
+    // Patch mood + metrics back to the Firestore doc (fire-and-forget)
+    if (_pendingFsId) {
+      const patch = {};
+      if (chosenFeel)           patch.mood       = chosenFeel;
+      if (pu && pu.value)       patch.pullup     = pu.value;
+      if (bj && bj.value)       patch.boxjump    = bj.value;
+      if (sp && sp.value)       patch.splits     = sp.value;
+      if (Object.keys(patch).length) fsUpdateSession(_pendingFsId, patch);
+      _pendingFsId = null;
+    }
     renderCard();
   };
 }
@@ -2525,6 +3113,9 @@ function showReflection() {
 function init() {
   initModal();
 }
+
+// type=module scripts are scoped — expose functions referenced by inline HTML attributes
+window.pickSession = pickSession;
 
 init();
 </script>
