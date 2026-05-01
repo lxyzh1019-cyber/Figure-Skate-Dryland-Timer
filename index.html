@@ -222,36 +222,6 @@
     opacity: 0.5;
     cursor: not-allowed;
   }
-  .modal-settings {
-    text-align: left;
-    background: var(--bg);
-    border: 2px solid var(--ink);
-    border-radius: var(--radius-sm);
-    padding: 0.8rem;
-    margin-bottom: 1rem;
-    box-shadow: 2px 2px 0 var(--ink);
-  }
-  .modal-settings h3 {
-    font-family: 'Gochi Hand', cursive;
-    font-size: 1.35rem;
-    margin-bottom: 0.4rem;
-  }
-  .settings-row {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 0.4rem 0.7rem;
-    align-items: center;
-    margin-bottom: 0.45rem;
-    font-size: 1rem;
-  }
-  .settings-row input,
-  .settings-row select {
-    font-family: 'Nunito', sans-serif;
-    border: 2px solid var(--ink);
-    border-radius: 8px;
-    padding: 0.25rem 0.4rem;
-    width: 96px;
-  }
 
   /* Main page (hidden until modal closes) */
   .page-content {
@@ -308,9 +278,14 @@
   .brief-section ul { list-style: none; padding: 0; margin: 0.3rem 0 0; font-size: 1.05rem; }
   .brief-section li { padding: 0.15rem 0; line-height: 1.4; }
   .brief-section li::before { content: "• "; color: var(--jess-deep); font-weight: bold; }
-  .brief-section .ex-line { display: flex; justify-content: space-between; gap: 0.5rem; }
+  .brief-section .ex-line {
+    display: flex; justify-content: space-between; align-items: baseline;
+    gap: 0.5rem; flex-wrap: wrap;
+  }
+  .brief-section .ex-line span:first-child { flex: 1 1 60%; min-width: 0; }
   .brief-section .ex-line .ex-meta {
     color: var(--ink-light); font-family: 'Caveat', cursive; font-size: 1.1rem;
+    flex: 0 0 auto; white-space: nowrap;
   }
   .readiness {
     background: var(--bg2); border: 2px dashed var(--paper-line);
@@ -339,13 +314,6 @@
     line-height: 1; color: var(--ink); letter-spacing: -3px; transition: color 0.2s;
   }
   .timer.urgent { color: var(--accent-orange); }
-  .timer.label {
-    font-size: 1.6rem;
-    letter-spacing: 0;
-    line-height: 1.2;
-    padding: 0 0.5rem;
-    white-space: normal;
-  }
 
   .progress {
     display: flex; justify-content: center; gap: 0.5rem; flex-wrap: wrap;
@@ -469,48 +437,6 @@
     background: var(--bg2); border-radius: var(--radius-sm);
     border: 2px dashed var(--paper-line);
   }
-  .tracker {
-    background: var(--bg2);
-    border: 2px solid var(--ink);
-    border-radius: var(--radius-sm);
-    padding: 0.7rem;
-    margin-top: 0.8rem;
-    box-shadow: 2px 2px 0 var(--ink);
-  }
-  .tracker h4 {
-    font-size: 1.35rem;
-    margin-bottom: 0.4rem;
-  }
-  .tracker-form {
-    display: grid;
-    grid-template-columns: 1fr 90px 1fr auto;
-    gap: 0.4rem;
-    margin-bottom: 0.5rem;
-  }
-  .tracker-form input {
-    border: 2px solid var(--ink);
-    border-radius: 8px;
-    padding: 0.35rem 0.45rem;
-    font-family: 'Nunito', sans-serif;
-  }
-  .tracker-form button {
-    border: 2px solid var(--ink);
-    border-radius: 8px;
-    background: var(--accent-green);
-    font-family: 'Nunito', sans-serif;
-    font-weight: 700;
-    cursor: pointer;
-    padding: 0.35rem 0.5rem;
-  }
-  .tracker-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    font-size: 1rem;
-  }
-  .tracker-list li {
-    padding: 0.2rem 0;
-  }
 
   @media (max-width: 480px) {
     body { font-size: 1.05rem; padding: 0.6rem; }
@@ -522,7 +448,6 @@
     .btn { font-size: 1rem; padding: 0.7rem 0.4rem; }
     .modal { padding: 1.5rem; }
     .modal h2 { font-size: 1.8rem; }
-    .tracker-form { grid-template-columns: 1fr; }
   }
 
   /* Landscape iPad optimization (wide screens, shorter height) */
@@ -551,17 +476,155 @@
     .timer { font-size: 7rem; }
     .btn { padding: 0.9rem 0.8rem; font-size: 1.3rem; }
   }
+
+  /* ===== Pass 2: session elapsed timer ===== */
+  .elapsed-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 0.5rem; padding: 0.4rem 0.8rem;
+    background: var(--bg2); border: 2px solid var(--ink); border-radius: var(--radius-sm);
+    box-shadow: 2px 2px 0 var(--ink);
+  }
+  .elapsed-bar .label {
+    font-family: 'Caveat', cursive; font-size: 1.1rem; color: var(--ink-light);
+  }
+  .elapsed-bar .elapsed-time {
+    font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 1.3rem;
+    color: var(--jess-deep); letter-spacing: 1px;
+  }
+
+  /* ===== Pass 2: weekly summary in modal ===== */
+  .week-summary {
+    background: var(--bg2); border: 2px dashed var(--paper-line);
+    border-radius: var(--radius-sm); padding: 0.7rem;
+    margin: 0.8rem 0; text-align: left;
+  }
+  .week-summary .ws-title {
+    font-family: 'Caveat', cursive; font-size: 1.15rem;
+    color: var(--ink-light); margin-bottom: 0.4rem; text-align: center;
+  }
+  .week-summary .ws-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+  }
+  .week-summary .ws-cell {
+    text-align: center; font-size: 0.75rem; line-height: 1.2;
+    padding: 0.3rem 0.1rem; background: var(--paper);
+    border: 1.5px solid var(--ink); border-radius: 6px;
+  }
+  .week-summary .ws-cell.done {
+    background: var(--accent-green); border-width: 2px;
+  }
+  .week-summary .ws-cell .ws-day {
+    font-family: 'Caveat', cursive; font-size: 0.85rem; color: var(--ink-light);
+  }
+  .week-summary .ws-cell .ws-time {
+    font-family: 'Nunito', sans-serif; font-weight: 700;
+    font-size: 0.85rem; color: var(--ink);
+  }
+  .week-summary .ws-total {
+    margin-top: 0.5rem; text-align: center;
+    font-family: 'Gochi Hand', cursive; font-size: 1.25rem;
+    color: var(--jess-deep);
+  }
+
+  /* ===== Pass 2: tracker reminder + tracker view ===== */
+  .tracker-reminder {
+    background: var(--accent-yellow); border: 2px solid var(--ink);
+    border-radius: var(--radius-sm); padding: 0.7rem 0.9rem;
+    margin: 0.8rem 0; text-align: left; box-shadow: 2px 2px 0 var(--ink);
+  }
+  .tracker-reminder .tr-title {
+    font-family: 'Gochi Hand', cursive; font-size: 1.2rem;
+    color: var(--ink); margin-bottom: 0.3rem;
+  }
+  .tracker-reminder .tr-body {
+    font-family: 'Patrick Hand', sans-serif; font-size: 0.95rem;
+    color: var(--ink); line-height: 1.4;
+  }
+
+  .modal-secondary-btns {
+    display: flex; gap: 0.5rem; margin-top: 0.6rem;
+  }
+  .modal-secondary-btns button {
+    flex: 1; font-family: 'Patrick Hand', sans-serif; font-size: 1rem;
+    padding: 0.5rem 0.4rem; border: 2px solid var(--ink);
+    border-radius: var(--radius-sm); background: var(--paper);
+    box-shadow: 2px 2px 0 var(--ink); cursor: pointer; color: var(--ink);
+  }
+  .modal-secondary-btns button:hover {
+    transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--ink);
+  }
+
+  .tracker-table {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    margin: 0.5rem 0; font-family: 'Patrick Hand', sans-serif;
+  }
+  .tracker-table th, .tracker-table td {
+    border: 1.5px solid var(--ink); padding: 0.4rem 0.3rem;
+    text-align: center; font-size: 0.95rem; background: var(--paper);
+  }
+  .tracker-table th {
+    background: var(--jess); color: white; font-weight: 700;
+  }
+  .tracker-table td.metric-name {
+    text-align: left; background: var(--bg2);
+    font-family: 'Caveat', cursive; font-size: 1.05rem;
+  }
+  .tracker-table input {
+    width: 100%; border: 1px dashed var(--paper-line);
+    background: transparent; font-family: 'Patrick Hand', sans-serif;
+    font-size: 1rem; text-align: center; color: var(--ink);
+    padding: 0.2rem; border-radius: 4px;
+  }
+  .tracker-table input:focus {
+    outline: none; border-color: var(--jess); background: var(--bg2);
+  }
+  .tracker-table th.this-week, .tracker-table td.this-week {
+    background: var(--accent-yellow); border-width: 2px;
+  }
+  .tracker-table th.this-week { background: var(--accent-orange); color: white; }
+
+  /* Sunday self-check highlight */
+  .self-check-banner {
+    background: var(--accent-pink); border: 2px solid var(--ink);
+    border-radius: var(--radius-sm); padding: 0.6rem 0.8rem;
+    margin: 0.5rem 0; text-align: center; box-shadow: 2px 2px 0 var(--ink);
+    font-family: 'Gochi Hand', cursive; font-size: 1.15rem; color: var(--ink);
+  }
+
+  /* Post-session input card */
+  .post-session-inputs {
+    background: var(--bg); border: 2px dashed var(--paper-line);
+    border-radius: var(--radius-sm); padding: 0.8rem;
+    margin: 0.5rem 0; text-align: left;
+  }
+  .post-session-inputs h4 {
+    font-family: 'Gochi Hand', cursive; font-size: 1.3rem;
+    color: var(--jess-deep); margin: 0 0 0.5rem; text-align: center;
+  }
+  .post-session-inputs label {
+    display: block; font-family: 'Caveat', cursive; font-size: 1.1rem;
+    color: var(--ink); margin: 0.4rem 0 0.2rem;
+  }
+  .post-session-inputs input {
+    width: 100%; padding: 0.5rem; border: 2px solid var(--ink);
+    border-radius: var(--radius-sm); font-family: 'Patrick Hand', sans-serif;
+    font-size: 1rem; background: var(--paper); box-sizing: border-box;
+  }
 </style>
 </head>
 <body>
 
 <!-- Day picker modal (shows on load) -->
 <div class="modal-overlay show" id="modal-overlay">
-  <div class="modal">
+  <div class="modal" id="modal-main">
     <h2>Which day are you training?</h2>
     <p>Pick your workout below</p>
     
     <div class="modal-day-buttons" id="modal-days"></div>
+
+    <div class="week-summary" id="week-summary"></div>
+
+    <div class="tracker-reminder" id="tracker-reminder"></div>
 
     <div class="modal-session-picker" id="modal-session-picker">
       <div class="label">This day has both sessions:</div>
@@ -580,6 +643,30 @@
     <button class="modal-btn" id="modal-confirm-btn" disabled>
       Let's Go! 💪
     </button>
+
+    <div class="modal-secondary-btns">
+      <button id="btn-open-tracker">📊 4-Week Progress</button>
+      <button id="btn-reset-week" title="Clear this week's session times">🔄 Reset Week</button>
+    </div>
+  </div>
+
+  <!-- Tracker view (hidden, shown when Progress is opened) -->
+  <div class="modal" id="modal-tracker" style="display:none; max-width: 560px;">
+    <h2>📊 4-Week Progress</h2>
+    <p>Self-check every Sunday — are you a little deeper this week?</p>
+
+    <div id="self-check-banner-slot"></div>
+
+    <table class="tracker-table" id="tracker-table"></table>
+
+    <div style="font-family: 'Caveat', cursive; font-size: 1rem; color: var(--ink-light); margin: 0.5rem 0; text-align: left;">
+      💡 Tip: hold the same position deeper this week than last? The protocol is working. No change for 3 weeks → bump splits hold to 75s.
+    </div>
+
+    <div class="modal-secondary-btns">
+      <button id="btn-tracker-back">← Back</button>
+      <button id="btn-tracker-save" style="background: var(--accent-green);">Save</button>
+    </div>
   </div>
 </div>
 
@@ -588,7 +675,7 @@
   <div class="wrap">
     <div class="header">
       <h1>⛸ Land Training</h1>
-      <div class="sub">Jen · 7-day skating plan · Week 2+</div>
+      <div class="sub">Jen · 7-day skating plan · v8</div>
     </div>
 
     <div class="day-tabs" id="day-tabs"></div>
@@ -971,32 +1058,6 @@ const EVENING_FLEX = {
 const DAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const DAY_LONG = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const SETTINGS_KEY = "landTrainingSettingsV1";
-const PROGRESS_KEY = "landTrainingProgressV1";
-const SKIP_HISTORY_KEY = "landTrainingSkipHistoryV1";
-const SKIP_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
-const ENCOURAGEMENTS = [
-  "Strong finish. Great focus.",
-  "That was awesome effort.",
-  "You are leveling up.",
-  "Sharp round. Keep rolling.",
-  "Big energy. Nice work.",
-  "That control was excellent.",
-  "Power and calm. Great combo.",
-  "You stayed disciplined. Love it.",
-  "That round looked solid.",
-  "High quality effort right there."
-];
-const PRONUNCIATION_MAP = {
-  "Pallof Press": "Pal-off Press"
-};
-const DEFAULT_SETTINGS = {
-  voiceStyle: "fun",
-  exerciseRestSeconds: 12,
-  roundRestSeconds: 35,
-  secondsPerRep: 3
-};
-const DONE_HOLD_MS = 1000;
 
 /* ============================================================
    STATE & AUDIO
@@ -1009,114 +1070,11 @@ let closeModalAborted = false;
 let session = {
   running: false, paused: false, abort: false, skipExercise: false,
   currentTimer: null, byRepsResolver: null,
-  calmMode: false, currentEx: null, weather: null, skipped: [],
-  doneHoldTimeout: null, doneHoldTriggered: false
+  calmMode: false, currentEx: null, weather: null
 };
-let appSettings = loadSettings();
-let progressEntries = loadProgressEntries();
-let skipHistory = loadSkipHistory();
-let lastEncouragement = "";
 
 const speech = window.speechSynthesis;
 let audioCtx = null;
-
-function readStorage(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw);
-  } catch (_err) {
-    return fallback;
-  }
-}
-
-function writeStorage(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
-}
-
-function loadSettings() {
-  const stored = readStorage(SETTINGS_KEY, {});
-  return { ...DEFAULT_SETTINGS, ...stored };
-}
-
-function saveSettings() {
-  writeStorage(SETTINGS_KEY, appSettings);
-}
-
-function loadProgressEntries() {
-  return readStorage(PROGRESS_KEY, []);
-}
-
-function saveProgressEntries() {
-  writeStorage(PROGRESS_KEY, progressEntries);
-}
-
-function pruneSkipHistory(items) {
-  const cutoff = Date.now() - SKIP_RETENTION_MS;
-  return (items || []).filter(item => item.createdAt >= cutoff);
-}
-
-function loadSkipHistory() {
-  const cleaned = pruneSkipHistory(readStorage(SKIP_HISTORY_KEY, []));
-  writeStorage(SKIP_HISTORY_KEY, cleaned);
-  return cleaned;
-}
-
-function saveSkipHistory() {
-  skipHistory = pruneSkipHistory(skipHistory);
-  writeStorage(SKIP_HISTORY_KEY, skipHistory);
-}
-
-function parseRepCount(repsDetail) {
-  if (!repsDetail) return null;
-  const match = repsDetail.match(/^(\d+)/);
-  if (!match) return null;
-  return Number(match[1]);
-}
-
-function repsDetailWithEstimate(ex) {
-  if (!ex.byReps) return ex.eachSide ? `${Math.floor(ex.work / 2)}s each side` : `${ex.work}s`;
-  const reps = parseRepCount(ex.repsDetail);
-  if (!reps) return ex.repsDetail;
-  const totalReps = ex.repsDetail.toLowerCase().includes("each side") ? reps * 2 : reps;
-  const estimate = Math.round(totalReps * appSettings.secondsPerRep);
-  return `${ex.repsDetail} · ~${estimate}s guide`;
-}
-
-function nextEncouragement() {
-  const options = ENCOURAGEMENTS.filter(msg => msg !== lastEncouragement);
-  const chosen = options[Math.floor(Math.random() * options.length)] || ENCOURAGEMENTS[0];
-  lastEncouragement = chosen;
-  return chosen;
-}
-
-function escapeRegex(text) {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function applyPronunciationMap(msg) {
-  let spoken = msg;
-  for (const [raw, spokenAs] of Object.entries(PRONUNCIATION_MAP)) {
-    const pattern = new RegExp(escapeRegex(raw), "gi");
-    spoken = spoken.replace(pattern, spokenAs);
-  }
-  return spoken;
-}
-
-function buildUtterance(msg, kind = "default") {
-  const u = new SpeechSynthesisUtterance(msg);
-  if (appSettings.voiceStyle === "quiet" && kind === "encouragement") {
-    u.volume = 0;
-  }
-  if (appSettings.voiceStyle === "fun" && kind === "encouragement") {
-    u.rate = 0.95 + Math.random() * 0.15;
-    u.pitch = 1 + Math.random() * 0.35;
-  } else {
-    u.rate = 0.9;
-    u.pitch = 1.05;
-  }
-  return u;
-}
 
 function ensureAudio() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1126,7 +1084,9 @@ function ensureAudio() {
 function speak(msg) {
   if (!speech) return;
   speech.cancel();
-  const u = buildUtterance(applyPronunciationMap(msg));
+  const u = new SpeechSynthesisUtterance(msg);
+  u.rate = 0.9;
+  u.pitch = 1.05;
   speech.speak(u);
 }
 
@@ -1211,49 +1171,6 @@ function initModal() {
   const confirmBtn = document.getElementById("modal-confirm-btn");
   const msgEl = document.getElementById("modal-msg");
   const sessionPicker = document.getElementById("modal-session-picker");
-  const settingsBox = document.createElement("div");
-  settingsBox.className = "modal-settings";
-  settingsBox.innerHTML = `
-    <h3>Session options</h3>
-    <div class="settings-row">
-      <label for="voice-style">Voice style</label>
-      <select id="voice-style">
-        <option value="classic">Classic</option>
-        <option value="fun">Fun</option>
-        <option value="quiet">Quiet</option>
-      </select>
-    </div>
-    <div class="settings-row">
-      <label for="exercise-rest">Rest between exercises (s)</label>
-      <input id="exercise-rest" type="number" min="8" max="120" />
-    </div>
-    <div class="settings-row">
-      <label for="round-rest">Rest between rounds (s)</label>
-      <input id="round-rest" type="number" min="8" max="180" />
-    </div>
-  `;
-  document.getElementById("modal-msg").before(settingsBox);
-  document.getElementById("voice-style").value = appSettings.voiceStyle;
-  document.getElementById("exercise-rest").value = appSettings.exerciseRestSeconds;
-  document.getElementById("round-rest").value = appSettings.roundRestSeconds;
-  document.getElementById("voice-style").onchange = (e) => {
-    appSettings.voiceStyle = e.target.value;
-    saveSettings();
-  };
-  document.getElementById("exercise-rest").onchange = (e) => {
-    const parsed = Number(e.target.value);
-    if (!Number.isFinite(parsed)) return;
-    appSettings.exerciseRestSeconds = Math.max(8, Math.round(parsed));
-    e.target.value = appSettings.exerciseRestSeconds;
-    saveSettings();
-  };
-  document.getElementById("round-rest").onchange = (e) => {
-    const parsed = Number(e.target.value);
-    if (!Number.isFinite(parsed)) return;
-    appSettings.roundRestSeconds = Math.max(8, Math.round(parsed));
-    e.target.value = appSettings.roundRestSeconds;
-    saveSettings();
-  };
 
   const order = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
   
@@ -1310,8 +1227,145 @@ function initModal() {
     
     modalDays.appendChild(btn);
   });
-  
+
   confirmBtn.onclick = async () => await closeModal();
+
+  // Pass 2: render weekly summary + tracker reminder
+  renderModalWeekSummary();
+  renderModalTrackerReminder();
+
+  // Wire secondary buttons
+  document.getElementById("btn-open-tracker").onclick = openTrackerView;
+  document.getElementById("btn-reset-week").onclick = () => {
+    if (!confirm("Reset this week's session times? (Tracker data is kept.)")) return;
+    clearThisWeekSessions();
+    renderModalWeekSummary();
+  };
+  document.getElementById("btn-tracker-back").onclick = closeTrackerView;
+  document.getElementById("btn-tracker-save").onclick = saveTrackerFromUI;
+}
+
+/* ===== Pass 2: weekly summary in modal ===== */
+function renderModalWeekSummary() {
+  const sessions = thisWeekSessions().filter(s => s.session === "morning");
+  const byDay = {};
+  sessions.forEach(s => {
+    byDay[s.dayKey] = (byDay[s.dayKey] || 0) + s.durationSecs;
+  });
+  const order = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+  const cellsHtml = order.map(key => {
+    const idx = DAY_KEYS.indexOf(key);
+    const secs = byDay[key];
+    const done = secs > 0;
+    return `
+      <div class="ws-cell ${done ? 'done' : ''}">
+        <div class="ws-day">${DAY_SHORT[idx]}</div>
+        <div class="ws-time">${done ? fmtMMSS(secs) : '—'}</div>
+      </div>`;
+  }).join("");
+  const total = sessions.reduce((sum, s) => sum + s.durationSecs, 0);
+  const totalText = total > 0 ? fmtHHMM(total) : "Let's start the week!";
+  document.getElementById("week-summary").innerHTML = `
+    <div class="ws-title">⏱ This week's training time</div>
+    <div class="ws-grid">${cellsHtml}</div>
+    <div class="ws-total">Week total: ${totalText}</div>`;
+}
+
+/* ===== Pass 2: tracker reminder in modal ===== */
+function renderModalTrackerReminder() {
+  const week = getCurrentTrackerWeek();
+  const t = loadTracker();
+  const wkData = t[`week${week}`] || {};
+  const today = edmontonDayKey();
+  const isSunday = today === "sunday";
+
+  // Build reminders based on missing data
+  const missing = [];
+  if (!wkData.pullup) missing.push("Pull-up reps");
+  if (!wkData.boxjump) missing.push("Box Jump rounds");
+  if (!wkData.splits) missing.push("Centre split feel");
+
+  let reminderBody = "";
+  if (isSunday) {
+    reminderBody = `
+      <div class="self-check-banner">📅 Sunday self-check day — note your splits depth & hip flexor upright.</div>`;
+  }
+  reminderBody += `
+    <div class="tr-title">📋 Don't forget your gear</div>
+    <div class="tr-body">
+      Resistance band · Yoga mat · Plyo box · Pull-up bar · Bosu (M/W) · Sandbag (W) · Fitness ball (F/Sat).
+    </div>`;
+  if (missing.length > 0 && week > 0) {
+    reminderBody += `
+      <div class="tr-body" style="margin-top: 0.4rem;">
+        💡 Week ${week} still needs: <strong>${missing.join(", ")}</strong>. Tap "📊 Progress" to log.
+      </div>`;
+  }
+  document.getElementById("tracker-reminder").innerHTML = reminderBody;
+}
+
+/* ===== Pass 2: tracker view ===== */
+function openTrackerView() {
+  document.getElementById("modal-main").style.display = "none";
+  document.getElementById("modal-tracker").style.display = "block";
+  renderTrackerTable();
+}
+function closeTrackerView() {
+  document.getElementById("modal-tracker").style.display = "none";
+  document.getElementById("modal-main").style.display = "block";
+  renderModalTrackerReminder();
+}
+function renderTrackerTable() {
+  const t = loadTracker();
+  const currentWk = getCurrentTrackerWeek();
+  const today = edmontonDayKey();
+
+  document.getElementById("self-check-banner-slot").innerHTML =
+    today === "sunday"
+      ? `<div class="self-check-banner">📅 Sunday — log this week before bed!</div>`
+      : "";
+
+  const metrics = [
+    { key: "pullup",  label: "Pull-up reps (clean)", type: "number", placeholder: "0" },
+    { key: "boxjump", label: "Box Jump rounds done", type: "number", placeholder: "0" },
+    { key: "splits",  label: "Centre split feel",    type: "text",   placeholder: "deeper / same" },
+    { key: "feel",    label: "Overall feel",         type: "text",   placeholder: "easy / just / hard" }
+  ];
+
+  const headers = `<tr>
+    <th>Metric</th>
+    ${[1,2,3,4].map(w => `<th class="${w === currentWk ? 'this-week' : ''}">Wk ${w}</th>`).join("")}
+  </tr>`;
+
+  const rows = metrics.map(m => `
+    <tr>
+      <td class="metric-name">${m.label}</td>
+      ${[1,2,3,4].map(w => {
+        const val = (t[`week${w}`] || {})[m.key] || "";
+        const cls = w === currentWk ? "this-week" : "";
+        return `<td class="${cls}"><input type="${m.type}" data-week="${w}" data-key="${m.key}" placeholder="${m.placeholder}" value="${val}"></td>`;
+      }).join("")}
+    </tr>
+  `).join("");
+
+  document.getElementById("tracker-table").innerHTML = headers + rows;
+}
+function saveTrackerFromUI() {
+  const t = loadTracker();
+  document.querySelectorAll("#tracker-table input").forEach(inp => {
+    const w = inp.dataset.week;
+    const k = inp.dataset.key;
+    const v = inp.value.trim();
+    t[`week${w}`] = t[`week${w}`] || {};
+    if (v) t[`week${w}`][k] = v;
+    else delete t[`week${w}`][k];
+  });
+  saveTracker(t);
+  // Brief visual feedback
+  const btn = document.getElementById("btn-tracker-save");
+  const orig = btn.textContent;
+  btn.textContent = "✓ Saved!";
+  setTimeout(() => { btn.textContent = orig; }, 1200);
 }
 
 function pickSession(which) {
@@ -1408,8 +1462,9 @@ function speakAndWait(msg) {
   return new Promise(resolve => {
     if (!speech) { resolve(); return; }
     speech.cancel();
-    const spokenMsg = applyPronunciationMap(msg);
-    const u = buildUtterance(spokenMsg);
+    const u = new SpeechSynthesisUtterance(msg);
+    u.rate = 0.9;
+    u.pitch = 1.05;
     u.onend = () => {
       // Small buffer after speech ends to prevent overlap with beeps
       setTimeout(resolve, 200);
@@ -1418,7 +1473,7 @@ function speakAndWait(msg) {
       setTimeout(resolve, 200);
     };
     // Failsafe: if onend never fires (known browser bug), resolve after estimated duration
-    const estimatedMs = Math.max(spokenMsg.length * 80, 2000);
+    const estimatedMs = Math.max(msg.length * 80, 2000);
     const failsafe = setTimeout(() => resolve(), estimatedMs);
     u.onend = () => { clearTimeout(failsafe); setTimeout(resolve, 200); };
     u.onerror = () => { clearTimeout(failsafe); setTimeout(resolve, 200); };
@@ -1570,12 +1625,16 @@ function renderEveningBrief(data) {
   };
 }
 
+function briefRepsMeta(ex) {
+  // For cadence exercises, just show "by reps" — strip the timing detail from screen
+  if (ex.byReps) return "by reps";
+  return ex.eachSide ? `${Math.floor(ex.work/2)}s × 2 sides` : `${ex.work}s`;
+}
+
 function renderBrief(data) {
   const circuitsHtml = data.circuits.map(c => {
     const exHtml = c.exercises.map(ex => {
-      const meta = ex.byReps
-        ? repsDetailWithEstimate(ex)
-        : (ex.eachSide ? `${Math.floor(ex.work/2)}s × 2 sides` : `${ex.work}s`);
+      const meta = briefRepsMeta(ex);
       return `<li class="ex-line"><span>${ex.name}</span><span class="ex-meta">${meta}</span></li>`;
     }).join("");
     return `
@@ -1687,6 +1746,10 @@ function renderSessionShell(data) {
       <h2 class="day-title">${data.title}</h2>
       <div class="day-subtitle">${data.subtitle}</div>
     </div>
+    <div class="elapsed-bar">
+      <span class="label">⏱ Session time</span>
+      <span class="elapsed-time" id="elapsed-time">00:00</span>
+    </div>
     <div class="status" id="status">Get ready…</div>
     <div class="timer-zone" id="timer-zone">
       <div class="timer" id="timer">--:--</div>
@@ -1700,10 +1763,8 @@ function renderSessionShell(data) {
 function setZone(mode) { document.getElementById("timer-zone").className = "timer-zone " + mode; }
 function setTimer(s, urgent = false) {
   const t = document.getElementById("timer");
-  const isLabel = typeof s === "string" && !/^\d{1,2}(:\d{2})?$/.test(s);
   t.textContent = fmt(s);
   t.classList.toggle("urgent", urgent);
-  t.classList.toggle("label", isLabel);
 }
 function setStatus(msg) { document.getElementById("status").textContent = msg; }
 function setProgress(chips) {
@@ -1741,50 +1802,12 @@ function setDoneControls() {
     <button class="btn btn-form"  id="btn-form">FORM</button>
     <button class="btn btn-skip"  id="btn-skip">SKIP EX</button>
     <button class="btn btn-stop"  id="btn-stop">STOP</button>`;
-  const doneBtn = document.getElementById("btn-done");
-  const resetDoneLabel = () => {
-    if (doneBtn) doneBtn.textContent = "DONE ✓";
-  };
-  const clearDoneHold = () => {
-    if (session.doneHoldTimeout) {
-      clearTimeout(session.doneHoldTimeout);
-      session.doneHoldTimeout = null;
+  document.getElementById("btn-done").onclick = () => {
+    if (session.byRepsResolver) {
+      beep(880, 0.15);
+      session.byRepsResolver("done"); // wrapper handles null + clearInterval
     }
-    session.doneHoldTriggered = false;
-    resetDoneLabel();
   };
-  const startDoneHold = (ev) => {
-    if (ev) ev.preventDefault();
-    if (!session.byRepsResolver || session.doneHoldTimeout) return;
-    session.doneHoldTriggered = false;
-    doneBtn.textContent = "HOLD...";
-    session.doneHoldTimeout = setTimeout(() => {
-      session.doneHoldTimeout = null;
-      session.doneHoldTriggered = true;
-      if (session.byRepsResolver) {
-        const r = session.byRepsResolver;
-        session.byRepsResolver = null;
-        beep(880, 0.15);
-        r("done");
-      }
-      resetDoneLabel();
-    }, DONE_HOLD_MS);
-  };
-  const cancelDoneHold = (ev) => {
-    if (ev) ev.preventDefault();
-    if (session.doneHoldTriggered) {
-      session.doneHoldTriggered = false;
-      resetDoneLabel();
-      return;
-    }
-    clearDoneHold();
-  };
-  doneBtn.onpointerdown = startDoneHold;
-  doneBtn.onpointerup = cancelDoneHold;
-  doneBtn.onpointerleave = cancelDoneHold;
-  doneBtn.onpointercancel = cancelDoneHold;
-  doneBtn.ondragstart = (ev) => ev.preventDefault();
-  doneBtn.onclick = (ev) => ev.preventDefault();
   document.getElementById("btn-pause").onclick = togglePause;
   document.getElementById("btn-form").onclick = formCheck;
   document.getElementById("btn-skip").onclick = skipExercise;
@@ -1817,31 +1840,26 @@ function countdown(seconds, opts = {}) {
   });
 }
 
-function waitForDone(timerLabel) {
+function waitForDone() {
   return new Promise(resolve => {
     session.byRepsResolver = resolve;
-    setTimer(timerLabel || "REPS");
+    setTimer("✓");
     setDoneControls();
     const watchdog = setInterval(() => {
-      if (session.abort) {
+      if (session.abort || session.skipExercise) {
         clearInterval(watchdog);
-        if (session.doneHoldTimeout) {
-          clearTimeout(session.doneHoldTimeout);
-          session.doneHoldTimeout = null;
-          session.doneHoldTriggered = false;
-        }
-        if (session.byRepsResolver) { const r = session.byRepsResolver; session.byRepsResolver = null; r("abort"); }
-      }
-      if (session.skipExercise) {
-        clearInterval(watchdog);
-        if (session.doneHoldTimeout) {
-          clearTimeout(session.doneHoldTimeout);
-          session.doneHoldTimeout = null;
-          session.doneHoldTriggered = false;
-        }
-        if (session.byRepsResolver) { const r = session.byRepsResolver; session.byRepsResolver = null; r("skip"); }
+        const r = session.byRepsResolver;
+        session.byRepsResolver = null;
+        r(session.abort ? "abort" : "skip");
       }
     }, 200);
+    // Wrap resolve so watchdog is always cleared
+    const origResolver = resolve;
+    session.byRepsResolver = (result) => {
+      clearInterval(watchdog);
+      session.byRepsResolver = null;
+      origResolver(result);
+    };
   });
 }
 
@@ -1858,6 +1876,231 @@ function sleep(ms) {
 }
 
 /* ============================================================
+   REPS VOICE INTELLIGENCE
+   ============================================================ */
+
+// Patterns that get cadence voice-only (not shown on screen)
+const CADENCE_PATTERN = /\d+s\s+(?:up|open|raise)/i;
+
+function hasCadence(ex) {
+  return ex.byReps && CADENCE_PATTERN.test(ex.repsDetail || "");
+}
+
+// Return screen-safe rep count: "10 reps" stripping cadence timing text
+function screenRepsDetail(ex) {
+  if (!hasCadence(ex)) return ex.repsDetail;
+  // Extract just the leading "N reps" part
+  const m = ex.repsDetail.match(/^(\d+\s+reps?)/i);
+  return m ? m[1] : ex.repsDetail.replace(/·.*$/, "").trim();
+}
+
+// Build the ordered voice cue sequence for a reps exercise
+// Returns array of strings to speak one by one, looping until DONE
+function buildVoiceCues(ex) {
+  const name = ex.name;
+
+  if (/glute bridge slow/i.test(name)) {
+    const cues = [];
+    for (let i = 1; i <= 10; i++) {
+      cues.push(`${i}. Up 2 3`, "Hold 2 3", "Down 2 3");
+    }
+    return cues;
+  }
+  if (/glute bridge/i.test(name)) {
+    const cues = [];
+    for (let i = 1; i <= 12; i++) {
+      cues.push(`${i}. Up 2`, "Hold", "Down 2");
+    }
+    return cues;
+  }
+  if (/calf raise/i.test(name)) {
+    const cues = [];
+    for (let i = 1; i <= 15; i++) {
+      cues.push(`${i}. Up 2`, "Hold", "Down 2");
+    }
+    return cues;
+  }
+  if (/clamshell/i.test(name)) {
+    const cues = [];
+    for (let i = 1; i <= 15; i++) {
+      cues.push(`${i}. Open 2`, "Hold", "Close 2");
+    }
+    return cues;
+  }
+  if (/dead bug/i.test(name)) {
+    const cues = [];
+    for (let i = 1; i <= 10; i++) {
+      cues.push(`${i}. Extend`, "And return");
+    }
+    return cues;
+  }
+  if (/bird dog/i.test(name)) {
+    const cues = [];
+    for (let i = 1; i <= 10; i++) {
+      cues.push(`${i}. Extend`, "Hold 2 3 4 5", "Return");
+    }
+    return cues;
+  }
+  // Default: count reps
+  const repMatch = (ex.repsDetail || "").match(/(\d+)\s*reps?/i);
+  const count = repMatch ? parseInt(repMatch[1]) : 10;
+  return Array.from({ length: count }, (_, i) => String(i + 1));
+}
+
+// Run a reps exercise with voice driving the pace.
+// Shows DONE button — Jen presses when finished.
+// Voice loops through cues; pressing DONE interrupts cleanly and instantly.
+async function runRepsWithVoice(ex) {
+  const cues = buildVoiceCues(ex);
+  let cueDone = false;
+
+  setTimer("✓");
+  setDoneControls();
+
+  // Promise that resolves when DONE/skip/abort is pressed
+  const donePromise = new Promise(resolve => {
+    const watchdog = setInterval(() => {
+      if (session.abort || session.skipExercise) {
+        clearInterval(watchdog);
+        const r = session.byRepsResolver;
+        if (r) { session.byRepsResolver = null; r(session.abort ? "abort" : "skip"); }
+      }
+    }, 200);
+    session.byRepsResolver = (result) => {
+      clearInterval(watchdog);
+      cueDone = true;
+      session.byRepsResolver = null;
+      // Cancel any in-flight speech so awaiting speakAndWait resolves fast
+      if (speech) speech.cancel();
+      resolve(result);
+    };
+  });
+
+  // Voice cue loop — runs until cueDone is set
+  // Respects session.paused (waits until unpaused before next cue)
+  const voiceLoop = (async () => {
+    for (const cue of cues) {
+      if (cueDone) break;
+      // If paused, wait — checked between cues so we don't speak over silence
+      while (session.paused && !cueDone) {
+        await new Promise(r => setTimeout(r, 200));
+      }
+      if (cueDone) break;
+      await speakAndWait(cue);
+      if (cueDone) break;
+    }
+  })();
+
+  const result = await donePromise;
+  cueDone = true;
+  await voiceLoop;
+  return result;
+}
+
+/* ============================================================
+   PASS 2: PERSISTENCE — sessions log + 4-week tracker
+   ============================================================ */
+
+const LS_SESSIONS = "skate_sessions_v1";
+const LS_TRACKER  = "skate_tracker_v1";
+
+// Sessions log: array of { dayKey, isoDate, durationSecs, session: 'morning'|'evening' }
+function loadSessions() {
+  try { return JSON.parse(localStorage.getItem(LS_SESSIONS) || "[]"); }
+  catch { return []; }
+}
+function saveSession(entry) {
+  const all = loadSessions();
+  all.push(entry);
+  localStorage.setItem(LS_SESSIONS, JSON.stringify(all));
+}
+function clearThisWeekSessions() {
+  const monday = mondayOfThisWeek();
+  const all = loadSessions().filter(s => new Date(s.isoDate) < monday);
+  localStorage.setItem(LS_SESSIONS, JSON.stringify(all));
+}
+function mondayOfThisWeek() {
+  const now = new Date();
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  const dow = d.getDay(); // 0=Sun..6=Sat
+  const diff = dow === 0 ? -6 : 1 - dow; // Monday-based week
+  d.setDate(d.getDate() + diff);
+  return d;
+}
+function thisWeekSessions() {
+  const monday = mondayOfThisWeek();
+  return loadSessions().filter(s => new Date(s.isoDate) >= monday);
+}
+function fmtMMSS(secs) {
+  if (!secs || secs < 0) return "—";
+  const m = Math.floor(secs / 60), r = secs % 60;
+  return `${m}:${String(r).padStart(2, "0")}`;
+}
+function fmtHHMM(secs) {
+  if (!secs || secs < 0) return "0m";
+  const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+// 4-week tracker storage
+// Structure: { week1: {pullup, boxjump, splits, feel}, week2: {...}, ... }
+function loadTracker() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LS_TRACKER) || "{}");
+    return {
+      week1: raw.week1 || {},
+      week2: raw.week2 || {},
+      week3: raw.week3 || {},
+      week4: raw.week4 || {}
+    };
+  } catch {
+    return { week1: {}, week2: {}, week3: {}, week4: {} };
+  }
+}
+function saveTracker(t) {
+  localStorage.setItem(LS_TRACKER, JSON.stringify(t));
+}
+
+// Determine "this week" for the tracker (1..4) — based on first-tracker-use date
+function getCurrentTrackerWeek() {
+  const t = loadTracker();
+  if (!t._startISO) {
+    t._startISO = new Date().toISOString();
+    saveTracker(t);
+  }
+  const start = new Date(t._startISO);
+  const days = Math.floor((new Date() - start) / 86400000);
+  return Math.min(4, Math.max(1, Math.floor(days / 7) + 1));
+}
+
+/* ============================================================
+   PASS 2: ELAPSED TIMER
+   ============================================================ */
+
+let elapsedStart = null;
+let elapsedInterval = null;
+
+function startElapsed() {
+  elapsedStart = Date.now();
+  if (elapsedInterval) clearInterval(elapsedInterval);
+  elapsedInterval = setInterval(() => {
+    if (session.paused) return;
+    const el = document.getElementById("elapsed-time");
+    if (!el) return;
+    const secs = Math.floor((Date.now() - elapsedStart) / 1000);
+    el.textContent = fmtMMSS(secs);
+  }, 1000);
+}
+function getElapsedSecs() {
+  if (!elapsedStart) return 0;
+  return Math.floor((Date.now() - elapsedStart) / 1000);
+}
+function stopElapsed() {
+  if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
+}
+
+/* ============================================================
    SESSION FLOW
    ============================================================ */
 
@@ -1869,8 +2112,7 @@ async function startSession() {
   session = {
     running: true, paused: false, abort: false, skipExercise: false,
     currentTimer: null, byRepsResolver: null,
-    calmMode: !!data.isCalmDay, currentEx: null, weather: session.weather, skipped: [],
-    doneHoldTimeout: null, doneHoldTriggered: false
+    calmMode: !!data.isCalmDay, currentEx: null, weather: session.weather
   };
 
   // Apply skipGreetingOnStart if set
@@ -1881,6 +2123,7 @@ async function startSession() {
 
   renderSessionShell(data);
   setSessionControls();
+  startElapsed();
 
   // Mantra / intro
   if (isEvening) {
@@ -1952,7 +2195,9 @@ async function startSession() {
           { text: `Exercise ${ei + 1}/${circuit.exercises.length}` }
         ]);
 
-        const detail = repsDetailWithEstimate(ex);
+        const detail = ex.byReps
+          ? screenRepsDetail(ex)
+          : (ex.eachSide ? `${Math.floor(ex.work/2)}s each side` : `${ex.work}s`);
 
         setExercise({ name: ex.name, detail, cue: ex.cue });
 
@@ -1960,9 +2205,9 @@ async function startSession() {
         setUpNext(next ? `<span class="label">Up next:</span> <span class="name">${next}</span>` : "");
 
         if (ex.byReps) {
-          // Voice cue completes FIRST, then show DONE button
-          await speakAndWait(ex.name + ". " + ex.repsDetail + ". Go.");
-          const result = await waitForDone(detail);
+          // Announce exercise name first, then voice-cue the reps
+          await speakAndWait(ex.name + ". Go.");
+          const result = await runRepsWithVoice(ex);
           if (result === "abort") return finalize(false);
           setSessionControls();
         } else {
@@ -2030,19 +2275,15 @@ async function startSession() {
             await speakAndWait(roundProgress);
 
             const leadTime = upcomingEx && HARD_EXERCISES.has(upcomingEx.name) ? 8 : 5;
-            const roundRestDuration = Math.max(MIN_REST, appSettings.roundRestSeconds);
-            const result = await countdown(roundRestDuration, {
+            const result = await countdown(circuit.roundRest, {
               onTick: (rem) => {
                 if (rem === leadTime && upcomingEx) speak("Get ready for " + upcomingEx.name);
               }
             });
             if (result === "abort") return finalize(false);
-            if (result !== "skip" && appSettings.voiceStyle !== "quiet") {
-              speak(nextEncouragement());
-            }
           } else {
             // Inter-exercise rest
-            const restDuration = Math.max(MIN_REST, appSettings.exerciseRestSeconds);
+            const restDuration = Math.max(ex.rest, MIN_REST);
             setZone("rest");
             setStatus("Rest");
             setExercise({
@@ -2093,6 +2334,8 @@ function togglePause() {
   session.paused = !session.paused;
   const btn = document.getElementById("btn-pause");
   if (btn) btn.textContent = session.paused ? "RESUME" : "PAUSE";
+  // speak() calls speech.cancel() — this also kills any active rep cue,
+  // which is exactly what we want when pausing
   speak(session.paused ? "Paused." : "Resuming.");
 }
 
@@ -2108,18 +2351,9 @@ function formCheck() {
 
 function skipExercise() {
   if (!confirm("Skip this exercise and move on?")) return;
-  if (session.currentEx) {
-    session.skipped.push({
-      name: session.currentEx.name,
-      round: document.getElementById("progress")?.innerText || "",
-      at: Date.now()
-    });
-  }
   session.skipExercise = true;
   if (session.byRepsResolver) {
-    const r = session.byRepsResolver;
-    session.byRepsResolver = null;
-    r("skip");
+    session.byRepsResolver("skip"); // wrapper handles null + clearInterval
   }
   speak("Skipping. Moving on.");
 }
@@ -2128,9 +2362,7 @@ function stopSession() {
   if (!confirm("Stop the whole session?")) return;
   session.abort = true;
   if (session.byRepsResolver) {
-    const r = session.byRepsResolver;
-    session.byRepsResolver = null;
-    r("abort");
+    session.byRepsResolver("abort"); // wrapper handles null + clearInterval
   }
   speak("Session stopped.");
 }
@@ -2145,16 +2377,27 @@ function finalize(completed) {
   session.paused = false;
   session.abort = false;
 
+  const elapsedSecs = getElapsedSecs();
+  stopElapsed();
+
   const isEvening = selectedSession === "evening";
 
   if (completed) {
+    // Save session record (morning sessions count toward weekly total; evening tracked too)
+    saveSession({
+      dayKey: selectedDay,
+      isoDate: new Date().toISOString(),
+      durationSecs: elapsedSecs,
+      session: isEvening ? "evening" : "morning"
+    });
+
     setZone("");
     if (isEvening) {
       setStatus("Flexibility done 🌙");
       setTimer("✓");
       setExercise({
         name: "Done, Jen!",
-        cue: "Great stretch work. Your body is a little more open now. See you tomorrow."
+        cue: `Great stretch work — ${fmtMMSS(elapsedSecs)} on the clock. Your body is a little more open now.`
       });
       setUpNext("");
       speak("Flexibility complete. Great stretch work.");
@@ -2163,21 +2406,10 @@ function finalize(completed) {
       setTimer("✓");
       setExercise({
         name: "Done, Jen!",
-        cue: "Great work out there. Sip water, breathe, walk it off for a minute."
+        cue: `Great work — ${fmtMMSS(elapsedSecs)} on the clock. Sip water, breathe, walk it off.`
       });
       setUpNext("");
       speak("Training complete. Fantastic effort.");
-    }
-    if (session.skipped.length) {
-      const skippedNames = session.skipped.map(item => item.name).join(", ");
-      setUpNext(`<span class="label">Skipped this session:</span> <span class="name">${skippedNames}</span>`);
-      skipHistory.unshift({
-        createdAt: Date.now(),
-        sessionDate: new Date().toISOString(),
-        sessionType: selectedSession,
-        skippedItems: session.skipped
-      });
-      saveSkipHistory();
     }
     showReflection();
   } else {
@@ -2209,36 +2441,47 @@ function showReflection() {
     return;
   }
 
+  // Morning reflection: feel rating + optional metric inputs that update the tracker
+  const week = getCurrentTrackerWeek();
+  const tracker = loadTracker();
+  const wkData = tracker[`week${week}`] || {};
+
+  // Detect what to ask based on day
+  const askPullup = ["tuesday", "friday"].includes(selectedDay);
+  const askBoxJump = ["monday", "wednesday", "friday"].includes(selectedDay);
+  const askSplits = ["saturday"].includes(selectedDay);
+
+  const inputsHtml = (askPullup || askBoxJump || askSplits) ? `
+    <div class="post-session-inputs">
+      <h4>📊 Quick log for Week ${week}</h4>
+      ${askPullup ? `
+        <label>Pull-up reps (clean, normal tempo)</label>
+        <input type="number" id="post-pullup" min="0" max="50" placeholder="e.g. 4" value="${wkData.pullup || ''}">
+      ` : ''}
+      ${askBoxJump ? `
+        <label>Box Jump rounds completed</label>
+        <input type="number" id="post-boxjump" min="0" max="10" placeholder="e.g. 4" value="${wkData.boxjump || ''}">
+      ` : ''}
+      ${askSplits ? `
+        <label>Centre split — how does it feel? (deeper / same / tighter)</label>
+        <input type="text" id="post-splits" placeholder="e.g. deeper, fingers reach floor" value="${wkData.splits || ''}">
+      ` : ''}
+    </div>
+  ` : '';
+
   document.getElementById("controls").innerHTML = `
     <div style="flex: 1 1 100%;">
       <div class="reflect">
         <h3>How did that feel?</h3>
-        <div style="font-family: 'Caveat', cursive; font-size: 1.1rem; color: var(--ink-light);">
-          Saved locally on this device.
-        </div>
         <div class="reflect-buttons">
           <button data-feel="easy">Easy</button>
           <button data-feel="just">Just right</button>
           <button data-feel="hard">Hard</button>
         </div>
         <div id="reflect-thanks" class="reflect-thanks" style="display:none;"></div>
-        <div id="skip-summary" style="margin-top:0.6rem; font-family:'Caveat',cursive; color:var(--ink-light);"></div>
-        <div class="tracker">
-          <h4>Progress tracker</h4>
-          <div class="tracker-form">
-            <input id="track-movement" placeholder="Movement (e.g. Pull-Up)" />
-            <input id="track-value" type="number" min="0" placeholder="Count" />
-            <input id="track-note" placeholder="Note (optional)" />
-            <button id="track-add">Add</button>
-          </div>
-          <ul class="tracker-list" id="tracker-list"></ul>
-        </div>
-        <div class="tracker" style="margin-top:0.5rem;">
-          <h4>Skipped in last 7 days</h4>
-          <ul class="tracker-list" id="skip-history-list"></ul>
-        </div>
+        ${inputsHtml}
         <div style="margin-top: 1rem;">
-          <button class="btn btn-primary" id="btn-restart">DONE</button>
+          <button class="btn btn-primary" id="btn-restart">SAVE & DONE</button>
         </div>
       </div>
     </div>`;
@@ -2247,46 +2490,32 @@ function showReflection() {
     just: "Perfect zone. That's where the magic happens.",
     hard: "Honest work right there. Tomorrow's body will thank today's effort."
   };
+  let chosenFeel = null;
   document.querySelectorAll(".reflect-buttons button").forEach(btn => {
     btn.onclick = () => {
+      document.querySelectorAll(".reflect-buttons button").forEach(b => b.classList.remove("selected"));
+      btn.classList.add("selected");
+      chosenFeel = btn.dataset.feel;
       const t = document.getElementById("reflect-thanks");
-      t.textContent = messages[btn.dataset.feel];
+      t.textContent = messages[chosenFeel];
       t.style.display = "block";
     };
   });
-  const skipSummary = document.getElementById("skip-summary");
-  if (session.skipped.length) {
-    skipSummary.textContent = `Skipped this session: ${session.skipped.map(s => s.name).join(", ")}`;
-  } else {
-    skipSummary.textContent = "No skipped exercises this session.";
-  }
-  const list = document.getElementById("tracker-list");
-  const recent = progressEntries.slice(-8).reverse();
-  list.innerHTML = recent.length
-    ? recent.map(item => `<li>${item.date} · ${item.movement}: ${item.value}${item.note ? ` (${item.note})` : ""}</li>`).join("")
-    : "<li>No entries yet.</li>";
-  document.getElementById("track-add").onclick = () => {
-    const movement = document.getElementById("track-movement").value.trim();
-    const value = Number(document.getElementById("track-value").value);
-    const note = document.getElementById("track-note").value.trim();
-    if (!movement || !Number.isFinite(value)) return;
-    progressEntries.push({
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      movement,
-      value,
-      note,
-      date: new Date().toISOString().slice(0, 10),
-      createdAt: Date.now()
-    });
-    saveProgressEntries();
-    showReflection();
+  document.getElementById("btn-restart").onclick = () => {
+    // Save metrics if any were entered
+    const t = loadTracker();
+    const w = `week${week}`;
+    t[w] = t[w] || {};
+    if (chosenFeel) t[w].feel = chosenFeel;
+    const pu = document.getElementById("post-pullup");
+    const bj = document.getElementById("post-boxjump");
+    const sp = document.getElementById("post-splits");
+    if (pu && pu.value) t[w].pullup = pu.value;
+    if (bj && bj.value) t[w].boxjump = bj.value;
+    if (sp && sp.value) t[w].splits = sp.value;
+    saveTracker(t);
+    renderCard();
   };
-  const skipHistoryList = document.getElementById("skip-history-list");
-  const recentSkips = skipHistory.slice(0, 8);
-  skipHistoryList.innerHTML = recentSkips.length
-    ? recentSkips.map(entry => `<li>${entry.sessionDate.slice(0, 10)} · ${entry.skippedItems.map(item => item.name).join(", ")}</li>`).join("")
-    : "<li>No skipped content in the last 7 days.</li>";
-  document.getElementById("btn-restart").onclick = () => renderCard();
 }
 
 /* ============================================================
