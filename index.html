@@ -821,6 +821,7 @@
       <button id="btn-open-history">📅 Last 7 Sessions</button>
       <button id="btn-open-achievements">🏅 Achievements</button>
       <button id="btn-reset-week" title="Clear this week's session times">🔄 Reset Week</button>
+      <button id="btn-test-mode" title="Practice without saving — nothing is recorded">🧪 Test Mode: OFF</button>
     </div>
   </div>
 
@@ -870,6 +871,7 @@
     <header class="header">
       <h1>⛸ Land Training</h1>
       <div class="sub">Jen · 7-day gap-period plan · gap_v3</div>
+      <div id="test-mode-banner" style="display:none; margin-top:0.4rem; padding:0.3rem 0.8rem; background:var(--accent-orange); color:white; border:2px solid var(--ink); border-radius:50px; font-family:'Gochi Hand',cursive; font-size:1.1rem; box-shadow:2px 2px 0 var(--ink);">🧪 TEST MODE — nothing saved</div>
     </header>
 
     <nav class="day-tabs" id="day-tabs" aria-label="Day picker"></nav>
@@ -1716,6 +1718,7 @@ let selectedRehearsalSport = "skate"; // "skate" | "swim"
 let skipGreetingOnStart = false;
 let closeModalAborted = false;
 let introPlaying = false;
+let testMode = false; // when true, nothing is saved (local or cloud) — for kids to try the timer
 let session = {
   running: false, paused: false, abort: false, skipExercise: false,
   currentTimer: null, byRepsResolver: null,
@@ -1986,6 +1989,16 @@ function initModal() {
     clearThisWeekSessions();
     renderModalWeekSummary();
   };
+  const testBtn = document.getElementById("btn-test-mode");
+  const refreshTestBtn = () => {
+    testBtn.textContent = `🧪 Test Mode: ${testMode ? "ON" : "OFF"}`;
+    testBtn.style.background = testMode ? "var(--accent-orange)" : "";
+    testBtn.style.color = testMode ? "white" : "";
+    const banner = document.getElementById("test-mode-banner");
+    if (banner) banner.style.display = testMode ? "inline-block" : "none";
+  };
+  testBtn.onclick = () => { testMode = !testMode; refreshTestBtn(); };
+  refreshTestBtn();
   document.getElementById("btn-tracker-back").onclick = closeAllSubViews;
   document.getElementById("btn-tracker-save").onclick = saveTrackerFromUI;
   document.getElementById("btn-history-back").onclick = closeAllSubViews;
@@ -3901,11 +3914,13 @@ function finalize(completed) {
       skippedCount: session.skipped.length,
       completedFully: true
     };
-    saveSession(sessionEntry);
-    renderModalWeekSummary();
-    // Cloud write — store returned doc ID so reflection can patch mood later
     _pendingFsId = null;
-    fsAddSession(sessionEntry).then(id => { _pendingFsId = id; });
+    if (!testMode) {
+      saveSession(sessionEntry);
+      renderModalWeekSummary();
+      // Cloud write — store returned doc ID so reflection can patch mood later
+      fsAddSession(sessionEntry).then(id => { _pendingFsId = id; });
+    }
 
     setZone("");
     if (isEvening) {
@@ -3927,7 +3942,7 @@ function finalize(completed) {
       setUpNext("");
       speak("Training complete. Fantastic effort.");
     }
-    if (session.skipped.length) {
+    if (session.skipped.length && !testMode) {
       skipHistory.unshift({
         createdAt: Date.now(),
         sessionDate: new Date().toISOString(),
@@ -4033,26 +4048,28 @@ function showReflection() {
     ? recentSkips.map(entry => `<li>${entry.sessionDate.slice(0, 10)} · ${entry.skippedItems.map(item => item.name).join(", ")}</li>`).join("")
     : "<li>No skipped content in the last 7 days.</li>";
   document.getElementById("btn-restart").onclick = () => {
-    // Save the day's PR metric + feel to the localStorage tracker
-    const t = loadTracker();
-    const w = `week${week}`;
-    t[w] = t[w] || {};
-    if (chosenFeel) t[w].feel = chosenFeel;
-    document.querySelectorAll("[data-pr-key]").forEach(input => {
-      if (input.value) t[w][input.dataset.prKey] = input.value;
-    });
-    saveTracker(t);
-    // Patch mood + PR metric back to the Firestore doc (fire-and-forget)
-    if (_pendingFsId) {
-      const patch = {};
-      if (chosenFeel) patch.mood = chosenFeel;
-      const prValues = {};
+    if (!testMode) {
+      // Save the day's PR metric + feel to the localStorage tracker
+      const t = loadTracker();
+      const w = `week${week}`;
+      t[w] = t[w] || {};
+      if (chosenFeel) t[w].feel = chosenFeel;
       document.querySelectorAll("[data-pr-key]").forEach(input => {
-        if (input.value) prValues[input.dataset.prKey] = input.value;
+        if (input.value) t[w][input.dataset.prKey] = input.value;
       });
-      if (Object.keys(prValues).length) patch.pr = prValues;
-      if (Object.keys(patch).length) fsUpdateSession(_pendingFsId, patch);
-      _pendingFsId = null;
+      saveTracker(t);
+      // Patch mood + PR metric back to the Firestore doc (fire-and-forget)
+      if (_pendingFsId) {
+        const patch = {};
+        if (chosenFeel) patch.mood = chosenFeel;
+        const prValues = {};
+        document.querySelectorAll("[data-pr-key]").forEach(input => {
+          if (input.value) prValues[input.dataset.prKey] = input.value;
+        });
+        if (Object.keys(prValues).length) patch.pr = prValues;
+        if (Object.keys(patch).length) fsUpdateSession(_pendingFsId, patch);
+        _pendingFsId = null;
+      }
     }
     renderCard();
   };
