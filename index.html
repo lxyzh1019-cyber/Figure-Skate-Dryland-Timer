@@ -821,6 +821,7 @@
       <button id="btn-open-history">📅 Last 7 Sessions</button>
       <button id="btn-open-achievements">🏅 Achievements</button>
       <button id="btn-reset-week" title="Clear this week's session times">🔄 Reset Week</button>
+      <button id="btn-test-mode" title="Practice without saving — nothing is recorded">🧪 Test Mode: OFF</button>
     </div>
   </div>
 
@@ -870,6 +871,7 @@
     <header class="header">
       <h1>⛸ Land Training</h1>
       <div class="sub">Jen · 7-day gap-period plan · gap_v3</div>
+      <div id="test-mode-banner" style="display:none; margin-top:0.4rem; padding:0.3rem 0.8rem; background:var(--accent-orange); color:white; border:2px solid var(--ink); border-radius:50px; font-family:'Gochi Hand',cursive; font-size:1.1rem; box-shadow:2px 2px 0 var(--ink);">🧪 TEST MODE — nothing saved</div>
     </header>
 
     <nav class="day-tabs" id="day-tabs" aria-label="Day picker"></nav>
@@ -1380,9 +1382,19 @@ const PLAN = {
     hrZone: "z2", hrText: "Zone 2 · 118–138 bpm — light day, slow down if HR climbs.",
     benchmark: "Fresh day — log a clean PR, no grinding.",
     prTarget: "Plank clean hold (s)",
-    equipment: ["Stability ball", "Mat"],
+    equipment: ["Spinner board", "Stability ball", "Mat"],
     warmup: WARMUP,
     isCalmDay: true,
+    spinnerBoard: {
+      title: "🌀 Spinner Board Block (~5 min — light/quality)",
+      note: "Friday is a quality day — slow, controlled, no grinding. Rest 30s between sets.",
+      duration: 300,
+      steps: [
+        "Forward spin — free foot hold 20s × 2 each direction",
+        "Back spin — free foot hold 20s × 2 each direction",
+        () => `Layback position hold on board — ${spinnerLaybackDuration()}s × 2 (quality reps only)`
+      ]
+    },
     circuits: [
       { name: "Light Core Block — Quality Only", rounds: 2, roundRest: ROUND_REST, exercises: [
         E("Plank", 30, 5, "Core braced.",
@@ -1706,6 +1718,7 @@ let selectedRehearsalSport = "skate"; // "skate" | "swim"
 let skipGreetingOnStart = false;
 let closeModalAborted = false;
 let introPlaying = false;
+let testMode = false; // when true, nothing is saved (local or cloud) — for kids to try the timer
 let session = {
   running: false, paused: false, abort: false, skipExercise: false,
   currentTimer: null, byRepsResolver: null,
@@ -1976,6 +1989,16 @@ function initModal() {
     clearThisWeekSessions();
     renderModalWeekSummary();
   };
+  const testBtn = document.getElementById("btn-test-mode");
+  const refreshTestBtn = () => {
+    testBtn.textContent = `🧪 Test Mode: ${testMode ? "ON" : "OFF"}`;
+    testBtn.style.background = testMode ? "var(--accent-orange)" : "";
+    testBtn.style.color = testMode ? "white" : "";
+    const banner = document.getElementById("test-mode-banner");
+    if (banner) banner.style.display = testMode ? "inline-block" : "none";
+  };
+  testBtn.onclick = () => { testMode = !testMode; refreshTestBtn(); };
+  refreshTestBtn();
   document.getElementById("btn-tracker-back").onclick = closeAllSubViews;
   document.getElementById("btn-tracker-save").onclick = saveTrackerFromUI;
   document.getElementById("btn-history-back").onclick = closeAllSubViews;
@@ -2945,6 +2968,7 @@ function configuredRoundRest() {
 function estimateSessionSecs(data, withWarmup) {
   let total = 0;
   if (withWarmup && data.warmup) total += data.warmup.duration || 180;
+  if (data.spinnerBoard) total += data.spinnerBoard.duration || 480;
   const exRest = configuredExerciseRest();
   data.circuits.forEach(c => {
     const roundRest = configuredRoundRest();
@@ -2958,7 +2982,7 @@ function estimateSessionSecs(data, withWarmup) {
                  || (ex.repsDetail || "").match(/(\d+)/);
           const reps = m ? parseInt(m[1], 10) + repBonus() : 10;
           const detail = ex.repsDetail || "";
-          const multiplier = /each direction/i.test(detail) ? 4 : (/each side|per side/i.test(detail) ? 2 : 1);
+          const multiplier = /each direction/i.test(detail) ? 2 : (/each side|per side/i.test(detail) ? 2 : 1);
           total += reps * (appSettings.secondsPerRep || 3) * multiplier;
         } else {
           total += exWork(ex) + (ex.eachSide ? SIDE_SWITCH_BUFFER : 0);
@@ -3890,11 +3914,13 @@ function finalize(completed) {
       skippedCount: session.skipped.length,
       completedFully: true
     };
-    saveSession(sessionEntry);
-    renderModalWeekSummary();
-    // Cloud write — store returned doc ID so reflection can patch mood later
     _pendingFsId = null;
-    fsAddSession(sessionEntry).then(id => { _pendingFsId = id; });
+    if (!testMode) {
+      saveSession(sessionEntry);
+      renderModalWeekSummary();
+      // Cloud write — store returned doc ID so reflection can patch mood later
+      fsAddSession(sessionEntry).then(id => { _pendingFsId = id; });
+    }
 
     setZone("");
     if (isEvening) {
@@ -3916,7 +3942,7 @@ function finalize(completed) {
       setUpNext("");
       speak("Training complete. Fantastic effort.");
     }
-    if (session.skipped.length) {
+    if (session.skipped.length && !testMode) {
       skipHistory.unshift({
         createdAt: Date.now(),
         sessionDate: new Date().toISOString(),
@@ -4022,26 +4048,28 @@ function showReflection() {
     ? recentSkips.map(entry => `<li>${entry.sessionDate.slice(0, 10)} · ${entry.skippedItems.map(item => item.name).join(", ")}</li>`).join("")
     : "<li>No skipped content in the last 7 days.</li>";
   document.getElementById("btn-restart").onclick = () => {
-    // Save the day's PR metric + feel to the localStorage tracker
-    const t = loadTracker();
-    const w = `week${week}`;
-    t[w] = t[w] || {};
-    if (chosenFeel) t[w].feel = chosenFeel;
-    document.querySelectorAll("[data-pr-key]").forEach(input => {
-      if (input.value) t[w][input.dataset.prKey] = input.value;
-    });
-    saveTracker(t);
-    // Patch mood + PR metric back to the Firestore doc (fire-and-forget)
-    if (_pendingFsId) {
-      const patch = {};
-      if (chosenFeel) patch.mood = chosenFeel;
-      const prValues = {};
+    if (!testMode) {
+      // Save the day's PR metric + feel to the localStorage tracker
+      const t = loadTracker();
+      const w = `week${week}`;
+      t[w] = t[w] || {};
+      if (chosenFeel) t[w].feel = chosenFeel;
       document.querySelectorAll("[data-pr-key]").forEach(input => {
-        if (input.value) prValues[input.dataset.prKey] = input.value;
+        if (input.value) t[w][input.dataset.prKey] = input.value;
       });
-      if (Object.keys(prValues).length) patch.pr = prValues;
-      if (Object.keys(patch).length) fsUpdateSession(_pendingFsId, patch);
-      _pendingFsId = null;
+      saveTracker(t);
+      // Patch mood + PR metric back to the Firestore doc (fire-and-forget)
+      if (_pendingFsId) {
+        const patch = {};
+        if (chosenFeel) patch.mood = chosenFeel;
+        const prValues = {};
+        document.querySelectorAll("[data-pr-key]").forEach(input => {
+          if (input.value) prValues[input.dataset.prKey] = input.value;
+        });
+        if (Object.keys(prValues).length) patch.pr = prValues;
+        if (Object.keys(patch).length) fsUpdateSession(_pendingFsId, patch);
+        _pendingFsId = null;
+      }
     }
     renderCard();
   };
