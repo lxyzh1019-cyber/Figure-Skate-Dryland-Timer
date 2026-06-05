@@ -1380,9 +1380,19 @@ const PLAN = {
     hrZone: "z2", hrText: "Zone 2 · 118–138 bpm — light day, slow down if HR climbs.",
     benchmark: "Fresh day — log a clean PR, no grinding.",
     prTarget: "Plank clean hold (s)",
-    equipment: ["Stability ball", "Mat"],
+    equipment: ["Spinner board", "Stability ball", "Mat"],
     warmup: WARMUP,
     isCalmDay: true,
+    spinnerBoard: {
+      title: "🌀 Spinner Board Block (~5 min — light/quality)",
+      note: "Friday is a quality day — slow, controlled, no grinding. Rest 30s between sets.",
+      duration: 300,
+      steps: [
+        "Forward spin — free foot hold 20s × 2 each direction",
+        "Back spin — free foot hold 20s × 2 each direction",
+        () => `Layback position hold on board — ${spinnerLaybackDuration()}s × 2 (quality reps only)`
+      ]
+    },
     circuits: [
       { name: "Light Core Block — Quality Only", rounds: 2, roundRest: ROUND_REST, exercises: [
         E("Plank", 30, 5, "Core braced.",
@@ -2945,6 +2955,7 @@ function configuredRoundRest() {
 function estimateSessionSecs(data, withWarmup) {
   let total = 0;
   if (withWarmup && data.warmup) total += data.warmup.duration || 180;
+  if (data.spinnerBoard) total += data.spinnerBoard.duration || 480;
   const exRest = configuredExerciseRest();
   data.circuits.forEach(c => {
     const roundRest = configuredRoundRest();
@@ -2958,7 +2969,7 @@ function estimateSessionSecs(data, withWarmup) {
                  || (ex.repsDetail || "").match(/(\d+)/);
           const reps = m ? parseInt(m[1], 10) + repBonus() : 10;
           const detail = ex.repsDetail || "";
-          const multiplier = /each direction/i.test(detail) ? 4 : (/each side|per side/i.test(detail) ? 2 : 1);
+          const multiplier = /each direction/i.test(detail) ? 2 : (/each side|per side/i.test(detail) ? 2 : 1);
           total += reps * (appSettings.secondsPerRep || 3) * multiplier;
         } else {
           total += exWork(ex) + (ex.eachSide ? SIDE_SWITCH_BUFFER : 0);
