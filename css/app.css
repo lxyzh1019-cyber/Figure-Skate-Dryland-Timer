@@ -1,0 +1,153 @@
+/* ============================================================================
+   Skate with Grace — app shell styles + token bridge
+   The bridge maps the design markup's semantic var names (aqua/coral/sun/mint/
+   grape/gum/stop, display/hand, radius-xl, shadow-*) onto the DS rose/gold
+   palette, so the transcribed inline styles need no per-property edits.
+   (Mirrors the prototypes' own :root bridge.)
+   ========================================================================== */
+:root {
+  --font-display: var(--font-ui);
+  --font-hand: var(--font-script);
+  --radius-xl: 26px;
+  --shadow-soft: var(--shadow-card);
+  --shadow-lift: var(--shadow-float);
+  --shadow-pop: var(--shadow-float);
+  --surface-2: var(--bg-deep);
+  --surface-inset: var(--bg-deep);
+  --hairline: var(--border);
+
+  /* Primary (was aqua) -> rose */
+  --aqua-wash: var(--rose-100);
+  --aqua-light: var(--rose-300);
+  --aqua: var(--rose-500);
+  --aqua-deep: var(--rose-600);
+  --aqua-ink: var(--rose-700);
+
+  /* Secondary depth (was deep-sea) -> deeper berry */
+  --sea-wash: var(--rose-50);
+  --sea-light: var(--rose-200);
+  --sea: var(--rose-600);
+  --sea-deep: var(--rose-700);
+  --sea-ink: var(--rose-700);
+
+  /* Energy / GO (was coral) -> gold */
+  --coral-wash: var(--gold-soft);
+  --coral-light: var(--gold-soft);
+  --coral: var(--gold);
+  --coral-deep: #D99A2E;
+  --coral-ink: #7A4E00;
+
+  /* Reward / stars (was sunshine) -> gold */
+  --sun-wash: var(--gold-soft);
+  --sun-light: var(--gold-soft);
+  --sun: var(--gold);
+  --sun-deep: #D99A2E;
+  --sun-ink: #7A4E00;
+
+  /* Success / "done" (was mint/emerald) -> achieved berry (DS has no green) */
+  --mint-wash: var(--rose-100);
+  --mint-light: var(--rose-300);
+  --mint: var(--rose-500);
+  --mint-deep: var(--rose-600);
+  --mint-ink: var(--rose-700);
+
+  /* Learning / evening (was grape) -> lilac */
+  --grape-wash: var(--rose-100);
+  --grape-light: var(--lilac);
+  --grape: var(--lilac);
+  --grape-deep: #A67CC2;
+  --grape-ink: #6B3F87;
+
+  /* Playful accent (was bubblegum) -> pink accent */
+  --gum-wash: var(--rose-100);
+  --gum-light: var(--pink-soft);
+  --gum: var(--pink-accent);
+  --gum-deep: #D14A7D;
+  --gum-ink: var(--rose-700);
+
+  /* Stop / safety (kept red — universal safety signal) */
+  --stop-wash: #FDE7E5;
+  --stop-light: #F3A29C;
+  --stop: #E2564E;
+  --stop-deep: #C23931;
+  --stop-ink: #7A211C;
+
+  /* Traffic-light readiness tokens (rose-family, retinted from old sketch theme) */
+  --light-green:    var(--rose-500);
+  --light-yellow:   var(--gold);
+  --light-red:      var(--stop);
+  --light-recovery: var(--lilac);
+}
+
+/* ---- Reset / shell ---- */
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-regular);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+#app { width: 100%; }
+
+/* Brand wordmark / cheer moments */
+.script { font-family: var(--font-script); font-weight: 600; }
+
+/* Uppercase micro-labels */
+.micro-label {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+/* ---- Pill buttons ---- */
+.btn {
+  font-family: inherit;
+  font-weight: 900;
+  border: none;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: transform var(--duration-quick) var(--ease-out),
+              background var(--duration-quick) var(--ease-out),
+              box-shadow var(--duration-quick) var(--ease-out);
+}
+.btn:active { transform: translateY(2px); }
+.btn-primary { background: var(--rose-500); color: #fff; box-shadow: 0 4px 0 var(--rose-600); }
+.btn-primary:hover { background: var(--rose-600); }
+.btn-secondary { background: var(--surface); color: var(--rose-600); border: 2px solid var(--border-strong); }
+.btn-go { background: var(--gold); color: var(--sun-ink); box-shadow: 0 5px 0 var(--sun-deep); }
+
+/* ---- Left rail / bottom nav ---- */
+.rail-btn { background: none; border: none; cursor: pointer; display: flex;
+  flex-direction: column; align-items: center; gap: 5px; font-family: inherit; }
+.rail-icon-wrap { width: 46px; height: 46px; border-radius: 50%; display: flex;
+  align-items: center; justify-content: center; transition: background var(--duration-quick) var(--ease-out); }
+
+/* ---- Scrollbars (webkit has no inline equivalent) ---- */
+[data-journey-rail]::-webkit-scrollbar { width: 6px; }
+[data-journey-rail]::-webkit-scrollbar-track { background: transparent; }
+[data-journey-rail]::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.35); border-radius: 6px; }
+[data-tab-scroll]::-webkit-scrollbar { display: none; }
+[data-rail] { scrollbar-width: thin; scrollbar-color: rgba(194,86,113,0.32) transparent; scroll-behavior: smooth; }
+[data-rail]::-webkit-scrollbar { height: 8px; }
+[data-rail]::-webkit-scrollbar-track { background: transparent; margin: 0 8px; }
+[data-rail]::-webkit-scrollbar-thumb { background: rgba(194,86,113,0.28); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+[data-rail]:hover::-webkit-scrollbar-thumb { background: rgba(194,86,113,0.45); background-clip: padding-box; }
+.rail-wrap { position: relative; }
+.rail-wrap::after { content: ""; position: absolute; top: 0; right: 0; bottom: 10px; width: 44px;
+  pointer-events: none; background: linear-gradient(to right, transparent, var(--surface));
+  border-radius: 0 var(--radius-xl) var(--radius-xl) 0; }
+
+/* ---- Motion ---- */
+@keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@keyframes mapPulse { 0%,100% { box-shadow: 0 0 0 5px rgba(255,255,255,0.25); } 50% { box-shadow: 0 0 0 10px rgba(255,255,255,0.08); } }
+@keyframes popIn { 0% { transform: scale(0.96); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
+}
