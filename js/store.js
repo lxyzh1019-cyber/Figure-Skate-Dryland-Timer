@@ -103,6 +103,16 @@ export function saveSettings(patch) {
   return merged;
 }
 
+/* ---- readiness (versioned V2 schema + "same as yesterday" shortcut) ---- */
+export function loadReadiness() { return readStorage(LS_READINESS, null); }
+export function saveReadiness(record) {
+  const full = { version: 2, when: Date.now(), ...record };
+  writeStorage(LS_READINESS, full);
+  writeStorage("skate_last_check", { answers: record.answers, light: record.light, when: full.when });
+  return full;
+}
+export function loadLastCheck() { return readStorage("skate_last_check", null); }
+
 /* ============================================================================
    Journey / XP / rank
    XP: a completed training session earns 40 + 10·moves; Sunday recovery = 0.
