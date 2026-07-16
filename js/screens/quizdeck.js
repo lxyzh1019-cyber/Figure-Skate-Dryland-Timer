@@ -62,7 +62,7 @@ export function renderQuizDeck(state) {
     return `
     <div style="width:100%;max-width:1242px;margin:0 auto;box-sizing:border-box;padding:18px;">
       <div style="background:var(--rose-50);border-radius:30px;box-shadow:0 18px 44px rgba(142,52,83,0.16);padding:40px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px;min-height:520px;justify-content:center;">
-        <img src="assets/skate/illo-nice-work.png" alt="" style="height:150px;object-fit:contain;" onerror="this.style.display='none'">
+        <img src="assets/skate/illo-great-job.png" alt="" style="height:150px;object-fit:contain;" onerror="this.style.display='none'">
         <div style="font-family:var(--font-script);font-weight:700;font-size:40px;color:var(--rose-700);">Quiz Complete!</div>
         <div style="font-family:var(--font-display);font-weight:600;font-size:30px;color:var(--sun-ink);">${quiz.score} / ${quiz.items.length} correct</div>
         <div style="font-size:16px;font-weight:700;color:var(--ink-soft);max-width:400px;">${cheer}</div>

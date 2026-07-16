@@ -91,6 +91,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 #app { width: 100%; }
+body.has-bottom-nav #app { padding-bottom: 84px; }
 
 /* Brand wordmark / cheer moments */
 .script { font-family: var(--font-script); font-weight: 600; }

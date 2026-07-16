@@ -68,6 +68,7 @@ export function buildTodayVM(state) {
 
   return {
     athleteName: settings.athleteName,
+    weather: state.weather || null,
     dateLine,
     selectedKey,
     todayKey,

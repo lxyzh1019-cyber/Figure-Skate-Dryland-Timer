@@ -93,7 +93,7 @@ function roundRest(snap) {
     `<span style="width:14px;height:14px;border-radius:50%;background:${i < snap.round ? "var(--rose-500)" : "var(--surface-2)"};"></span>`).join("");
   return `
     <div style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px;">
-      <img src="assets/skate/illo-nice-work.png" alt="" style="height:120px;object-fit:contain;" onerror="this.style.display='none'">
+      <img src="assets/skate/illo-keep-going.png" alt="" style="height:120px;object-fit:contain;" onerror="this.style.display='none'">
       <div style="font-family:var(--font-display);font-weight:600;font-size:30px;color:var(--rose-700);">Great round!</div>
       <div style="display:flex;gap:8px;">${dots}</div>
       ${snap.intentWord ? `<div style="font-family:var(--font-hand);font-size:22px;font-weight:700;color:var(--rose-700);">This round, think: <b>${snap.intentWord}</b></div>` : ""}
@@ -104,6 +104,20 @@ function roundRest(snap) {
         </div>
       </div>
       ${controls(snap)}
+    </div>`;
+}
+
+function landingOverlay(name) {
+  return `
+    <div style="position:absolute;inset:0;z-index:19;background:rgba(251,241,243,0.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:40px;text-align:center;">
+      <div style="font-size:44px;">🧊</div>
+      <div style="font-family:var(--font-display);font-weight:600;font-size:28px;color:var(--rose-700);">How was that landing?</div>
+      <div style="font-size:15px;font-weight:700;color:var(--ink-soft);max-width:420px;">Knee over toe, frozen for 2 seconds? Be honest — it keeps you safe.</div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center;">
+        <button type="button" data-action="sessLandingClean" class="btn btn-primary" style="padding:16px 28px;font-size:16px;">✓ Clean &amp; frozen</button>
+        <button type="button" data-action="sessLandingWobbly" class="btn" style="background:var(--gold);color:var(--sun-ink);padding:16px 28px;font-size:16px;box-shadow:0 4px 0 var(--sun-deep);">😬 A bit wobbly</button>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:var(--ink-faint);">Two wobbly in a row and Coach drops a round to protect you.</div>
     </div>`;
 }
 
@@ -133,7 +147,7 @@ export function renderComplete(state, complete) {
   return `
   <div style="width:100%;max-width:1242px;margin:0 auto;box-sizing:border-box;padding:18px;">
     <div style="background:var(--rose-50);border-radius:30px;box-shadow:0 18px 44px rgba(142,52,83,0.16);padding:40px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px;min-height:600px;justify-content:center;">
-      <img src="assets/skate/illo-nice-work.png" alt="" style="height:180px;object-fit:contain;" onerror="this.style.display='none'">
+      <img src="assets/skate/illo-way-to-go.png" alt="" style="height:180px;object-fit:contain;" onerror="this.style.display='none'">
       <div style="font-family:var(--font-script);font-weight:700;font-size:44px;color:var(--rose-700);line-height:1;">${c.completedFully ? "Session Complete!" : "Good work today!"}</div>
       ${c.mantra ? `<div style="font-family:var(--font-hand);font-size:24px;font-weight:700;color:var(--rose-600);">“${c.mantra}”</div>` : ""}
       <div style="font-size:16px;font-weight:800;color:var(--ink-soft);">${state.__dayTitle || ""} · ${mins} min${e.endedEarly ? " · ended early" : ""}</div>
@@ -184,6 +198,7 @@ export function renderSession(state) {
         </div>
       </div>
       <div style="flex:1;display:flex;align-items:center;justify-content:center;">${inner}</div>
+      ${snap.landingCheck ? landingOverlay(snap.landingCheck) : ""}
       ${snap.stopOverlay ? stopOverlay() : ""}
     </div>
   </div>`;

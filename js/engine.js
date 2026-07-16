@@ -103,6 +103,19 @@ export class Session {
       }
 
       if (this.ended) break;
+
+      // Jump-fatigue gate: grade the landing after each valgus main-block jump.
+      // Two wobbly landings in a row drop the remaining main rounds by a tier.
+      if (res === "done" && ph.kind === "exercise" && ph.block === "main" && ph.ex.gate === "valgus") {
+        const grade = await this._landingCheck(ph);
+        if (this.ended) break;
+        this._wobblyStreak = grade === "wobbly" ? (this._wobblyStreak || 0) + 1 : 0;
+        if (this._wobblyStreak >= 2) {
+          this._wobblyStreak = 0;
+          if (this._dropTier()) await speakAndWait("Two wobbly landings — let's drop a tier. Quality over quantity.");
+        }
+      }
+
       if (res === "stop") {
         const decision = await this._handleStop();
         if (decision === "end") { this._finish(false); return; }
@@ -148,6 +161,29 @@ export class Session {
   _handleStop() {
     this.stopOverlay = true; this.onChange();
     return new Promise((resolve) => { this._stopRes = resolve; });
+  }
+  /* Landing self-check overlay after a gated jump; resolves 'clean' | 'wobbly'. */
+  _landingCheck(ph) {
+    this.landingCheck = ph.ex.name;
+    this.onChange();
+    return new Promise((resolve) => { this._landRes = resolve; });
+  }
+  gradeLanding(grade) {
+    this.landingCheck = null;
+    const r = this._landRes; this._landRes = null;
+    if (r) r(grade);
+  }
+  /* Cut the remaining higher main rounds (green3 → yellow2 → red1). Returns
+     true if anything was dropped. */
+  _dropTier() {
+    const cur = (this.phase && this.phase.round) || 1;
+    const before = this.plan.length;
+    this.plan = this.plan.filter((ph, i) =>
+      i <= this.idx ||
+      !((ph.block === "main" && (ph.round || 0) > cur) || (ph.kind === "roundRest" && (ph.round || 0) >= cur)));
+    this.totalPhases = this.plan.length || 1;
+    this.tierDropped = (this.tierDropped || 0) + 1;
+    return this.plan.length < before;
   }
 
   /* ---- controls (called from screen data-action handlers) ---- */
@@ -198,6 +234,7 @@ export class Session {
       next: ph.next || null, intentWord: this.intentWord || null,
       remaining: this.remaining, total: this.total,
       paused: this.paused, stopOverlay: this.stopOverlay,
+      landingCheck: this.landingCheck || null, tierDropped: this.tierDropped || 0,
       ended: this.ended, complete: this.complete || null,
       progressPct: Math.min(100, Math.round((this.idx / this.totalPhases) * 100)),
       elapsedSecs: Math.round((Date.now() - this.startTs) / 1000)

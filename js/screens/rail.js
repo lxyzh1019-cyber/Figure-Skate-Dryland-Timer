@@ -8,7 +8,13 @@ const ITEMS = [
   { nav: "grownup",  action: "goGrownup",  icon: "🧑", label: "Grown-up" }
 ];
 
+/* Nav mode — set by main.js each render. On narrow the left rail collapses
+   (returns "") and a fixed bottom-nav is appended instead. */
+let _wide = true;
+export function setNavWide(w) { _wide = w; }
+
 export function rail(active) {
+  if (!_wide) return "";              // narrow → bottom-nav is used instead
   const btns = ITEMS.map(it => {
     const on = it.nav === active;
     const iconWrap = `width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;` +

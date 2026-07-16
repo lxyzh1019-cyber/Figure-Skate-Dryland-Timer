@@ -7,7 +7,7 @@ import { LIGHT_ROUNDS, DAYS } from "./data.js";
 import { seedJourneyOnce, saveReadiness, loadLastCheck, loadSettings, patchLastSession } from "./store.js";
 import { renderToday } from "./screens/today.js";
 import { todayKeyNow } from "./vm/today.js";
-import { rail } from "./screens/rail.js";
+import { rail, bottomNav, setNavWide } from "./screens/rail.js";
 import {
   renderReadiness, freshReadiness, lightFromAnswers, lightFromZones, LIGHTS
 } from "./screens/readiness.js";
@@ -18,6 +18,7 @@ import { renderQuizDeck, freshQuiz } from "./screens/quizdeck.js";
 import { claimPrize, recordQuizResult, redeemPrize, saveSettings, loadSessions } from "./store.js";
 import { renderProgress } from "./screens/progress.js";
 import { renderGrownup } from "./screens/grownup.js";
+import { getWeather } from "./weather.js";
 
 const state = {
   nav: "today",          // today | progress | grownup | session | readiness | quizdeck | prizedraw
@@ -26,6 +27,7 @@ const state = {
   readiness: freshReadiness(),
   pendingSession: null,  // { dayKey, light, rounds }
   session: null,         // live Session engine instance
+  weather: null,
   __mood: null,
   prizeDraw: null,
   quiz: null,
@@ -70,8 +72,11 @@ function renderPlaceholder(title, note) {
   </div>`;
 }
 
+const RAIL_SCREENS = new Set(["today", "progress", "grownup"]);
+
 function render() {
   const app = document.getElementById("app");
+  setNavWide(state.isWide);
   let html;
   switch (state.nav) {
     case "today":     html = renderToday(state); break;
@@ -83,6 +88,10 @@ function render() {
     case "grownup":   html = renderGrownup(state); break;
     default:          html = renderPlaceholder("Coming soon", "This screen is part of a later build phase.");
   }
+  // Narrow: use the fixed bottom-nav on the three primary screens.
+  const showBottom = !state.isWide && RAIL_SCREENS.has(state.nav);
+  if (showBottom) html += bottomNav(state.nav);
+  document.body.classList.toggle("has-bottom-nav", showBottom);
   app.innerHTML = html;
 }
 
@@ -225,6 +234,8 @@ const ACTIONS = {
   sessStop:       () => { state.session && state.session.requestStop(); },
   sessResumeStop: () => { state.session && state.session.resumeFromStop(); },
   sessEndStop:    () => { state.session && state.session.endFromStop(); },
+  sessLandingClean:  () => { state.session && state.session.gradeLanding("clean"); },
+  sessLandingWobbly: () => { state.session && state.session.gradeLanding("wobbly"); },
   sessEnd:        () => { state.session && state.session.endEarly(); },
   sessMood:       (el) => {
     state.__mood = el.getAttribute("data-mood");
@@ -253,5 +264,7 @@ function boot() {
   computeWide();
   try { seedJourneyOnce(); } catch (err) { console.warn("journey seed skipped:", err); }
   render();
+  // Best-effort weather; re-render Today when it arrives (offline → stays null).
+  getWeather().then(w => { if (w) { state.weather = w; if (state.nav === "today") render(); } }).catch(() => {});
 }
 boot();

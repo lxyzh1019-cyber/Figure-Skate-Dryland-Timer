@@ -92,7 +92,10 @@ function dayDetailPane(v) {
     <div style="padding:24px 26px;display:flex;flex-direction:column;gap:14px;flex:1;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
         <span style="background:rgba(255,255,255,0.22);border-radius:var(--radius-pill);padding:6px 14px;font-size:11px;font-weight:900;letter-spacing:0.08em;">${dv.badgeLabel}</span>
-        ${dv.isRecovery ? '<span style="font-size:24px;">💤</span>' : '<span style="font-size:24px;">⛸️</span>'}
+        <div style="display:flex;align-items:center;gap:8px;">
+          ${v.weather ? `<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,0.28);border-radius:var(--radius-pill);padding:6px 12px;font-size:13px;font-weight:900;" title="${v.weather.caption}">${v.weather.icon} ${v.weather.temp}°</span>` : ""}
+          ${dv.isRecovery ? '<span style="font-size:24px;">💤</span>' : '<span style="font-size:24px;">⛸️</span>'}
+        </div>
       </div>
       ${dv.showBackToToday ? `<button type="button" data-action="backToToday" style="align-self:flex-start;background:none;border:none;color:rgba(255,255,255,0.9);font-size:13px;font-weight:800;text-decoration:underline;cursor:pointer;padding:0;">← Back to today</button>` : ""}
       <div style="font-family:var(--font-display);font-weight:600;font-size:34px;line-height:1.05;">${dv.title}</div>

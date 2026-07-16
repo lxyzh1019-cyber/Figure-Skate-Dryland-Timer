@@ -143,7 +143,9 @@ function bodyMap(r) {
     <div style="flex:1;min-width:240px;background:var(--bg);border:2px solid var(--hairline);border-radius:22px;padding:14px;display:flex;flex-direction:column;align-items:center;">
       <span style="background:var(--rose-500);color:#fff;font-size:12px;font-weight:900;letter-spacing:0.06em;padding:6px 16px;border-radius:var(--radius-pill);margin-bottom:10px;">${r.view === 'front' ? 'FRONT VIEW' : 'BACK VIEW'}</span>
       <div style="position:relative;width:200px;height:440px;">
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;">${bodySilhouette()}</svg>
+        <img src="assets/skate/body-${r.view}.png" alt="${r.view} body map" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none;"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="display:none;position:absolute;inset:0;width:100%;height:100%;">${bodySilhouette()}</svg>
         ${zoneButtons(r)}
       </div>
       <div style="display:flex;gap:8px;margin-top:12px;">
