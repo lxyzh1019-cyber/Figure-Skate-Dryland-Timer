@@ -1,0 +1,42 @@
+/* Skate with Grace — color tokens (sampled from product screens) */
+:root {
+  /* Rose / berry scale — the brand's core hue */
+  --rose-50:  #FDF4F6;
+  --rose-100: #F9E4EA;
+  --rose-200: #F3CBD6;
+  --rose-300: #EAA7B8;
+  --rose-400: #D97A92;
+  --rose-500: #C25671; /* primary actions */
+  --rose-600: #A84460;
+  --rose-700: #8E3453; /* deep berry headings */
+
+  /* Accents */
+  --pink-accent: #F06A9B;  /* hearts, petals, sparkles */
+  --pink-soft:   #F7B8CE;
+  --gold:        #F2B84B;  /* stars, trophies, achievement */
+  --gold-soft:   #F9DFA0;
+  --lilac:       #C9A6D9;  /* occasional sparkle accent */
+
+  /* Neutrals — warm, never pure gray */
+  --ink:        #4A3A41;
+  --ink-soft:   #8A737C;
+  --ink-faint:  #B79CA6;
+  --surface:    #FFFFFF;
+  --bg:         #FBF1F3;   /* app background blush */
+  --bg-deep:    #F7E6EB;
+  --border:     #F2DCE3;
+  --border-strong: #E5C3CE;
+
+  /* Semantic aliases */
+  --text-heading:   var(--rose-700);
+  --text-body:      var(--ink);
+  --text-muted:     var(--ink-soft);
+  --text-on-rose:   #FFFFFF;
+  --surface-card:   var(--surface);
+  --surface-page:   var(--bg);
+  --action-primary: var(--rose-500);
+  --action-primary-hover: var(--rose-600);
+  --accent-star:    var(--gold);
+  --accent-heart:   var(--pink-accent);
+  --focus-ring:     var(--rose-300);
+}

@@ -1,0 +1,28 @@
+/* Skate with Grace — spacing, radii, shadows */
+:root {
+  /* Spacing — 4px base */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* Radii — everything is soft */
+  --radius-sm: 10px;   /* chips inside cards */
+  --radius-md: 16px;   /* list rows, cue cards */
+  --radius-lg: 22px;   /* cards, phone panels */
+  --radius-pill: 999px;/* buttons, badges, progress dots */
+
+  /* Shadows — pink-tinted, feather-soft */
+  --shadow-card: 0 4px 16px rgba(194, 86, 113, 0.10);
+  --shadow-float: 0 8px 28px rgba(194, 86, 113, 0.18);
+  --shadow-press: inset 0 2px 4px rgba(142, 52, 83, 0.15);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-quick: 150ms;
+  --duration-gentle: 300ms;
+}

@@ -1,0 +1,35 @@
+/* Skate with Grace — typography tokens */
+:root {
+  /* Families (Google Fonts substitutes — see fonts.css) */
+  --font-script: "Dancing Script", "Brush Script MT", cursive;   /* brand moments: "Skate with Grace", "Great Job!" */
+  --font-ui: "Quicksand", "Nunito", "Avenir Next", sans-serif;   /* everything else */
+
+  /* Sizes (mobile-first, 390px frame) */
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-md: 16px;
+  --text-lg: 18px;
+  --text-xl: 22px;   /* screen titles */
+  --text-2xl: 28px;  /* exercise names */
+  --text-timer: 64px;
+  --text-script-md: 30px;
+  --text-script-lg: 44px;
+
+  /* Weights — Quicksand reads soft; use 500–700 */
+  --weight-regular: 500;
+  --weight-medium: 600;
+  --weight-bold: 700;
+
+  --leading-tight: 1.15;
+  --leading-body: 1.5;
+  --tracking-label: 0.08em; /* uppercase micro-labels: "STRENGTH", "COACH CUE" */
+}
+
+body {
+  font-family: var(--font-ui);
+  color: var(--text-body);
+  font-weight: var(--weight-regular);
+}
+
+a { color: var(--rose-600); }
+a:hover { color: var(--rose-700); }

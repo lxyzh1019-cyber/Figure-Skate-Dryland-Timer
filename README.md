@@ -1,8 +1,9 @@
-# ⛸ Jenn · Figure-Skate Dryland Timer
+# ⛸ Jenn · Figure-Skate Dryland Timer (V2)
 
-A single-file (`index.html`) workout-timer web app for figure-skating dryland.
-Built on the Swimming-Dryland-Timer engine (full feature parity) and loaded with
-the **Jenn Skating Dryland 2026.2 (v10)** plan.
+A no-build web app for figure-skating dryland training, redesigned in the
+**"Skate with Grace"** design system (rose/blush palette, Quicksand + Dancing
+Script, soft pink UI) and loaded with the **Jenn Skating Dryland 2026.2 (v10)**
+plan. Built on the Swimming-Dryland-Timer engine (full feature parity).
 
 ## Plan content (2026.2)
 
@@ -14,30 +15,57 @@ the **Jenn Skating Dryland 2026.2 (v10)** plan.
 - Thu — Single-Leg + Core · Fri — Spin + Push/Carry · Sat — POWER B (Jump+Pull+Drive)
 - Sun — Foam Roll + Review (recovery only)
 
-Outcome metrics tracked on the PR board: doubles landing ≥9/10, pull-up clean reps,
-single-leg eccentric hold, rotational-jump landing grade, layback hold.
+Quality gates baked into the engine: valgus gate (left knee), jump-fatigue
+awareness, spin-dizziness stop, never-to-failure pull series, bilateral ankle
+gate (right deeper), progressive overload (paused until Week 3).
 
-Quality gates baked into the engine: valgus gate (left-knee, jumps + box step-up),
-jump fatigue tier-drop, spin dizziness stop, never-to-failure pull series, bilateral
-ankle gate (right deeper), progressive overload **paused until Week 3**.
+## Screens & features
 
-## Features
+- **Today** — greeting + mascot, week strip, streak/level stat chips, Quiz Deck
+  launch, Skating-Journey hero (XP/level/rank), day-detail pane + Start CTA.
+- **Body Check** (readiness) — 4 questions → interactive body map → severity →
+  traffic-light (green 3 / yellow 2 / red 1 / recovery 0 rounds), grown-up override.
+- **Session** — timer ring, coach voice cues, timed + rep-tap exercises, rests,
+  round breaks, side switches, STOP overlay, Session Complete (mantra, XP, mood).
+- **Progress** — streak hero + week chart, prize wallet (redeem), milestones,
+  rank card, training log.
+- **Prize Draw** — pick 1 of 3 sealed cards on level-up (prizes persisted).
+- **Quiz Deck** — 8 questions generated from the plan's moves.
+- **Grown-up Zone** — Overview · Analytics (ACWR + CSV) · Library (how-to +
+  YouTube) · Settings (name, voice, rests, prize pool, practice) · Coaching.
 
-8-question readiness check → traffic-light rounds (🟢 3 / 🟡 2 / 🔴 1 / recovery 0),
-voice cues, exercise how-to (YouTube search aliases), independence ladder, quick quiz +
-self-correction cards, 4-week PR board, last-7-sessions history, achievements, mood
-tracking, test mode, weekly engagement pick.
+## Project layout (module split, no build step)
+
+```
+index.html            # thin shell: loads css/ + js/main.js (module)
+index.legacy.html     # the previous single-file app, kept for reference
+css/tokens/*.css       # Skate with Grace design tokens (colors/typography/surfaces)
+css/fonts.css          # Quicksand + Dancing Script (Google Fonts)
+css/app.css            # token bridge + shell/nav/buttons/keyframes
+js/data.js             # DAYS plan + builders + overload helpers
+js/store.js            # localStorage + streaks + journey/XP model
+js/audio.js            # coach TTS + beeps (gated by the coach-voice toggle)
+js/engine.js           # async session engine (Session class)
+js/firebase.js         # offline-safe Firestore mirror (jenn_skating_sessions)
+js/vm/*.js             # pure view-model builders
+js/screens/*.js        # per-screen renderers
+js/main.js             # state, render() dispatcher, event delegation, boot
+assets/skate/*.png     # mascot illustrations
+```
 
 ## Run it
 
-No build step — open `index.html` in a browser, or serve statically:
+No build step — serve statically (ES modules need http, not file://):
 
 ```
-python -m http.server 8000   # then open http://localhost:8000
+python3 -m http.server 8000   # then open http://localhost:8000
 ```
 
 ## Persistence
 
-- Browser `localStorage` keys are namespaced `skate*` / `skate_*` (settings, progress,
-  skip history, engagement, readiness, learning, ladder, gate, sessions, tracker).
-- Cloud history uses Firestore collection `jenn_skating_sessions`.
+- Browser `localStorage`, namespaced `skate*` / `skate_*` (settings, sessions,
+  tracker, readiness, quiz, journey/XP). Keys are unchanged from the previous
+  version, so existing history and progress carry over; XP is seeded once from
+  past sessions on first V2 boot.
+- Cloud history mirrors to Firestore collection `jenn_skating_sessions`
+  (best-effort; the app runs fully offline on localStorage if the network is blocked).
