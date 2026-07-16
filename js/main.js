@@ -15,8 +15,9 @@ import { Session } from "./engine.js";
 import { renderSession, updateTimer } from "./screens/session.js";
 import { renderPrizeDraw, freshPrizeDraw } from "./screens/prizedraw.js";
 import { renderQuizDeck, freshQuiz } from "./screens/quizdeck.js";
-import { claimPrize, recordQuizResult, redeemPrize } from "./store.js";
+import { claimPrize, recordQuizResult, redeemPrize, saveSettings, loadSessions } from "./store.js";
 import { renderProgress } from "./screens/progress.js";
+import { renderGrownup } from "./screens/grownup.js";
 
 const state = {
   nav: "today",          // today | progress | grownup | session | readiness | quizdeck | prizedraw
@@ -28,7 +29,25 @@ const state = {
   __mood: null,
   prizeDraw: null,
   quiz: null,
+  grownupTab: "overview",
+  libDetail: null,
 };
+
+const REST_LIMITS = { exerciseRestSeconds: [0, 30], roundRestSeconds: [5, 60], sectionRestSeconds: [5, 90] };
+
+function downloadCsv() {
+  const rows = [["date", "day", "light", "minutes", "completedFully", "endedEarly", "pain", "mood", "xpEarned"]];
+  loadSessions().forEach(s => rows.push([
+    s.isoDate || "", s.dayKey || "", s.light || "", Math.round((s.durationSecs || 0) / 60),
+    s.completedFully ? "yes" : "no", s.endedEarly ? "yes" : "no", s.pain ? "yes" : "no", s.mood || "", s.xpEarned || 0
+  ]));
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "skate-sessions.csv"; document.body.appendChild(a); a.click();
+  a.remove(); URL.revokeObjectURL(url);
+}
 
 function computeWide() {
   state.isWide = window.innerWidth >= 900 && window.innerWidth > window.innerHeight;
@@ -61,7 +80,7 @@ function render() {
     case "prizedraw": html = state.prizeDraw ? renderPrizeDraw(state) : renderToday(state); break;
     case "quizdeck":  html = state.quiz ? renderQuizDeck(state) : renderToday(state); break;
     case "progress":  html = renderProgress(state); break;
-    case "grownup":   html = renderPlaceholder("Grown-up Zone 🧑", "Overview, analytics, library, settings and coaching tools land in a later phase."); break;
+    case "grownup":   html = renderGrownup(state); break;
     default:          html = renderPlaceholder("Coming soon", "This screen is part of a later build phase.");
   }
   app.innerHTML = html;
@@ -134,6 +153,28 @@ const ACTIONS = {
   },
   prizeRedeem: (el) => { redeemPrize(+el.getAttribute("data-i")); render(); },
 
+  // ---- grown-up zone ----
+  guTab:         (el) => { state.grownupTab = el.getAttribute("data-tab"); state.libDetail = null; render(); },
+  guToggle:      (el) => { const k = el.getAttribute("data-key"); const s = loadSettings(); saveSettings({ [k]: !s[k] }); render(); },
+  guVoiceStyle:  (el) => { saveSettings({ voiceStyle: el.getAttribute("data-style") }); render(); },
+  guStep:        (el) => {
+    const k = el.getAttribute("data-key"), delta = +el.getAttribute("data-delta");
+    const [lo, hi] = REST_LIMITS[k] || [0, 120];
+    const cur = loadSettings()[k] || 0;
+    saveSettings({ [k]: Math.max(lo, Math.min(hi, cur + delta)) });
+    render();
+  },
+  guPrizeRemove: (el) => { const i = +el.getAttribute("data-i"); const pool = [...(loadSettings().prizePool || [])]; pool.splice(i, 1); saveSettings({ prizePool: pool }); render(); },
+  guPrizeAdd:    () => {
+    const inp = document.querySelector("[data-set-prize]");
+    const v = inp && inp.value.trim();
+    if (!v) return;
+    saveSettings({ prizePool: [...(loadSettings().prizePool || []), v] }); render();
+  },
+  guExportCsv:   () => { try { downloadCsv(); } catch (e) { console.warn("csv export failed", e); } },
+  guLibOpen:     (el) => { state.libDetail = el.getAttribute("data-name"); render(); },
+  guLibClose:    (el, e) => { if (e.target.closest("[data-stop]")) return; state.libDetail = null; render(); },
+
   // ---- readiness ----
   rdyAnswer: (el) => {
     const q = el.getAttribute("data-q"), val = el.getAttribute("data-val");
@@ -197,6 +238,12 @@ document.addEventListener("click", (e) => {
   if (!el) return;
   const fn = ACTIONS[el.getAttribute("data-action")];
   if (fn) { e.preventDefault(); fn(el, e); }
+});
+
+/* Text inputs (Settings name, add-prize) commit on change/blur. */
+document.addEventListener("change", (e) => {
+  const el = e.target.closest("[data-set]");
+  if (el) { saveSettings({ [el.getAttribute("data-set")]: el.value }); }
 });
 
 window.addEventListener("resize", () => { const was = state.isWide; computeWide(); if (was !== state.isWide) render(); });
