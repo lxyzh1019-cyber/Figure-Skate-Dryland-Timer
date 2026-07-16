@@ -15,7 +15,8 @@ import { Session } from "./engine.js";
 import { renderSession, updateTimer } from "./screens/session.js";
 import { renderPrizeDraw, freshPrizeDraw } from "./screens/prizedraw.js";
 import { renderQuizDeck, freshQuiz } from "./screens/quizdeck.js";
-import { claimPrize, recordQuizResult, loadJourney } from "./store.js";
+import { claimPrize, recordQuizResult, redeemPrize } from "./store.js";
+import { renderProgress } from "./screens/progress.js";
 
 const state = {
   nav: "today",          // today | progress | grownup | session | readiness | quizdeck | prizedraw
@@ -59,7 +60,7 @@ function render() {
     case "session":   html = state.session ? renderSession(state) : renderToday(state); break;
     case "prizedraw": html = state.prizeDraw ? renderPrizeDraw(state) : renderToday(state); break;
     case "quizdeck":  html = state.quiz ? renderQuizDeck(state) : renderToday(state); break;
-    case "progress":  html = renderPlaceholder("Your Progress 🏅", "Streaks, prizes, milestones and your training log arrive in the next build phase."); break;
+    case "progress":  html = renderProgress(state); break;
     case "grownup":   html = renderPlaceholder("Grown-up Zone 🧑", "Overview, analytics, library, settings and coaching tools land in a later phase."); break;
     default:          html = renderPlaceholder("Coming soon", "This screen is part of a later build phase.");
   }
@@ -131,6 +132,7 @@ const ACTIONS = {
     claimPrize(pd.options[pd.revealed]);
     render();
   },
+  prizeRedeem: (el) => { redeemPrize(+el.getAttribute("data-i")); render(); },
 
   // ---- readiness ----
   rdyAnswer: (el) => {
