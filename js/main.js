@@ -4,13 +4,15 @@
    app never crashes while the rebuild proceeds phase by phase.
    ============================================================================ */
 import { LIGHT_ROUNDS, DAYS } from "./data.js";
-import { seedJourneyOnce, saveReadiness, loadLastCheck } from "./store.js";
+import { seedJourneyOnce, saveReadiness, loadLastCheck, loadSettings, patchLastSession } from "./store.js";
 import { renderToday } from "./screens/today.js";
 import { todayKeyNow } from "./vm/today.js";
 import { rail } from "./screens/rail.js";
 import {
   renderReadiness, freshReadiness, lightFromAnswers, lightFromZones, LIGHTS
 } from "./screens/readiness.js";
+import { Session } from "./engine.js";
+import { renderSession, updateTimer } from "./screens/session.js";
 
 const state = {
   nav: "today",          // today | progress | grownup | session | readiness | quizdeck | prizedraw
@@ -18,6 +20,8 @@ const state = {
   isWide: true,
   readiness: freshReadiness(),
   pendingSession: null,  // { dayKey, light, rounds }
+  session: null,         // live Session engine instance
+  __mood: null,
 };
 
 function computeWide() {
@@ -41,29 +45,39 @@ function renderPlaceholder(title, note) {
   </div>`;
 }
 
-function sessionPlaceholderNote() {
-  const ps = state.pendingSession;
-  if (!ps) return "The timer, coach cues and round flow are being wired to the new design next.";
-  const L = LIGHTS[ps.light];
-  const day = DAYS[ps.dayKey];
-  return `Readiness set <b>${L.emoji} ${L.label}</b> for <b>${day.title}</b> — ` +
-    `${ps.rounds === 0 ? "recovery circuit" : ps.rounds + " main round" + (ps.rounds > 1 ? "s" : "")}. ` +
-    `The live timer, coach cues and round flow arrive in Phase 3.`;
-}
-
 function render() {
   const app = document.getElementById("app");
   let html;
   switch (state.nav) {
     case "today":     html = renderToday(state); break;
     case "readiness": html = renderReadiness(state); break;
+    case "session":   html = state.session ? renderSession(state) : renderToday(state); break;
     case "progress":  html = renderPlaceholder("Your Progress 🏅", "Streaks, prizes, milestones and your training log arrive in the next build phase."); break;
     case "grownup":   html = renderPlaceholder("Grown-up Zone 🧑", "Overview, analytics, library, settings and coaching tools land in a later phase."); break;
-    case "session":   html = renderPlaceholder("Session player ⛸️", sessionPlaceholderNote()); break;
     case "quizdeck":  html = renderPlaceholder("Quiz Deck 🧠", "The full 8-move quiz deck arrives in a later build phase."); break;
     default:          html = renderPlaceholder("Coming soon", "This screen is part of a later build phase.");
   }
   app.innerHTML = html;
+}
+
+/* Instantiate + run the session engine for the pending readiness result. */
+function startEngine() {
+  const ps = state.pendingSession;
+  if (!ps) return;
+  state.__mood = null;
+  state.session = new Session({
+    dayKey: ps.dayKey, light: ps.light, settings: loadSettings(),
+    onChange: () => { if (state.nav === "session") render(); },
+    onTick: (rem, tot) => updateTimer(rem, tot),
+    onComplete: () => { if (state.nav === "session") render(); },
+  });
+  state.nav = "session";
+  render();
+  state.session.run();
+}
+function clearSession() {
+  if (state.session && !state.session.ended) state.session.endEarly();
+  state.session = null; state.__mood = null; state.pendingSession = null;
 }
 
 /* ---- readiness helpers ---- */
@@ -79,7 +93,7 @@ function readinessFinishFromAnswers() {
 
 /* ---- event delegation: one listener resolves data-action ---- */
 const ACTIONS = {
-  goToday:      () => { state.nav = "today"; state.selectedDay = null; render(); },
+  goToday:      () => { clearSession(); state.nav = "today"; state.selectedDay = null; render(); },
   goProgress:   () => { state.nav = "progress"; render(); },
   goGrownup:    () => { state.nav = "grownup"; render(); },
   selectDay:    (el) => { state.selectedDay = el.getAttribute("data-day"); render(); },
@@ -127,7 +141,20 @@ const ACTIONS = {
     const r = state.readiness, dayKey = sessionDayKey();
     saveReadiness({ answers: r.answers, zoneSev: r.zoneSev, light: r.light, overridden: r.overridden, resultSource: r.resultSource });
     state.pendingSession = { dayKey, light: r.light, rounds: LIGHT_ROUNDS[r.light] };
-    state.nav = "session";
+    startEngine();
+  },
+
+  // ---- session controls (delegate to the live engine) ----
+  sessPause:      () => { state.session && state.session.togglePause(); },
+  sessSkip:       () => { state.session && state.session.skip(); },
+  sessTapDone:    () => { state.session && state.session.tapDone(); },
+  sessStop:       () => { state.session && state.session.requestStop(); },
+  sessResumeStop: () => { state.session && state.session.resumeFromStop(); },
+  sessEndStop:    () => { state.session && state.session.endFromStop(); },
+  sessEnd:        () => { state.session && state.session.endEarly(); },
+  sessMood:       (el) => {
+    state.__mood = el.getAttribute("data-mood");
+    patchLastSession({ mood: state.__mood });
     render();
   },
 };

@@ -6,6 +6,19 @@
    GO = the day's main workout, Sunday = recovery circuit.
    ============================================================================ */
 
+/* ---- Progressive overload (anchored to Mon May 25 2026, capped week 7 /
+   mid-July). Timed work +2s every 2 weeks; rep-based +1 rep every 2 weeks. ---- */
+const OVERLOAD_ANCHOR = new Date(2026, 4, 25);
+const OVERLOAD_CAP_WEEKS = 7;
+export function overloadWeek() {
+  const now = new Date();
+  if (now < OVERLOAD_ANCHOR) return 1;
+  const days = Math.floor((now - OVERLOAD_ANCHOR) / 86400000);
+  return Math.min(OVERLOAD_CAP_WEEKS, Math.floor(days / 7) + 1);
+}
+export function adjWork(baseSeconds) { return baseSeconds + Math.floor((overloadWeek() - 1) / 2) * 2; }
+export function repBonus() { return Math.floor((overloadWeek() - 1) / 2); }
+
 /* X() normalizes an exercise into the shape the timer/voice engine expects
    (work / byReps+repsDetail / reset / cue / redFlag …). */
 export function X(o) {
