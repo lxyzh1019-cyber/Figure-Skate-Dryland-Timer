@@ -180,6 +180,40 @@ export function awardSessionXp(entry) {
   return { journey: after, leveledUp: toLvl > fromLvl, from: fromLvl, to: toLvl, gained };
 }
 
+/* Claim one prize from a level-up draw: store it and spend a pending draw. */
+export function claimPrize(label) {
+  const j = loadJourney();
+  j.prizesWon = j.prizesWon || [];
+  j.prizesWon.push({ label, when: Date.now(), redeemed: false });
+  j.pendingDraws = Math.max(0, (j.pendingDraws || 0) - 1);
+  saveJourney(j);
+  return j;
+}
+export function redeemPrize(idx) {
+  const j = loadJourney();
+  if (j.prizesWon && j.prizesWon[idx]) { j.prizesWon[idx].redeemed = true; saveJourney(j); }
+  return j;
+}
+
+/* ---- lightweight event log + quiz results ---- */
+const LS_QUIZ = "skate_quiz_v1";
+export function logEvent(type, data) {
+  try {
+    const all = readStorage(LS_EVENTS, []);
+    all.push({ t: Date.now(), iso: new Date().toISOString(), type, ...(data || {}) });
+    writeStorage(LS_EVENTS, all.slice(-1500));
+  } catch {}
+}
+export function recordQuizResult(correct, total) {
+  const q = readStorage(LS_QUIZ, { runs: [], bestPct: 0 });
+  const pct = total ? Math.round((correct / total) * 100) : 0;
+  q.runs = (q.runs || []).concat({ when: Date.now(), correct, total, pct }).slice(-50);
+  q.bestPct = Math.max(q.bestPct || 0, pct);
+  writeStorage(LS_QUIZ, q);
+  logEvent("quiz_complete", { correct, total, pct });
+  return q;
+}
+
 /* Full journey view-state used by Today + Progress. */
 export function journeyState() {
   const j = loadJourney();

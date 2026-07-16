@@ -13,6 +13,9 @@ import {
 } from "./screens/readiness.js";
 import { Session } from "./engine.js";
 import { renderSession, updateTimer } from "./screens/session.js";
+import { renderPrizeDraw, freshPrizeDraw } from "./screens/prizedraw.js";
+import { renderQuizDeck, freshQuiz } from "./screens/quizdeck.js";
+import { claimPrize, recordQuizResult, loadJourney } from "./store.js";
 
 const state = {
   nav: "today",          // today | progress | grownup | session | readiness | quizdeck | prizedraw
@@ -22,6 +25,8 @@ const state = {
   pendingSession: null,  // { dayKey, light, rounds }
   session: null,         // live Session engine instance
   __mood: null,
+  prizeDraw: null,
+  quiz: null,
 };
 
 function computeWide() {
@@ -52,9 +57,10 @@ function render() {
     case "today":     html = renderToday(state); break;
     case "readiness": html = renderReadiness(state); break;
     case "session":   html = state.session ? renderSession(state) : renderToday(state); break;
+    case "prizedraw": html = state.prizeDraw ? renderPrizeDraw(state) : renderToday(state); break;
+    case "quizdeck":  html = state.quiz ? renderQuizDeck(state) : renderToday(state); break;
     case "progress":  html = renderPlaceholder("Your Progress 🏅", "Streaks, prizes, milestones and your training log arrive in the next build phase."); break;
     case "grownup":   html = renderPlaceholder("Grown-up Zone 🧑", "Overview, analytics, library, settings and coaching tools land in a later phase."); break;
-    case "quizdeck":  html = renderPlaceholder("Quiz Deck 🧠", "The full 8-move quiz deck arrives in a later build phase."); break;
     default:          html = renderPlaceholder("Coming soon", "This screen is part of a later build phase.");
   }
   app.innerHTML = html;
@@ -99,7 +105,32 @@ const ACTIONS = {
   selectDay:    (el) => { state.selectedDay = el.getAttribute("data-day"); render(); },
   backToToday:  () => { state.selectedDay = null; render(); },
   startSession: () => { state.readiness = freshReadiness(); state.nav = "readiness"; render(); },
-  startQuizDeck:() => { state.nav = "quizdeck"; render(); }, // full deck lands in Phase 4
+  startQuizDeck:() => { state.quiz = freshQuiz(8); state.nav = "quizdeck"; render(); },
+  exitQuizDeck: () => { state.quiz = null; state.nav = "today"; render(); },
+  openPrizeDraw:() => { state.prizeDraw = freshPrizeDraw(); state.nav = "prizedraw"; render(); },
+
+  // ---- quiz deck ----
+  quizPick: (el) => {
+    const q = state.quiz; if (!q || q.answered) return;
+    q.picked = +el.getAttribute("data-i");
+    q.answered = true;
+    if (q.picked === q.items[q.idx].correct) q.score++;
+    render();
+  },
+  quizNext: () => {
+    const q = state.quiz; if (!q) return;
+    q.idx++; q.answered = false; q.picked = null;
+    if (q.idx >= q.items.length && !q.logged) { recordQuizResult(q.score, q.items.length); q.logged = true; }
+    render();
+  },
+
+  // ---- prize draw ----
+  prizeReveal: (el) => {
+    const pd = state.prizeDraw; if (!pd || pd.revealed != null) return;
+    pd.revealed = +el.getAttribute("data-i");
+    claimPrize(pd.options[pd.revealed]);
+    render();
+  },
 
   // ---- readiness ----
   rdyAnswer: (el) => {
