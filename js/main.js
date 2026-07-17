@@ -143,13 +143,16 @@ const ACTIONS = {
     const q = state.quiz; if (!q || q.answered) return;
     q.picked = +el.getAttribute("data-i");
     q.answered = true;
-    if (q.picked === q.items[q.idx].correct) q.score++;
+    const item = q.items[q.idx];
+    const ok = q.picked === item.correct;
+    if (ok) q.score++;
+    (q.results = q.results || []).push({ move: item.move, ok });
     render();
   },
   quizNext: () => {
     const q = state.quiz; if (!q) return;
     q.idx++; q.answered = false; q.picked = null;
-    if (q.idx >= q.items.length && !q.logged) { recordQuizResult(q.score, q.items.length); q.logged = true; }
+    if (q.idx >= q.items.length && !q.logged) { recordQuizResult(q.score, q.items.length, q.results || []); q.logged = true; }
     render();
   },
 

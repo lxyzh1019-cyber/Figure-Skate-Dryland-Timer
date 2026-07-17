@@ -5,7 +5,7 @@
    take effect in the next session. Driven by state.grownupTab (+ state.libDetail).
    ============================================================================ */
 import { DAYS, STANDING_RULES, COACH_CHANNELS, ENGAGEMENT_SYSTEMS, TOP7, DAY_KEYS } from "../data.js";
-import { loadSessions, loadSettings, thisWeekSessions, currentStreak, longestStreak } from "../store.js";
+import { loadSessions, loadSettings, thisWeekSessions, currentStreak, longestStreak, movesToWatch, easyDaysLast7 } from "../store.js";
 import { rail } from "./rail.js";
 
 const TABS = [
@@ -35,7 +35,12 @@ function overviewTab() {
   const adherence = Math.min(100, Math.round((week.filter(s => DAYS[s.dayKey] && !DAYS[s.dayKey].spa).length / planned) * 100));
   const painFlags = all.filter(s => s.pain || s.light === "red" || s.light === "recovery").slice(-5).reverse();
   const skipTotal = all.reduce((a, s) => a + (s.skipped || 0), 0);
+  const easy = easyDaysLast7();
+  const watch = movesToWatch(5);
   return `
+    ${easy >= 2 ? `<div style="display:flex;align-items:center;gap:12px;background:var(--gold-soft);border:2px solid var(--gold);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:16px;">
+      <span style="font-size:24px;">💛</span>
+      <div style="font-weight:800;color:var(--ink);line-height:1.4;">${easy} easy/rest days in the last week — worth a gentle check-in about how ${loadSettings().athleteName} is feeling.</div></div>` : ""}
     ${card("This week", `
       <div style="display:flex;gap:20px;flex-wrap:wrap;">
         <div><div style="font-family:var(--font-display);font-size:34px;font-weight:600;color:var(--rose-600);">${week.length}/${planned}</div><div style="font-size:13px;font-weight:800;color:var(--ink-soft);">sessions done</div></div>
@@ -46,6 +51,13 @@ function overviewTab() {
     ${card("⚠ Body flags (recent easy / stopped days)", painFlags.length
       ? painFlags.map(s => `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--hairline);"><span style="font-size:18px;">${s.pain ? "🛑" : s.light === "recovery" ? "🧊" : "🔴"}</span><div style="flex:1;"><b>${(DAYS[s.dayKey] || {}).title || s.dayKey}</b> · ${s.isoDate ? new Date(s.isoDate).toLocaleDateString() : ""}</div><span style="font-size:12px;font-weight:800;color:var(--ink-soft);">${s.pain ? "pain flag" : s.light}</span></div>`).join("")
       : `<div style="font-size:14px;font-weight:700;color:var(--ink-soft);">No pain flags or forced-easy days recently. 👍</div>`)}
+    ${card("👀 Moves to watch", watch.length
+      ? watch.map(w => `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--hairline);">
+          <span style="flex:1;font-weight:800;color:var(--ink);">${w.move}</span>
+          ${w.wobbly ? `<span style="font-size:12px;font-weight:800;color:var(--coral-deep,#D99A2E);">${w.wobbly} wobbly landing${w.wobbly === 1 ? "" : "s"}</span>` : ""}
+          ${w.missed ? `<span style="font-size:12px;font-weight:800;color:var(--stop-ink);">${w.missed} quiz miss${w.missed === 1 ? "" : "es"}</span>` : ""}
+        </div>`).join("")
+      : `<div style="font-size:14px;font-weight:700;color:var(--ink-soft);">Nothing standing out — clean landings and solid quiz answers. 👍</div>`)}
     ${card("Totals", `<div style="display:flex;gap:24px;flex-wrap:wrap;font-weight:800;color:var(--ink);">
       <div>🏅 <b>${all.length}</b> sessions</div><div>🔥 best streak <b>${longestStreak()}</b></div><div>⏭ <b>${skipTotal}</b> skips</div></div>`)}
   `;

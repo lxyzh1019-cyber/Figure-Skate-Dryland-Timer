@@ -220,14 +220,43 @@ export function logEvent(type, data) {
     writeStorage(LS_EVENTS, all.slice(-1500));
   } catch {}
 }
-export function recordQuizResult(correct, total) {
-  const q = readStorage(LS_QUIZ, { runs: [], bestPct: 0 });
+/* Record a quiz run. `items` (optional) is [{move, ok}] so we can track which
+   moves the athlete misses over time (feeds the parent watch-list). */
+export function recordQuizResult(correct, total, items) {
+  const q = readStorage(LS_QUIZ, { runs: [], bestPct: 0, byMove: {} });
   const pct = total ? Math.round((correct / total) * 100) : 0;
   q.runs = (q.runs || []).concat({ when: Date.now(), correct, total, pct }).slice(-50);
   q.bestPct = Math.max(q.bestPct || 0, pct);
+  q.byMove = q.byMove || {};
+  (items || []).forEach(it => {
+    const rec = q.byMove[it.move] || { seen: 0, missed: 0 };
+    rec.seen++; if (!it.ok) rec.missed++;
+    q.byMove[it.move] = rec;
+  });
   writeStorage(LS_QUIZ, q);
   logEvent("quiz_complete", { correct, total, pct });
   return q;
+}
+
+/* Parent watch-list: moves the athlete tends to land wobbly or miss on the quiz,
+   scored (wobbly counts double) and sorted. */
+export function movesToWatch(limit = 5) {
+  const wobbly = {};
+  loadSessions().forEach(s => Object.entries(s.landings || {}).forEach(([m, g]) => { wobbly[m] = (wobbly[m] || 0) + (g.wobbly || 0); }));
+  const byMove = (readStorage(LS_QUIZ, {}).byMove) || {};
+  const score = {};
+  Object.entries(wobbly).forEach(([m, w]) => { score[m] = (score[m] || 0) + w * 2; });
+  Object.entries(byMove).forEach(([m, v]) => { score[m] = (score[m] || 0) + (v.missed || 0); });
+  return Object.entries(score).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, limit)
+    .map(([move]) => ({ move, wobbly: wobbly[move] || 0, missed: (byMove[move] || {}).missed || 0 }));
+}
+
+/* Count of forced-easy days (red/recovery/pain) in the last 7 calendar days. */
+export function easyDaysLast7() {
+  const cutoff = localDateKey(new Date(Date.now() - 7 * DAY_MS));
+  const days = new Set();
+  loadSessions().forEach(s => { if (sessionDay(s) >= cutoff && (s.pain || s.light === "red" || s.light === "recovery")) days.add(sessionDay(s)); });
+  return days.size;
 }
 
 /* Full journey view-state used by Today + Progress. */

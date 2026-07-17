@@ -6,9 +6,45 @@
 import { DAYS, DAY_KEYS, DAY_SHORT } from "../data.js";
 import {
   loadSessions, thisWeekSessions, currentStreak, longestStreak,
-  journeyState, mondayOfThisWeek, sessionDay, localDateKey
+  journeyState, mondayOfThisWeek, sessionDay, localDateKey, RANKS, rankForLevel
 } from "../store.js";
 import { rail } from "./rail.js";
+
+/* The Skating Journey — rank waypoints from bottom (First Glide) to top, with
+   the current rank marked by the mascot. Reuses the watercolor hero look. */
+function journeyMap(j) {
+  const current = rankForLevel(j.level).name;
+  const nodes = [...RANKS].reverse().map(r => {
+    const done = j.level >= r.min && r.name !== current;
+    const isCurrent = r.name === current;
+    const dot = isCurrent
+      ? `<div style="width:40px;height:40px;border-radius:50%;overflow:hidden;border:3px solid #fff;box-shadow:0 0 0 4px rgba(255,255,255,0.35);flex-shrink:0;"><img src="assets/skate/illo-welcome.png" alt="" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'"></div>`
+      : `<div style="width:26px;height:26px;border-radius:50%;flex-shrink:0;background:${done ? "var(--gold)" : "rgba(255,255,255,0.35)"};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:${done ? "var(--sun-ink)" : "#fff"};">${done ? "✓" : "•"}</div>`;
+    return `<div style="display:flex;align-items:center;gap:12px;padding:7px 0;opacity:${done || isCurrent ? 1 : 0.6};">
+      ${dot}
+      <div><div style="font-weight:900;font-size:${isCurrent ? "17px" : "15px"};color:#fff;">${r.name}</div>
+      <div style="font-size:11px;font-weight:800;color:rgba(255,255,255,0.8);">${isCurrent ? "You are here" : `Level ${r.min}+`}</div></div>
+    </div>`;
+  }).join(`<div style="width:2px;height:12px;background:rgba(255,255,255,0.35);margin-left:19px;"></div>`);
+  return `
+    <div style="position:relative;border-radius:var(--radius-xl);overflow:hidden;box-shadow:var(--shadow-soft);background:#A8496A;">
+      <svg viewBox="0 0 400 600" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;">
+        <defs><linearGradient id="jGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#7A2E48"></stop><stop offset="45%" stop-color="#A8496A"></stop>
+          <stop offset="80%" stop-color="#E0A9BC"></stop><stop offset="100%" stop-color="#F9E4C8"></stop>
+        </linearGradient></defs>
+        <rect width="400" height="600" fill="url(#jGrad)"></rect>
+      </svg>
+      <div style="position:relative;z-index:2;padding:20px 22px;color:#fff;">
+        <div style="font-size:12px;font-weight:900;letter-spacing:0.08em;opacity:0.9;">THE SKATING JOURNEY</div>
+        <div style="font-family:var(--font-display);font-weight:600;font-size:22px;margin:4px 0 12px;">LVL ${j.level} · ${j.rankName}</div>
+        <div style="height:9px;background:rgba(255,255,255,0.28);border-radius:9px;overflow:hidden;margin-bottom:6px;">
+          <div style="width:${Math.max(4, j.levelPct)}%;height:100%;background:var(--gold);border-radius:9px;"></div></div>
+        <div style="font-size:13px;font-weight:800;opacity:0.95;margin-bottom:14px;">${j.xpToNext} XP to LVL ${j.level + 1}${j.nextRankName !== "Max rank" ? ` · next rank: ${j.nextRankName}` : ""}</div>
+        ${nodes}
+      </div>
+    </div>`;
+}
 
 function weekBars() {
   // Bucket this week's minutes by actual calendar day (Mon..Sun), not workout name.
@@ -107,17 +143,8 @@ export function renderProgress(state) {
           </div>
         </div>
 
-        <!-- rank / journey -->
-        <div style="background:linear-gradient(160deg,var(--rose-500),var(--rose-700));color:#fff;border-radius:var(--radius-xl);padding:18px 20px;box-shadow:var(--shadow-soft);">
-          <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-            <div style="font-family:var(--font-display);font-weight:600;font-size:22px;">LVL ${j.level} · ${j.rankName}</div>
-            <div style="font-size:13px;font-weight:800;opacity:0.9;">${j.xp} XP total</div>
-          </div>
-          <div style="height:9px;background:rgba(255,255,255,0.28);border-radius:9px;overflow:hidden;margin:10px 0 6px;">
-            <div style="width:${Math.max(4, j.levelPct)}%;height:100%;background:var(--gold);border-radius:9px;"></div>
-          </div>
-          <div style="font-size:13px;font-weight:800;opacity:0.95;">${j.xpToNext} XP to LVL ${j.level + 1}${j.nextRankName !== "Max rank" ? ` · next rank: ${j.nextRankName}` : ""}</div>
-        </div>
+        <!-- the skating journey (rank waypoint map) -->
+        ${journeyMap(j)}
 
         <!-- milestones -->
         <div style="background:var(--surface);border:1.5px solid var(--hairline);border-radius:var(--radius-xl);padding:18px;box-shadow:var(--shadow-soft);">
