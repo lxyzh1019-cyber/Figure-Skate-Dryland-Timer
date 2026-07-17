@@ -93,6 +93,14 @@ body {
 #app { width: 100%; }
 body.has-bottom-nav #app { padding-bottom: 84px; }
 
+/* Keyboard focus — visible ring for accessibility (mouse clicks stay clean). */
+:focus:not(:focus-visible) { outline: none; }
+button:focus-visible, a:focus-visible, input:focus-visible, [data-action]:focus-visible {
+  outline: 3px solid var(--rose-500);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
 /* Brand wordmark / cheer moments */
 .script { font-family: var(--font-script); font-weight: 600; }
 
