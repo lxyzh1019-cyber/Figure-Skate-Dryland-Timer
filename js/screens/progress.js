@@ -6,23 +6,23 @@
 import { DAYS, DAY_KEYS, DAY_SHORT } from "../data.js";
 import {
   loadSessions, thisWeekSessions, currentStreak, longestStreak,
-  journeyState, mondayOfThisWeek
+  journeyState, mondayOfThisWeek, sessionDay, localDateKey
 } from "../store.js";
 import { rail } from "./rail.js";
 
 function weekBars() {
-  const week = thisWeekSessions();
-  const byDay = {};
-  week.forEach(s => { const k = (s.dayKey || "").toLowerCase(); (byDay[k] = byDay[k] || []).push(s); });
-  // Mon..Sun order for the chart
-  const order = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
-  const maxMin = Math.max(30, ...order.map(k => (byDay[k] || []).reduce((a, s) => a + (s.durationSecs || 0) / 60, 0)));
-  return order.map(k => {
-    const mins = (byDay[k] || []).reduce((a, s) => a + (s.durationSecs || 0) / 60, 0);
-    const done = (byDay[k] || []).length > 0;
-    const h = Math.max(6, Math.round((mins / maxMin) * 100));
-    return { short: DAY_SHORT[DAY_KEYS.indexOf(k)], done, h };
+  // Bucket this week's minutes by actual calendar day (Mon..Sun), not workout name.
+  const monday = mondayOfThisWeek();
+  const byDate = {};
+  thisWeekSessions().forEach(s => { const k = sessionDay(s); byDate[k] = (byDate[k] || 0) + (s.durationSecs || 0) / 60; });
+  const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const cells = labels.map((short, i) => {
+    const d = new Date(monday); d.setDate(monday.getDate() + i);
+    const mins = byDate[localDateKey(d)] || 0;
+    return { short, mins, done: mins > 0 };
   });
+  const maxMin = Math.max(30, ...cells.map(c => c.mins));
+  return cells.map(c => ({ short: c.short, done: c.done, h: Math.max(6, Math.round((c.mins / maxMin) * 100)) }));
 }
 
 function milestones() {

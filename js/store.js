@@ -39,6 +39,16 @@ export function patchLastSession(patch) {
   writeStorage(LS_SESSIONS, all);
 }
 
+/* Local calendar day (YYYY-MM-DD in the athlete's timezone, not UTC) — the key
+   for streaks/week grouping so evening sessions don't roll into "tomorrow". */
+export function localDateKey(d = new Date()) {
+  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+/* A session's calendar day — prefers the stored localDate, falls back to the
+   UTC isoDate slice for rows written before this change. */
+export function sessionDay(s) { return s.localDate || (s.isoDate || "").slice(0, 10); }
+
 export function mondayOfThisWeek() {
   const d = new Date(); d.setHours(0, 0, 0, 0);
   const dow = d.getDay();                 // 0=Sun..6=Sat
@@ -46,13 +56,13 @@ export function mondayOfThisWeek() {
   return d;
 }
 export function thisWeekSessions() {
-  const monday = mondayOfThisWeek();
-  return loadSessions().filter(s => s.isoDate && new Date(s.isoDate) >= monday);
+  const mondayKey = localDateKey(mondayOfThisWeek());
+  return loadSessions().filter(s => sessionDay(s) >= mondayKey);   // YYYY-MM-DD lexical compare
 }
 
 /* Longest run of consecutive calendar days with >=1 session. */
 export function longestStreak(sessions = loadSessions()) {
-  const days = [...new Set(sessions.map(s => (s.isoDate || "").slice(0, 10)).filter(Boolean))].sort();
+  const days = [...new Set(sessions.map(sessionDay).filter(Boolean))].sort();
   let best = 0, run = 0, prev = null;
   days.forEach(d => {
     if (prev && Math.round((new Date(d) - new Date(prev)) / DAY_MS) === 1) run++; else run = 1;
@@ -60,12 +70,12 @@ export function longestStreak(sessions = loadSessions()) {
   });
   return best;
 }
-/* Current streak anchored to today/yesterday. */
+/* Current streak anchored to today/yesterday (local). */
 export function currentStreak(sessions = loadSessions()) {
-  const days = [...new Set(sessions.map(s => (s.isoDate || "").slice(0, 10)).filter(Boolean))].sort();
+  const days = [...new Set(sessions.map(sessionDay).filter(Boolean))].sort();
   if (!days.length) return 0;
   let cur = new Date(days[days.length - 1]);
-  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const today = new Date(localDateKey());   // local midnight
   const anchor = new Date(today); anchor.setDate(anchor.getDate() - 1);
   if (cur < anchor) return 0;
   let streak = 1;
@@ -141,7 +151,13 @@ export function levelCost(level) { return 100 + (level - 1) * 20; }
 export function xpForSessionEntry(entry) {
   const day = DAYS[entry?.dayKey];
   if (!day || day.spa || day.defaultLight === "recovery") return 0;
-  return 40 + 10 * countMoves(day);
+  const base = 40 + 10 * countMoves(day);
+  // Reward finishing: full base when completed; otherwise scale by how far the
+  // athlete got (min 10%). Old rows (no completedFully field) count as complete.
+  const frac = entry && entry.completedFully === false
+    ? Math.max(0.1, (entry.progressPct || 0) / 100) : 1;
+  const cleanBonus = 5 * (entry && entry.cleanLandings || 0);
+  return Math.round(base * frac) + cleanBonus;
 }
 
 /* Resolve {level, xpIntoLevel, xpToNext, levelPct} from a total XP. */
