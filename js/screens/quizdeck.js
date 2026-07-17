@@ -29,7 +29,8 @@ export function freshQuiz(n = 8) {
       question: `What does “${m.name}” help you build?`,
       options,
       correct: options.indexOf(m.swimTransfer),
-      why: m.cue || m.swimTransfer
+      transfer: m.swimTransfer,
+      tip: m.cue || ""
     };
   });
   return { items, idx: 0, score: 0, picked: null, answered: false, logged: false };
@@ -92,7 +93,7 @@ export function renderQuizDeck(state) {
       ${quiz.answered ? `
         <div style="margin-top:20px;background:var(--rose-50);border-radius:var(--radius-md);padding:14px 16px;max-width:640px;">
           <div style="font-weight:900;font-size:15px;color:${quiz.picked === q.correct ? "var(--rose-600)" : "var(--stop-ink)"};">${quiz.picked === q.correct ? "✓ Correct!" : "Not quite —"} ${q.options[q.correct]}</div>
-          <div style="font-size:14px;font-weight:700;color:var(--ink-soft);margin-top:4px;line-height:1.4;">Coach cue: ${q.why}</div>
+          <div style="font-size:14px;font-weight:700;color:var(--ink-soft);margin-top:4px;line-height:1.4;">“${q.move}” builds <b>${q.transfer}</b> for your skating.${q.tip ? ` <span style="color:var(--ink-faint);">Tip: ${q.tip}</span>` : ""}</div>
         </div>
         <button type="button" data-action="quizNext" class="btn btn-primary" style="margin-top:18px;align-self:flex-start;padding:14px 30px;font-size:16px;">${quiz.idx + 1 >= quiz.items.length ? "See results →" : "Next question →"}</button>
       ` : ""}

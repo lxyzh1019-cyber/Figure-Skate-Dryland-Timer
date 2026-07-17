@@ -6,7 +6,7 @@
 import { DAYS, DAY_KEYS, DAY_SHORT, countMoves } from "../data.js";
 import {
   loadSettings, loadSessions, thisWeekSessions, currentStreak, journeyState,
-  mondayOfThisWeek
+  mondayOfThisWeek, sessionDay, localDateKey
 } from "../store.js";
 
 const DAY_MS = 86400000;
@@ -22,7 +22,8 @@ function buildWeek(selectedKey, todayKey) {
   const monday = mondayOfThisWeek();
   // DAY_KEYS = [sunday, monday..saturday]; each weekday maps to its date within
   // the current Monday-based week (Sunday closes the week at offset +6).
-  const done = new Set(thisWeekSessions().map(s => (s.dayKey || "").toLowerCase()));
+  // "done" is keyed by the session's actual calendar day, not the workout name.
+  const doneDates = new Set(thisWeekSessions().map(sessionDay));
   return DAY_KEYS.map((key, i) => {
     const day = DAYS[key];
     // date for this weekday within the current Mon-based week
@@ -32,7 +33,7 @@ function buildWeek(selectedKey, todayKey) {
     const date = new Date(monday); date.setDate(monday.getDate() + offset);
     const isToday = key === todayKey;
     const isSelected = key === selectedKey;
-    const isDone = done.has(key);
+    const isDone = doneDates.has(localDateKey(date));
     const isRest = !!day.spa;
     let status = "upcoming";
     if (isDone) status = "done";
@@ -80,7 +81,9 @@ export function buildTodayVM(state) {
       { icon: "💤", label: "Rest" }
     ],
     statChips: [
-      { icon: "🔥", value: streak, label: streak === 1 ? "day streak" : "day streak", color: "var(--coral)" },
+      streak > 0
+        ? { icon: "🔥", value: streak, label: "day streak", color: "var(--coral)" }
+        : { icon: "⛸️", value: "Go!", label: "ready today", color: "var(--rose-500)" },
       { icon: "🏅", value: weekCount, label: "this week", color: "var(--rose-500)" },
       { icon: "⭐", value: "LVL " + journey.level, label: journey.rankName, color: "var(--gold-deep, #D99A2E)" }
     ],

@@ -39,6 +39,16 @@ export function patchLastSession(patch) {
   writeStorage(LS_SESSIONS, all);
 }
 
+/* Local calendar day (YYYY-MM-DD in the athlete's timezone, not UTC) — the key
+   for streaks/week grouping so evening sessions don't roll into "tomorrow". */
+export function localDateKey(d = new Date()) {
+  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+/* A session's calendar day — prefers the stored localDate, falls back to the
+   UTC isoDate slice for rows written before this change. */
+export function sessionDay(s) { return s.localDate || (s.isoDate || "").slice(0, 10); }
+
 export function mondayOfThisWeek() {
   const d = new Date(); d.setHours(0, 0, 0, 0);
   const dow = d.getDay();                 // 0=Sun..6=Sat
@@ -46,13 +56,13 @@ export function mondayOfThisWeek() {
   return d;
 }
 export function thisWeekSessions() {
-  const monday = mondayOfThisWeek();
-  return loadSessions().filter(s => s.isoDate && new Date(s.isoDate) >= monday);
+  const mondayKey = localDateKey(mondayOfThisWeek());
+  return loadSessions().filter(s => sessionDay(s) >= mondayKey);   // YYYY-MM-DD lexical compare
 }
 
 /* Longest run of consecutive calendar days with >=1 session. */
 export function longestStreak(sessions = loadSessions()) {
-  const days = [...new Set(sessions.map(s => (s.isoDate || "").slice(0, 10)).filter(Boolean))].sort();
+  const days = [...new Set(sessions.map(sessionDay).filter(Boolean))].sort();
   let best = 0, run = 0, prev = null;
   days.forEach(d => {
     if (prev && Math.round((new Date(d) - new Date(prev)) / DAY_MS) === 1) run++; else run = 1;
@@ -60,20 +70,29 @@ export function longestStreak(sessions = loadSessions()) {
   });
   return best;
 }
-/* Current streak anchored to today/yesterday. */
+/* Current streak (local), forgiving of Sundays — rest IS training, so a
+   Sunday with no session never breaks the streak. */
 export function currentStreak(sessions = loadSessions()) {
-  const days = [...new Set(sessions.map(s => (s.isoDate || "").slice(0, 10)).filter(Boolean))].sort();
-  if (!days.length) return 0;
-  let cur = new Date(days[days.length - 1]);
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const anchor = new Date(today); anchor.setDate(anchor.getDate() - 1);
-  if (cur < anchor) return 0;
-  let streak = 1;
-  for (let i = days.length - 2; i >= 0; i--) {
-    const prev = new Date(days[i]);
-    if (Math.round((cur - prev) / DAY_MS) === 1) { streak++; cur = prev; } else break;
+  const trained = new Set(sessions.map(sessionDay).filter(Boolean));
+  if (!trained.size) return 0;
+  const isRest = d => d.getDay() === 0;            // Sunday
+  let d = new Date(localDateKey());                 // today, local midnight
+  // Streak is "live" if today or yesterday was trained (or today is a rest day).
+  if (!trained.has(localDateKey(d)) && !isRest(d)) {
+    d.setDate(d.getDate() - 1);
+    if (!trained.has(localDateKey(d)) && !isRest(d)) return 0;
+  }
+  let streak = 0;
+  while (true) {
+    if (trained.has(localDateKey(d))) streak++;
+    else if (!isRest(d)) break;                     // a non-rest untrained day ends it
+    d.setDate(d.getDate() - 1);
   }
   return streak;
+}
+/* Distinct days the athlete has trained (for a "showed up N times" count). */
+export function showedUpCount(sessions = loadSessions()) {
+  return new Set(sessions.map(sessionDay).filter(Boolean)).size;
 }
 
 /* ---- settings (V2 defaults merged over any stored value) ---- */
@@ -141,7 +160,13 @@ export function levelCost(level) { return 100 + (level - 1) * 20; }
 export function xpForSessionEntry(entry) {
   const day = DAYS[entry?.dayKey];
   if (!day || day.spa || day.defaultLight === "recovery") return 0;
-  return 40 + 10 * countMoves(day);
+  const base = 40 + 10 * countMoves(day);
+  // Reward finishing: full base when completed; otherwise scale by how far the
+  // athlete got (min 10%). Old rows (no completedFully field) count as complete.
+  const frac = entry && entry.completedFully === false
+    ? Math.max(0.1, (entry.progressPct || 0) / 100) : 1;
+  const cleanBonus = 5 * (entry && entry.cleanLandings || 0);
+  return Math.round(base * frac) + cleanBonus;
 }
 
 /* Resolve {level, xpIntoLevel, xpToNext, levelPct} from a total XP. */
@@ -204,14 +229,43 @@ export function logEvent(type, data) {
     writeStorage(LS_EVENTS, all.slice(-1500));
   } catch {}
 }
-export function recordQuizResult(correct, total) {
-  const q = readStorage(LS_QUIZ, { runs: [], bestPct: 0 });
+/* Record a quiz run. `items` (optional) is [{move, ok}] so we can track which
+   moves the athlete misses over time (feeds the parent watch-list). */
+export function recordQuizResult(correct, total, items) {
+  const q = readStorage(LS_QUIZ, { runs: [], bestPct: 0, byMove: {} });
   const pct = total ? Math.round((correct / total) * 100) : 0;
   q.runs = (q.runs || []).concat({ when: Date.now(), correct, total, pct }).slice(-50);
   q.bestPct = Math.max(q.bestPct || 0, pct);
+  q.byMove = q.byMove || {};
+  (items || []).forEach(it => {
+    const rec = q.byMove[it.move] || { seen: 0, missed: 0 };
+    rec.seen++; if (!it.ok) rec.missed++;
+    q.byMove[it.move] = rec;
+  });
   writeStorage(LS_QUIZ, q);
   logEvent("quiz_complete", { correct, total, pct });
   return q;
+}
+
+/* Parent watch-list: moves the athlete tends to land wobbly or miss on the quiz,
+   scored (wobbly counts double) and sorted. */
+export function movesToWatch(limit = 5) {
+  const wobbly = {};
+  loadSessions().forEach(s => Object.entries(s.landings || {}).forEach(([m, g]) => { wobbly[m] = (wobbly[m] || 0) + (g.wobbly || 0); }));
+  const byMove = (readStorage(LS_QUIZ, {}).byMove) || {};
+  const score = {};
+  Object.entries(wobbly).forEach(([m, w]) => { score[m] = (score[m] || 0) + w * 2; });
+  Object.entries(byMove).forEach(([m, v]) => { score[m] = (score[m] || 0) + (v.missed || 0); });
+  return Object.entries(score).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, limit)
+    .map(([move]) => ({ move, wobbly: wobbly[move] || 0, missed: (byMove[move] || {}).missed || 0 }));
+}
+
+/* Count of forced-easy days (red/recovery/pain) in the last 7 calendar days. */
+export function easyDaysLast7() {
+  const cutoff = localDateKey(new Date(Date.now() - 7 * DAY_MS));
+  const days = new Set();
+  loadSessions().forEach(s => { if (sessionDay(s) >= cutoff && (s.pain || s.light === "red" || s.light === "recovery")) days.add(sessionDay(s)); });
+  return days.size;
 }
 
 /* Full journey view-state used by Today + Progress. */

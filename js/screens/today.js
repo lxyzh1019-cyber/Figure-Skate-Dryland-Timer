@@ -150,25 +150,23 @@ export function renderToday(state) {
 
         <div style="display:flex;gap:10px;">${v.statChips.map(statChip).join("")}</div>
 
-        ${v.journey.pendingDraws > 0 ? `
-        <button type="button" data-action="openPrizeDraw" style="display:flex;align-items:center;gap:12px;background:var(--gold-soft);border:2px solid var(--gold);border-radius:var(--radius-lg);padding:13px 16px;cursor:pointer;font-family:inherit;text-align:left;">
-          <span style="width:44px;height:44px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">🎁</span>
-          <div style="flex:1;min-width:0;">
-            <div style="font-family:var(--font-display);font-weight:600;font-size:17px;color:var(--sun-ink);">You have a prize to open!</div>
-            <div style="font-size:13px;font-weight:700;color:var(--ink-soft);">You leveled up — pick a sealed card to reveal your reward</div>
+        <!-- Extras row — secondary; the day-pane Start button is the sole primary CTA -->
+        <div>
+          <div class="micro-label" style="margin-bottom:8px;">Extras</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            ${v.journey.pendingDraws > 0 ? `
+            <button type="button" data-action="openPrizeDraw" style="flex:1;min-width:150px;display:flex;align-items:center;gap:10px;background:var(--gold-soft);border:2px solid var(--gold);border-radius:var(--radius-lg);padding:11px 13px;cursor:pointer;font-family:inherit;text-align:left;">
+              <span style="width:36px;height:36px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0;">🎁</span>
+              <div style="min-width:0;"><div style="font-weight:900;font-size:15px;color:var(--sun-ink);">Open your prize</div>
+              <div style="font-size:12px;font-weight:700;color:var(--ink-soft);">You leveled up!</div></div>
+            </button>` : ""}
+            <button type="button" data-action="startQuizDeck" style="flex:1;min-width:150px;display:flex;align-items:center;gap:10px;background:var(--rose-50);border:2px solid var(--lilac);border-radius:var(--radius-lg);padding:11px 13px;cursor:pointer;font-family:inherit;text-align:left;">
+              <span style="width:36px;height:36px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0;">🧠</span>
+              <div style="min-width:0;"><div style="font-weight:900;font-size:15px;color:var(--ink);">Quiz Deck</div>
+              <div style="font-size:12px;font-weight:700;color:var(--ink-soft);">Test your moves</div></div>
+            </button>
           </div>
-          <span style="font-size:20px;color:var(--sun-deep);">›</span>
-        </button>` : ""}
-
-        <button type="button" data-action="startQuizDeck" style="display:flex;align-items:center;gap:12px;background:var(--rose-50);
-          border:2px solid var(--lilac);border-radius:var(--radius-lg);padding:13px 16px;cursor:pointer;font-family:inherit;text-align:left;">
-          <span style="width:44px;height:44px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">🧠</span>
-          <div style="flex:1;min-width:0;">
-            <div style="font-family:var(--font-display);font-weight:600;font-size:17px;color:var(--ink);">Quiz Deck</div>
-            <div style="font-size:13px;font-weight:700;color:var(--ink-soft);">Quick questions on your moves — cues, watch-outs &amp; fixes</div>
-          </div>
-          <span style="font-size:20px;color:var(--lilac);">›</span>
-        </button>
+        </div>
 
         ${journeyHero(v.journey)}
       </div>

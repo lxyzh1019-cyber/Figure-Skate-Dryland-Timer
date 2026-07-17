@@ -179,7 +179,10 @@ function severityPopup(r) {
 function resultCard(r) {
   const L = LIGHTS[r.light];
   const rounds = LIGHT_ROUNDS[r.light];
-  const isStop = r.light === "recovery" && r.resultSource === "bodycheck" && (r.zoneSev && Math.max(0, ...Object.values(r.zoneSev)) === 4);
+  const worstSev = r.zoneSev ? Math.max(0, ...Object.values(r.zoneSev)) : 0;
+  const isStop = r.light === "recovery" && r.resultSource === "bodycheck" && worstSev === 4;
+  // A "changed movement" (severity 3) body flag asks for a grown-up OK before starting.
+  const needGrownup = r.resultSource === "bodycheck" && worstSev === 3;
   const lightOpts = ["green", "yellow", "red", "recovery"].map(k => {
     const on = r.light === k;
     return `<button type="button" data-action="rdyOverride" data-light="${k}"
@@ -197,6 +200,9 @@ function resultCard(r) {
         <div class="micro-label" style="margin-bottom:9px;">Coach suggests this light — a grown-up can change it${r.overridden ? " (changed)" : ""}:</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">${lightOpts}</div>
       </div>
+      ${needGrownup ? `<div style="display:flex;align-items:center;gap:10px;background:var(--stop-wash);border:2px solid var(--stop);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:16px;">
+        <span style="font-size:22px;">🗣️</span>
+        <div style="font-size:14px;font-weight:800;color:var(--stop-ink);line-height:1.4;">That spot changed how you move — check with a coach or parent <b>before</b> you start. If they say OK, keep it to this easy day.</div></div>` : ""}
       ${isStop
         ? `<button type="button" data-action="goToday" style="width:100%;border:none;border-radius:var(--radius-pill);padding:18px;background:var(--stop);color:#fff;font-family:var(--font-display);font-weight:600;font-size:20px;cursor:pointer;box-shadow:0 5px 0 var(--stop-deep);">🛑 Stop — back to Today</button>`
         : `<button type="button" data-action="rdyStart" style="width:100%;border:none;border-radius:var(--radius-pill);padding:18px;background:var(--gold);color:var(--sun-ink);font-family:var(--font-display);font-weight:600;font-size:21px;cursor:pointer;box-shadow:0 5px 0 var(--sun-deep);">${rounds === 0 ? "🧊 Start Recovery" : `💪 Start Training! · ${rounds} round${rounds > 1 ? "s" : ""}`}</button>`}

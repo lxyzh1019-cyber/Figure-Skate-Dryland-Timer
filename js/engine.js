@@ -7,7 +7,7 @@
    screens/session.js renders from engine.snapshot() and calls the controls.
    ============================================================================ */
 import { DAYS, LIGHT_ROUNDS, countMoves, DAY_MANTRA, INTENT_WORDS, adjWork } from "./data.js";
-import { saveSession, awardSessionXp, patchLastSession } from "./store.js";
+import { saveSession, awardSessionXp, patchLastSession, localDateKey } from "./store.js";
 import { speakAndWait, tickBeep, finishBeep, cancelSpeech, primeAudio } from "./audio.js";
 
 export const BLOCK_LABEL = {
@@ -36,16 +36,21 @@ export class Session {
     this.remaining = 0;
     this.total = 0;
     this.idx = 0;
+    this.effectiveRounds = this.mainRounds;   // live main-round count (drops on fatigue)
+    this._cleanLandings = 0;
+    this.landings = {};                        // per-move landing grades (parent watch-list)
 
     this.plan = this._buildPlan();
     this.totalPhases = this.plan.length || 1;
   }
 
   /* ---- plan ---- */
+  // Every phase carries {block, round} so the tier-drop can cut a whole round
+  // cleanly (exercises + their rests + side switches), leaving no orphans.
   _pushExercise(plan, ex, block, round, rounds) {
     if (ex.eachSide) {
       plan.push({ kind: "exercise", ex, block, round, rounds, side: "Left" });
-      plan.push({ kind: "sideSwitch", ex });
+      plan.push({ kind: "sideSwitch", ex, block, round });
       plan.push({ kind: "exercise", ex, block, round, rounds, side: "Right" });
     } else {
       plan.push({ kind: "exercise", ex, block, round, rounds });
@@ -54,10 +59,12 @@ export class Session {
   _buildPlan() {
     const d = this.day, plan = [];
     const R = this.settings;
+    const exRest = (block, round, next) =>
+      R.exerciseRestSeconds > 0 ? plan.push({ kind: "exRest", block, round, secs: R.exerciseRestSeconds, next }) : 0;
     if (d.spa || this.light === "recovery") {
       (d.recoveryHolds || []).forEach((ex, i, arr) => {
         this._pushExercise(plan, ex, "recovery", 1, 1);
-        if (i < arr.length - 1) plan.push({ kind: "exRest", secs: R.exerciseRestSeconds, next: arr[i + 1].name });
+        if (i < arr.length - 1) exRest("recovery", 1, arr[i + 1].name);
       });
       return plan;
     }
@@ -69,9 +76,9 @@ export class Session {
       for (let r = 1; r <= rounds; r++) {
         arr.forEach((ex, i) => {
           this._pushExercise(plan, ex, bk, r, rounds);
-          if (i < arr.length - 1) plan.push({ kind: "exRest", secs: R.exerciseRestSeconds, next: arr[i + 1].name });
+          if (i < arr.length - 1) exRest(bk, r, arr[i + 1].name);
         });
-        if (bk === "main" && r < rounds) plan.push({ kind: "roundRest", round: r, rounds, secs: R.roundRestSeconds });
+        if (bk === "main" && r < rounds) plan.push({ kind: "roundRest", block: bk, round: r, rounds, secs: R.roundRestSeconds });
       }
       plan.push({ kind: "sectionRest", block: bk, secs: R.sectionRestSeconds });
     });
@@ -109,6 +116,10 @@ export class Session {
       if (res === "done" && ph.kind === "exercise" && ph.block === "main" && ph.ex.gate === "valgus") {
         const grade = await this._landingCheck(ph);
         if (this.ended) break;
+        // record for parent watch-list + XP bonus
+        const rec = this.landings[ph.ex.name] || { clean: 0, wobbly: 0 };
+        rec[grade] = (rec[grade] || 0) + 1; this.landings[ph.ex.name] = rec;
+        if (grade === "clean") this._cleanLandings++;
         this._wobblyStreak = grade === "wobbly" ? (this._wobblyStreak || 0) + 1 : 0;
         if (this._wobblyStreak >= 2) {
           this._wobblyStreak = 0;
@@ -173,14 +184,20 @@ export class Session {
     const r = this._landRes; this._landRes = null;
     if (r) r(grade);
   }
-  /* Cut the remaining higher main rounds (green3 → yellow2 → red1). Returns
-     true if anything was dropped. */
+  /* Drop ONE main-round tier (green3 → yellow2 → red1): remove the highest
+     still-planned main round (its exercises, rests, side-switches) plus the
+     round-rest leading into it. Never drops below the current round. */
   _dropTier() {
     const cur = (this.phase && this.phase.round) || 1;
+    let maxR = cur;
+    this.plan.forEach(ph => { if (ph.block === "main" && ph.round > maxR) maxR = ph.round; });
+    if (maxR <= cur) return false;                 // already at the floor
+    const target = maxR;
     const before = this.plan.length;
     this.plan = this.plan.filter((ph, i) =>
       i <= this.idx ||
-      !((ph.block === "main" && (ph.round || 0) > cur) || (ph.kind === "roundRest" && (ph.round || 0) >= cur)));
+      !((ph.block === "main" && ph.round === target) || (ph.kind === "roundRest" && ph.round === target - 1)));
+    this.effectiveRounds = Math.max(cur, target - 1);
     this.totalPhases = this.plan.length || 1;
     this.tierDropped = (this.tierDropped || 0) + 1;
     return this.plan.length < before;
@@ -203,11 +220,16 @@ export class Session {
     this.ended = true;
     clearInterval(this._iv);
     cancelSpeech();
-    const durationSecs = Math.round((Date.now() - this.startTs) / 1000);
+    const now = new Date();
+    const durationSecs = Math.round((now - this.startTs) / 1000);
+    const progressPct = Math.min(100, Math.round((this.idx / this.totalPhases) * 100));
     const entry = {
-      dayKey: this.dayKey, isoDate: new Date().toISOString(), durationSecs,
-      light: this.light, completedFully, endedEarly: !completedFully,
-      pain: !!this.painFlag, moves: countMoves(this.day), skipped: this.skipped.length
+      dayKey: this.dayKey, isoDate: now.toISOString(),
+      localDate: localDateKey(now),   // calendar day in the athlete's timezone
+      durationSecs, light: this.light, completedFully, endedEarly: !completedFully,
+      progressPct, pain: !!this.painFlag, moves: countMoves(this.day),
+      skipped: this.skipped.length, cleanLandings: this._cleanLandings,
+      landings: this.landings
     };
     let xp = null;
     if (!this.settings.testMode) {
@@ -230,7 +252,7 @@ export class Session {
       dayKey: this.dayKey, dayTitle: this.day.title, light: this.light,
       kind: ph.kind, ex: ph.ex || null, side: ph.side || null,
       block: ph.block || null, blockLabel: BLOCK_LABEL[ph.block] || "",
-      round: ph.round || null, rounds: ph.rounds || null,
+      round: ph.round || null, rounds: ph.block === "main" ? this.effectiveRounds : (ph.rounds || null),
       next: ph.next || null, intentWord: this.intentWord || null,
       remaining: this.remaining, total: this.total,
       paused: this.paused, stopOverlay: this.stopOverlay,

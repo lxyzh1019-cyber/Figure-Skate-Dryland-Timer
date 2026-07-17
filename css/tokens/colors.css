@@ -19,8 +19,8 @@
 
   /* Neutrals — warm, never pure gray */
   --ink:        #4A3A41;
-  --ink-soft:   #8A737C;
-  --ink-faint:  #B79CA6;
+  --ink-soft:   #6E5760;  /* darkened to clear WCAG AA on the blush bg */
+  --ink-faint:  #8C7480;  /* darkened for legibility while staying muted */
   --surface:    #FFFFFF;
   --bg:         #FBF1F3;   /* app background blush */
   --bg-deep:    #F7E6EB;

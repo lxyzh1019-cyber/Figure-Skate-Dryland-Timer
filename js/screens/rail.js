@@ -18,11 +18,11 @@ export function rail(active) {
   const btns = ITEMS.map(it => {
     const on = it.nav === active;
     const iconWrap = `width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;` +
-      (on ? "background:var(--rose-500);box-shadow:0 4px 12px rgba(194,86,113,0.35);" : "background:var(--surface-2);");
+      (on ? "background:#fff;border:2px solid var(--rose-500);box-shadow:0 4px 12px rgba(194,86,113,0.35);" : "background:var(--surface-2);");
     const labelColor = on ? "var(--rose-700)" : "var(--ink-soft)";
     return `
-      <button type="button" data-action="${it.action}" style="background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;font-family:inherit;">
-        <div style="${iconWrap}">${on ? `<span style="filter:grayscale(1) brightness(3);">${it.icon}</span>` : it.icon}</div>
+      <button type="button" data-action="${it.action}" aria-label="${it.label}" style="background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;font-family:inherit;">
+        <div style="${iconWrap}">${it.icon}</div>
         <span style="font-size:11px;font-weight:900;color:${labelColor};">${it.label}</span>
       </button>`;
   }).join("");
