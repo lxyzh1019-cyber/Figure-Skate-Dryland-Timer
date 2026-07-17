@@ -6,7 +6,7 @@
 import { DAYS, DAY_KEYS, DAY_SHORT } from "../data.js";
 import {
   loadSessions, thisWeekSessions, currentStreak, longestStreak,
-  journeyState, mondayOfThisWeek, sessionDay, localDateKey, RANKS, rankForLevel
+  journeyState, mondayOfThisWeek, sessionDay, localDateKey, RANKS, rankForLevel, showedUpCount
 } from "../store.js";
 import { rail } from "./rail.js";
 
@@ -119,10 +119,11 @@ export function renderProgress(state) {
         <!-- streak + week chart + prizes -->
         <div style="display:flex;gap:14px;flex-wrap:wrap;">
           <div style="flex:2;min-width:280px;background:var(--surface);border:1.5px solid var(--hairline);border-radius:var(--radius-xl);padding:18px;box-shadow:var(--shadow-soft);display:flex;align-items:center;gap:18px;">
-            <div style="display:flex;flex-direction:column;align-items:center;background:var(--gold-soft);border-radius:20px;padding:12px 16px;flex-shrink:0;">
-              <span style="font-size:30px;">🔥</span>
-              <span style="font-family:var(--font-display);font-weight:600;font-size:28px;color:var(--coral-deep,#D99A2E);line-height:1;">${streak}</span>
-              <span style="font-size:11px;font-weight:900;color:var(--sun-ink);letter-spacing:0.03em;">DAY STREAK</span>
+            <div style="display:flex;flex-direction:column;align-items:center;background:var(--gold-soft);border-radius:20px;padding:12px 16px;flex-shrink:0;min-width:96px;">
+              <span style="font-size:30px;">${streak > 0 ? "🔥" : "⛸️"}</span>
+              <span style="font-family:var(--font-display);font-weight:600;font-size:28px;color:var(--coral-deep,#D99A2E);line-height:1;">${streak > 0 ? streak : "Go!"}</span>
+              <span style="font-size:11px;font-weight:900;color:var(--sun-ink);letter-spacing:0.03em;text-align:center;">${streak > 0 ? "DAY STREAK" : "READY TODAY"}</span>
+              <span style="font-size:11px;font-weight:800;color:var(--sun-ink);opacity:0.85;margin-top:4px;">best ${longestStreak()} · showed up ${showedUpCount()}×</span>
             </div>
             <div style="flex:1;min-width:0;">
               <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px;">

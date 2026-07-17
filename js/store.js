@@ -70,20 +70,29 @@ export function longestStreak(sessions = loadSessions()) {
   });
   return best;
 }
-/* Current streak anchored to today/yesterday (local). */
+/* Current streak (local), forgiving of Sundays — rest IS training, so a
+   Sunday with no session never breaks the streak. */
 export function currentStreak(sessions = loadSessions()) {
-  const days = [...new Set(sessions.map(sessionDay).filter(Boolean))].sort();
-  if (!days.length) return 0;
-  let cur = new Date(days[days.length - 1]);
-  const today = new Date(localDateKey());   // local midnight
-  const anchor = new Date(today); anchor.setDate(anchor.getDate() - 1);
-  if (cur < anchor) return 0;
-  let streak = 1;
-  for (let i = days.length - 2; i >= 0; i--) {
-    const prev = new Date(days[i]);
-    if (Math.round((cur - prev) / DAY_MS) === 1) { streak++; cur = prev; } else break;
+  const trained = new Set(sessions.map(sessionDay).filter(Boolean));
+  if (!trained.size) return 0;
+  const isRest = d => d.getDay() === 0;            // Sunday
+  let d = new Date(localDateKey());                 // today, local midnight
+  // Streak is "live" if today or yesterday was trained (or today is a rest day).
+  if (!trained.has(localDateKey(d)) && !isRest(d)) {
+    d.setDate(d.getDate() - 1);
+    if (!trained.has(localDateKey(d)) && !isRest(d)) return 0;
+  }
+  let streak = 0;
+  while (true) {
+    if (trained.has(localDateKey(d))) streak++;
+    else if (!isRest(d)) break;                     // a non-rest untrained day ends it
+    d.setDate(d.getDate() - 1);
   }
   return streak;
+}
+/* Distinct days the athlete has trained (for a "showed up N times" count). */
+export function showedUpCount(sessions = loadSessions()) {
+  return new Set(sessions.map(sessionDay).filter(Boolean)).size;
 }
 
 /* ---- settings (V2 defaults merged over any stored value) ---- */

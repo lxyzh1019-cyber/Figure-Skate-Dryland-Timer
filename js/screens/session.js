@@ -139,6 +139,11 @@ const MOODS = [
   { key: "good",   emoji: "😊", label: "Good" },
   { key: "tough",  emoji: "😮‍💨", label: "Tough" }
 ];
+const MOOD_ACK = {
+  strong: "Amazing — that power is all yours. 💪",
+  good:   "Love it. Steady and strong today. 😊",
+  tough:  "Tough days build the toughest skaters. Proud of you for finishing. 💛"
+};
 
 export function renderComplete(state, complete) {
   const c = complete, e = c.entry;
@@ -160,6 +165,7 @@ export function renderComplete(state, complete) {
         <div style="display:flex;gap:12px;">
           ${MOODS.map(m => `<button type="button" data-action="sessMood" data-mood="${m.key}" class="btn" style="background:${state.__mood === m.key ? 'var(--rose-500)' : 'var(--surface)'};color:${state.__mood === m.key ? '#fff' : 'var(--ink)'};border:2px solid var(--border-strong);display:flex;flex-direction:column;gap:4px;padding:12px 20px;"><span style="font-size:28px;">${m.emoji}</span><span style="font-size:13px;font-weight:900;">${m.label}</span></button>`).join("")}
         </div>
+        ${state.__mood ? `<div style="font-family:var(--font-hand);font-size:20px;font-weight:700;color:var(--rose-600);max-width:420px;">${MOOD_ACK[state.__mood]}</div>` : ""}
       </div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:12px;">
         ${xp && xp.leveledUp ? `<button type="button" data-action="openPrizeDraw" class="btn btn-primary" style="padding:16px 30px;font-family:var(--font-display);font-weight:600;font-size:20px;">🎁 Open your prize</button>` : ""}

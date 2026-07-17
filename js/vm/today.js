@@ -81,7 +81,9 @@ export function buildTodayVM(state) {
       { icon: "💤", label: "Rest" }
     ],
     statChips: [
-      { icon: "🔥", value: streak, label: streak === 1 ? "day streak" : "day streak", color: "var(--coral)" },
+      streak > 0
+        ? { icon: "🔥", value: streak, label: "day streak", color: "var(--coral)" }
+        : { icon: "⛸️", value: "Go!", label: "ready today", color: "var(--rose-500)" },
       { icon: "🏅", value: weekCount, label: "this week", color: "var(--rose-500)" },
       { icon: "⭐", value: "LVL " + journey.level, label: journey.rankName, color: "var(--gold-deep, #D99A2E)" }
     ],
