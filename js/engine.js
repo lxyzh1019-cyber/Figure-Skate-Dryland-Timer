@@ -1,265 +1,858 @@
-/* ============================================================================
-   engine.js — async session engine (ported behaviour from the original app).
-   Builds the session plan from the day's blocks × traffic-light rounds, then
-   runs each phase (timed countdown / rep tap / rests / round breaks / side
-   switches) with coach voice + beeps, pause/skip/stop/end, and finalize that
-   writes skate_sessions_v2 + awards XP. The engine owns timing/logic only;
-   screens/session.js renders from engine.snapshot() and calls the controls.
-   ============================================================================ */
-import { DAYS, LIGHT_ROUNDS, countMoves, DAY_MANTRA, INTENT_WORDS, adjWork } from "./data.js";
-import { saveSession, awardSessionXp, patchLastSession, localDateKey } from "./store.js";
-import { speakAndWait, tickBeep, finishBeep, cancelSpeech, primeAudio } from "./audio.js";
+/* ============================================================
+   SESSION ENGINE — port of the old app's async/await runner
+   (speak-then-count sequencing, eachSide side-switch, intent
+   word, clean-check, skip/pause/stop, valgus earn-back). The old
+   DOM setters are replaced by mutations of the exported `sess`
+   view-state + notify() callbacks:
+     notify("phase") → full session-screen re-render
+     notify("tick")  → targeted per-second DOM writes only
+   ============================================================ */
 
-export const BLOCK_LABEL = {
-  warmup: "Warm-up", coordination: "Coordination", main: "Main Set",
-  finisher: "Power / Finisher", swimskill: "Skating Skill", recovery: "Recovery"
-};
-const BLOCK_ORDER = ["warmup", "coordination", "main", "finisher", "swimskill"];
+import { DAYS, BLOCK_ORDER, BLOCK_LABEL, LIGHT_ROUNDS, SIDE_SWITCH_BUFFER, INTENT_WORDS, MICRO_LOOP, BREATH_REHEARSAL, MANTRA, exWork, exRepsDetail } from "./data.js";
+import { settings, configuredExerciseRest, configuredRoundRest, configuredSectionRest, saveSession, patchLastSession, logEvent, loadDayProgress, saveDayProgress, clearDayProgress, loadGate, saveGate, addSkipRecord, addXp, xpForSession } from "./store.js";
+import { speak, speakIfIdle, speakAndWait, interruptSpeech, cancelSpeech, nextEncouragement, beep, endBeep, playCue, ensureAudio, voiceOn } from "./audio.js";
+import { fsAddSession } from "./firebase.js";
+import { recoveryDoseSecs, refTime } from "./util.js";
 
-export class Session {
-  constructor({ dayKey, light, settings, onChange, onTick, onComplete }) {
-    this.dayKey = dayKey;
-    this.light = light;
-    this.settings = settings;
-    this.onChange = onChange || (() => {});
-    this.onTick = onTick || (() => {});
-    this.onComplete = onComplete || (() => {});
-    this.day = DAYS[dayKey];
-    this.mainRounds = Math.max(1, LIGHT_ROUNDS[light] || 1);
-    this.startTs = Date.now();
+// Moves that deserve a longer "get ready" lead-in before they start. Kept in
+// sync with the names that actually appear in the 2026.2 content (js/data.js);
+// stale entries were pruned so the lead-time branch fires when it should.
+const HARD_EXERCISES = new Set([
+  "Box Jump → Stick", "Lateral Bound → Stick", "Skater Jump",
+  "Rotational Jump w/ Frozen Landing", "Turn-and-Stick Single-Leg Landing",
+  "Pull-Up (heavy)", "Scap Pull-Up + Dead Hang"
+]);
 
-    this.paused = false;
-    this.ended = false;
-    this.stopOverlay = false;
-    this.painFlag = false;
-    this.skipped = [];
-    this.remaining = 0;
-    this.total = 0;
-    this.idx = 0;
-    this.effectiveRounds = this.mainRounds;   // live main-round count (drops on fatigue)
-    this._cleanLandings = 0;
-    this.landings = {};                        // per-move landing grades (parent watch-list)
+/* ---- session view-state (the single source the UI renders from) ---- */
+export const sess = blankSession();
 
-    this.plan = this._buildPlan();
-    this.totalPhases = this.plan.length || 1;
-  }
+function blankSession() {
+  return {
+    running: false, paused: false, abort: false, skipExercise: false, forceDone: false, forceDoneAt: 0,
+    byRepsResolver: null, intentResolver: null, microResolver: null, landingResolver: null,
+    currentEx: null, skipped: [], perExercise: [], justSkipped: false,
+    phase: "greeting",           // greeting|getready|work|reps|sideswitch|rest|roundRest|sectionRest|intent|microloop|landing|breath|done
+    circuits: [], ci: 0, ei: 0, round: 1, exDone: 0,
+    timerSecs: 0, timerMax: 0, urgent: false,
+    exElapsed: 0, elapsed: 0, pausedSecs: 0, plannedSecs: 0,
+    upNextName: "", upNextDose: "", restCue: "",
+    stopOverlay: false, confirmEnd: false, painFlag: false,
+    pendingCleanCheck: false, cleanCount: 0, wobblyCount: 0, lastWobbly: false,
+    landings: {}, wobblyStreak: 0, tierDropped: 0,
+    intentWord: null, microLoop: null,
+    exStatus: {},                // "ci-ei" -> done|skipped
+    roundsCompleted: 0, sideLabel: "",
+    dayKey: null, light: "green", practice: false, mini: false, spa: false,
+    endedEarly: false, xpEarned: 0, leveledUp: false,
+    mood: null, wentWell: null, nextTime: null, quizPick: null,
+    savedEntry: false, fsId: null
+  };
+}
 
-  /* ---- plan ---- */
-  // Every phase carries {block, round} so the tier-drop can cut a whole round
-  // cleanly (exercises + their rests + side switches), leaving no orphans.
-  _pushExercise(plan, ex, block, round, rounds) {
-    if (ex.eachSide) {
-      plan.push({ kind: "exercise", ex, block, round, rounds, side: "Left" });
-      plan.push({ kind: "sideSwitch", ex, block, round });
-      plan.push({ kind: "exercise", ex, block, round, rounds, side: "Right" });
-    } else {
-      plan.push({ kind: "exercise", ex, block, round, rounds });
-    }
-  }
-  _buildPlan() {
-    const d = this.day, plan = [];
-    const R = this.settings;
-    const exRest = (block, round, next) =>
-      R.exerciseRestSeconds > 0 ? plan.push({ kind: "exRest", block, round, secs: R.exerciseRestSeconds, next }) : 0;
-    if (d.spa || this.light === "recovery") {
-      (d.recoveryHolds || []).forEach((ex, i, arr) => {
-        this._pushExercise(plan, ex, "recovery", 1, 1);
-        if (i < arr.length - 1) exRest("recovery", 1, arr[i + 1].name);
-      });
-      return plan;
-    }
-    const blocks = d.blocks || {};
-    BLOCK_ORDER.forEach(bk => {
-      const arr = blocks[bk] || [];
-      if (!arr.length) return;
-      const rounds = bk === "main" ? this.mainRounds : 1;
-      for (let r = 1; r <= rounds; r++) {
-        arr.forEach((ex, i) => {
-          this._pushExercise(plan, ex, bk, r, rounds);
-          if (i < arr.length - 1) exRest(bk, r, arr[i + 1].name);
-        });
-        if (bk === "main" && r < rounds) plan.push({ kind: "roundRest", block: bk, round: r, rounds, secs: R.roundRestSeconds });
-      }
-      plan.push({ kind: "sectionRest", block: bk, secs: R.sectionRestSeconds });
+let notify = () => {};
+export function onSessionUpdate(fn) { notify = fn; }
+
+/* ---- circuits assembly (2026.2 block model) ---- */
+export function assembleCircuits(dayKey, light, opts = {}) {
+  const day = DAYS[dayKey];
+  if (!day) return [];
+  if (day.spa) {
+    const menu = (day.recovery || []).map(r => {
+      const { secs, eachSide } = recoveryDoseSecs(r.dose);
+      return { name: r.name, block: "recovery", driver: "time", work: secs,
+        dose: r.dose, cue: r.why, eachSide, rest: 3 };
     });
-    while (plan.length && plan[plan.length - 1].kind === "sectionRest") plan.pop();
-    return plan;
+    return [{ name: "Recovery", block: "recovery", rounds: 1,
+      exercises: menu.concat(day.recoveryHolds || []) }];
   }
+  const rounds = Math.max(1, LIGHT_ROUNDS[light] || 1);
+  const skipBlocks = opts.skip || [];
+  const circuits = [];
+  const order = opts.mini ? ["warmup", "main"] : BLOCK_ORDER;
+  order.forEach(bk => {
+    if (skipBlocks.includes(bk)) return;
+    let exs = (day.blocks[bk] || []).slice();
+    // Standing rule: jump rope hidden on double-ice days.
+    if (bk === "warmup" && day.iceLoad === "double") {
+      exs = exs.filter(ex => !/jump rope/i.test(ex.name));
+    }
+    if (!exs.length) return;
+    circuits.push({ name: BLOCK_LABEL[bk], block: bk,
+      rounds: bk === "main" && !opts.mini ? rounds : 1, exercises: exs });
+    if (bk === "main" && !opts.mini && day.prepMenu && day.prepMenu.length && !skipBlocks.includes("prep")) {
+      circuits.push({ name: BLOCK_LABEL.prep, block: "prep", rounds: 1, exercises: day.prepMenu });
+    }
+  });
+  return circuits;
+}
 
-  /* ---- lifecycle ---- */
-  async run() {
-    primeAudio();
-    for (this.idx = 0; this.idx < this.plan.length && !this.ended;) {
-      const ph = this.plan[this.idx];
-      this.phase = ph;
-      this.onChange();
-      let res = "done";
-      if (ph.kind === "exercise") {
-        await speakAndWait(this._announce(ph));
-        if (this.ended) break;
-        const timed = ph.ex.driver === "time" || ph.ex.work != null;
-        res = timed ? await this._countdown(adjWork(ph.ex.work || 30)) : await this._waitTap();
-      } else if (ph.kind === "sideSwitch") {
-        this.onChange(); await speakAndWait("Switch sides."); res = "done";
-      } else if (ph.kind === "roundRest") {
-        this.intentWord = INTENT_WORDS[(ph.round - 1) % INTENT_WORDS.length];
-        await speakAndWait("Nice round. Quick breather.");
-        res = await this._countdown(ph.secs || 15);
-      } else { // exRest | sectionRest
-        res = await this._countdown(ph.secs || 8);
+/* Jump-fatigue tier-drop rule (pure, unit-tested): two wobbly landings in a
+   row remove the highest remaining main round, never dropping below the round
+   currently in progress. Returns the new round count for the circuit. */
+export function tierDroppedRounds(currentRounds, wobblyStreak, roundInProgress) {
+  if (wobblyStreak >= 2 && currentRounds > roundInProgress) {
+    return Math.max(roundInProgress, currentRounds - 1);
+  }
+  return currentRounds;
+}
+
+/* Estimated session length in seconds (rep-based ≈ secondsPerRep × reps). */
+export function estimateSessionSecs(circuits) {
+  let total = 0;
+  const exRest = configuredExerciseRest();
+  const roundRest = configuredRoundRest();
+  circuits.forEach(c => {
+    for (let r = 1; r <= c.rounds; r++) {
+      let exInRound = 0;
+      c.exercises.forEach(ex => {
+        if (ex.rounds && r > ex.rounds) return;
+        exInRound++;
+        if (ex.byReps) {
+          const m = (ex.repsDetail || "").match(/(\d+)\s*(?:reps?|steps?|alternating)/i)
+                 || (ex.repsDetail || "").match(/(\d+)/);
+          const reps = m ? parseInt(m[1], 10) : 10;
+          const detail = ex.repsDetail || "";
+          const multiplier = /each direction/i.test(detail) ? 4 : (/each side|per side|\/side/i.test(detail) ? 2 : 1);
+          total += reps * (settings.secondsPerRep || 3) * multiplier;
+        } else {
+          total += exWork(ex) + (ex.eachSide ? SIDE_SWITCH_BUFFER : 0);
+        }
+      });
+      total += exRest * Math.max(0, exInRound - 1);
+      if (r < c.rounds) total += roundRest;
+    }
+  });
+  total += Math.max(0, circuits.length - 1) * configuredSectionRest();
+  return Math.round(total);
+}
+
+/* Planning-estimate per exercise — re-exported from util so session VM imports
+   (import { refTime } from "../engine.js") keep working from one definition. */
+export { refTime };
+
+/* ---- primitives (ported: abort/skip aware, pause-respecting) ---- */
+
+function countdown(seconds, opts = {}) {
+  // Timestamp-based: remaining is derived from a real deadline, so a throttled
+  // background tab (or a slow tick) can't make the clock drift — it self-corrects
+  // to wall-clock time. While paused the deadline is pushed forward so no time
+  // is lost. Per-second side effects (beeps/onTick/notify) fire once per whole
+  // second actually crossed.
+  return new Promise(resolve => {
+    sess.timerSecs = seconds; sess.timerMax = seconds; sess.urgent = false;
+    notify("tick");
+    const started = Date.now();
+    let deadline = started + seconds * 1000;
+    let lastWhole = seconds;
+    const id = setInterval(() => {
+      if (sess.abort)        { clearInterval(id); resolve("abort"); return; }
+      // Honor a Done-tap only if it landed AFTER this countdown began — a stale
+      // flag from the previous phase must not skip a freshly-started one.
+      if (sess.forceDone && sess.forceDoneAt >= started) { sess.forceDone = false; clearInterval(id); endBeep(); resolve("done"); return; }
+      if (sess.forceDone && sess.forceDoneAt < started) sess.forceDone = false;   // drop the stale flag
+      if (sess.skipExercise) { clearInterval(id); resolve("skip");  return; }
+      if (sess.paused) { deadline = Date.now() + lastWhole * 1000; return; }
+
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      if (remaining === lastWhole) return;   // still inside the same whole second
+      lastWhole = remaining;
+      sess.timerSecs = remaining;
+      sess.urgent = remaining <= 3 && remaining > 0;
+      if (opts.onTick) opts.onTick(remaining);
+      if (remaining <= 3 && remaining > 0) beep(remaining === 1 ? 880 : 440, 0.1);
+      else if (remaining > 3) playCue(sess.phase === "work" ? "tickSoft" : "tickRest");
+      if (remaining <= 0) { endBeep(); notify("tick"); clearInterval(id); resolve("done"); return; }
+      notify("tick");
+    }, 200);
+  });
+}
+
+function sleep(ms) {
+  return new Promise(resolve => {
+    const started = Date.now();
+    let elapsed = 0, last = started;
+    const id = setInterval(() => {
+      if (sess.abort)        { clearInterval(id); resolve("abort"); return; }
+      if (sess.forceDone && sess.forceDoneAt >= started) { sess.forceDone = false; clearInterval(id); resolve("done"); return; }
+      if (sess.forceDone && sess.forceDoneAt < started) sess.forceDone = false;
+      if (sess.skipExercise) { clearInterval(id); resolve("skip");  return; }
+      const now = Date.now();
+      // Accumulate only unpaused time — a pause mid-sleep must not swallow the
+      // remainder when resumed (raw now-start would already exceed ms).
+      if (!sess.paused) elapsed += now - last;
+      last = now;
+      if (elapsed >= ms) { clearInterval(id); resolve("done"); }
+    }, 100);
+  });
+}
+
+/* ---- reps voice intelligence (ported) ---- */
+
+const TEMPO_PATTERN = /(\d)-(\d)-(\d)/;
+function repCount(ex, fallback) {
+  const m = (ex.repsDetail || "").match(/(\d+)\s*reps?/i);
+  return m ? parseInt(m[1]) : fallback;
+}
+function getExercisePattern(ex) {
+  const m = (ex.repsDetail || "").match(TEMPO_PATTERN);
+  if (m) {
+    return { count: repCount(ex, 10), phases: [
+      { word: "Up",   secs: parseInt(m[1]), freq: 660 },
+      { word: "Hold", secs: parseInt(m[2]), freq: 880 },
+      { word: "Down", secs: parseInt(m[3]), freq: 440 }
+    ]};
+  }
+  const name = ex.name;
+  if (/glute bridge/i.test(name)) return { count: 12, phases: [
+    { word: "Up", secs: 2, freq: 660 }, { word: "Hold", secs: 1, freq: 880 }, { word: "Down", secs: 2, freq: 440 } ]};
+  if (/dead bug/i.test(name)) return { count: 10, phases: [
+    { word: "Extend", secs: 2, freq: 660 }, { word: "Return", secs: 2, freq: 440 } ]};
+  if (/bird dog/i.test(name)) return { count: 10, phases: [
+    { word: "Extend", secs: 1, freq: 660 }, { word: "Hold", secs: 5, freq: 880 }, { word: "Return", secs: 1, freq: 440 } ]};
+  return null;
+}
+function buildVoiceCues(ex) {
+  const repMatch = (ex.repsDetail || "").match(/(\d+)\s*reps?/i);
+  const count = repMatch ? parseInt(repMatch[1]) : 10;
+  return Array.from({ length: count }, (_, i) => String(i + 1));
+}
+
+const CADENCE_PATTERN = /\d+s\s+(?:up|open|raise)/i;
+export function screenRepsDetail(ex) {
+  const detail = exRepsDetail(ex) || ex.dose;
+  if (!(ex.byReps && CADENCE_PATTERN.test(ex.repsDetail || ""))) return detail;
+  const m = detail.match(/^(\d+\s+reps?)/i);
+  return m ? m[1] : detail.replace(/·.*$/, "").trim();
+}
+
+async function runTempoLoop(ex, pattern, isDone) {
+  const phaseDefs = pattern.phases;
+  async function tempoSleep(ms) {
+    const start = Date.now();
+    let pausedMs = 0;
+    while (true) {
+      if (isDone() || sess.abort || sess.skipExercise) return "interrupt";
+      if (sess.paused) { pausedMs += 100; }
+      else if (Date.now() - start - pausedMs >= ms) return "done";
+      await new Promise(r => setTimeout(r, 100));
+    }
+  }
+  for (let i = 1; i <= pattern.count; i++) {
+    for (let p = 0; p < phaseDefs.length; p++) {
+      const ph = phaseDefs[p];
+      if (ph.secs <= 0) continue;
+      if (isDone()) return;
+      while (sess.paused && !isDone()) { await new Promise(r => setTimeout(r, 200)); }
+      if (isDone()) return;
+      speak(p === 0 ? `${i}. ${ph.word}` : ph.word);
+      beep(ph.freq, 0.1);
+      for (let s = 1; s < ph.secs; s++) {
+        if (await tempoSleep(1000) === "interrupt") return;
+        beep(ph.freq, 0.08);
       }
+      if (await tempoSleep(1000) === "interrupt") return;
+    }
+  }
+}
 
-      if (this.ended) break;
+async function runRepsWithVoice(ex) {
+  const pattern = getExercisePattern(ex);
+  const cues = pattern ? null : buildVoiceCues(ex);
+  let cueDone = false;
 
-      // Jump-fatigue gate: grade the landing after each valgus main-block jump.
-      // Two wobbly landings in a row drop the remaining main rounds by a tier.
-      if (res === "done" && ph.kind === "exercise" && ph.block === "main" && ph.ex.gate === "valgus") {
-        const grade = await this._landingCheck(ph);
-        if (this.ended) break;
-        // record for parent watch-list + XP bonus
-        const rec = this.landings[ph.ex.name] || { clean: 0, wobbly: 0 };
-        rec[grade] = (rec[grade] || 0) + 1; this.landings[ph.ex.name] = rec;
-        if (grade === "clean") this._cleanLandings++;
-        this._wobblyStreak = grade === "wobbly" ? (this._wobblyStreak || 0) + 1 : 0;
-        if (this._wobblyStreak >= 2) {
-          this._wobblyStreak = 0;
-          if (this._dropTier()) await speakAndWait("Two wobbly landings — let's drop a tier. Quality over quantity.");
+  const donePromise = new Promise(resolve => {
+    const watchdog = setInterval(() => {
+      if (sess.abort || sess.skipExercise) {
+        clearInterval(watchdog);
+        const r = sess.byRepsResolver;
+        if (r) { sess.byRepsResolver = null; r(sess.abort ? "abort" : "skip"); }
+      }
+    }, 200);
+    sess.byRepsResolver = (result) => {
+      clearInterval(watchdog);
+      cueDone = true;
+      sess.byRepsResolver = null;
+      cancelSpeech();   // in-flight speech resolves fast after DONE
+      resolve(result);
+    };
+  });
+
+  const voiceLoop = !voiceOn() ? Promise.resolve()
+    : pattern
+    ? runTempoLoop(ex, pattern, () => cueDone)
+    : (async () => {
+        for (const cue of cues) {
+          if (cueDone) break;
+          while (sess.paused && !cueDone) { await new Promise(r => setTimeout(r, 200)); }
+          if (cueDone) break;
+          await speakAndWait(cue);
+          if (cueDone) break;
+        }
+      })();
+
+  const result = await donePromise;
+  cueDone = true;
+  await voiceLoop;
+  return result;
+}
+
+/* ---- elapsed clock ---- */
+let elapsedInterval = null;
+function startElapsed() {
+  sess.elapsed = 0; sess.pausedSecs = 0;
+  if (elapsedInterval) clearInterval(elapsedInterval);
+  elapsedInterval = setInterval(() => {
+    if (!sess.running) return;
+    if (sess.paused) { sess.pausedSecs += 1; return; }
+    sess.elapsed += 1;
+    if (sess.phase === "reps" || sess.phase === "work") sess.exElapsed += 1;
+    notify("tick");
+  }, 1000);
+}
+function stopElapsed() {
+  if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
+}
+
+/* ---- helpers ---- */
+function nextExercise(circuits, ci, r, ei) {
+  const circuit = circuits[ci];
+  for (let j = ei + 1; j < circuit.exercises.length; j++) {
+    if (!(circuit.exercises[j].rounds && r > circuit.exercises[j].rounds)) return circuit.exercises[j];
+  }
+  if (r + 1 <= circuit.rounds) {
+    for (let j = 0; j < circuit.exercises.length; j++) {
+      if (!(circuit.exercises[j].rounds && (r + 1) > circuit.exercises[j].rounds)) return circuit.exercises[j];
+    }
+  }
+  if (ci + 1 < circuits.length) return circuits[ci + 1].exercises[0];
+  return null;
+}
+
+function setPhase(phase) {
+  sess.phase = phase;
+  notify("phase");
+}
+
+function setUpNext(circuits, ci, r, ei) {
+  const nx = nextExercise(circuits, ci, r, ei);
+  sess.upNextName = nx ? nx.name : "";
+  sess.upNextDose = nx ? (nx.dose || "") : "";
+}
+
+function recordBlockDone(blockKey) {
+  if (!blockKey || blockKey === "prep" || sess.practice) return;
+  const prog = loadDayProgress(sess.dayKey) || { done: [], light: sess.light };
+  if (!prog.done.includes(blockKey)) prog.done.push(blockKey);
+  prog.light = sess.light;
+  saveDayProgress(sess.dayKey, prog);
+}
+
+/* ---- intent word / micro-loop prompts (UI resolves via resolvers) ---- */
+function intentWordPrompt() {
+  return new Promise(resolve => {
+    setPhase("intent");
+    speakIfIdle("After round one — pick one word to fix what you felt. Say it out loud.");
+    const watchdog = setInterval(() => {
+      if (sess.abort) { clearInterval(watchdog); clearTimeout(timeout); sess.intentResolver = null; resolve("abort"); }
+    }, 200);
+    const timeout = setTimeout(() => { clearInterval(watchdog); sess.intentResolver = null; resolve("done"); }, 20000);
+    // resolver(null) = dismissed (Done button / session end) — no word recorded
+    sess.intentResolver = (word) => {
+      clearInterval(watchdog); clearTimeout(timeout);
+      sess.intentResolver = null;
+      if (!word) { resolve(sess.abort ? "abort" : "done"); return; }
+      sess.intentWord = word;
+      speakIfIdle(word + "! Carry it into the next rounds.");
+      setTimeout(() => resolve("done"), 700);
+    };
+  });
+}
+
+function microLoopPrompt() {
+  return new Promise(resolve => {
+    setPhase("microloop");
+    speakIfIdle(MICRO_LOOP.q);
+    const watchdog = setInterval(() => {
+      if (sess.abort) { clearInterval(watchdog); clearTimeout(timeout); sess.microResolver = null; resolve(); }
+    }, 200);
+    const timeout = setTimeout(() => { clearInterval(watchdog); sess.microResolver = null; resolve(); }, 15000);
+    sess.microResolver = (answer) => {
+      clearInterval(watchdog); clearTimeout(timeout);
+      sess.microResolver = null;
+      if (answer == null) { resolve(); return; }   // dismissed without answering
+      const ok = answer === MICRO_LOOP.a;
+      sess.microLoop = { answer, correct: ok };
+      speakIfIdle(ok ? "Yes — " + MICRO_LOOP.a + "!" : "It's " + MICRO_LOOP.a + ".");
+      notify("phase");
+      setTimeout(resolve, 900);
+    };
+  });
+}
+
+/* Blocking landing check after every valgus-gated jump: the athlete grades
+   the landing "clean & frozen" vs "a bit wobbly" before the rest starts.
+   Feeds the jump-fatigue tier-drop (2 wobbly in a row → drop a main round)
+   and the per-move landings record on the session entry. */
+function landingCheckPrompt(ex) {
+  return new Promise(resolve => {
+    setPhase("landing");
+    speakIfIdle("Landing check. Clean and frozen, or a bit wobbly?");
+    const watchdog = setInterval(() => {
+      if (sess.abort) { clearInterval(watchdog); clearTimeout(timeout); sess.landingResolver = null; resolve("abort"); }
+    }, 200);
+    // Un-graded after 20s = move on; never stalls the session.
+    const timeout = setTimeout(() => { clearInterval(watchdog); sess.landingResolver = null; resolve("done"); }, 20000);
+    sess.landingResolver = (grade) => {
+      clearInterval(watchdog); clearTimeout(timeout);
+      sess.landingResolver = null;
+      if (sess.abort) { resolve("abort"); return; }
+      if (!grade) { resolve("done"); return; }   // dismissed without grading
+      const rec = sess.landings[ex.name] || { clean: 0, wobbly: 0 };
+      if (grade === "clean") {
+        rec.clean += 1; sess.cleanCount += 1; sess.lastWobbly = false; sess.wobblyStreak = 0;
+        speakIfIdle("Clean and frozen. That's the one.");
+      } else {
+        rec.wobbly += 1; sess.wobblyCount += 1; sess.lastWobbly = true;
+        sess.wobblyStreak = (sess.wobblyStreak || 0) + 1;
+        speakIfIdle("Okay — reset. Knee over toe, freeze the next one.");
+      }
+      sess.landings[ex.name] = rec;
+      notify("phase");
+      setTimeout(() => resolve("done"), 700);
+    };
+  });
+}
+
+/* ============================================================
+   MAIN RUNNER
+   ============================================================ */
+export async function startSession({ dayKey, light = "green", practice = false, mini = false }) {
+  if (sess.running) return;
+  ensureAudio();
+  const day = DAYS[dayKey];
+  if (!day) return;
+
+  Object.assign(sess, blankSession(), {
+    running: true, dayKey, practice, mini,
+    light: day.spa ? "recovery" : light,
+    spa: !!day.spa
+  });
+
+  // Same-day resume: blocks already completed today are skipped.
+  const prog = practice ? null : loadDayProgress(dayKey);
+  const skipBlocks = (prog && prog.done) || [];
+  sess.circuits = assembleCircuits(dayKey, sess.light, { mini, skip: sess.spa ? [] : skipBlocks });
+  if (!sess.circuits.length) { sess.running = false; return; }
+  sess.plannedSecs = estimateSessionSecs(sess.circuits) + 8;
+
+  if (!practice) logEvent("session_start", { day: dayKey, light: sess.light });
+
+  const circuits = sess.circuits;
+  const dayMantra = day.mantra || MANTRA;
+  const lightLabel = { green: "GREEN, 3 rounds", yellow: "YELLOW, 2 rounds",
+    red: "RED, 1 round", recovery: "recovery only" }[sess.light] || "";
+  const firstEx = circuits[0].exercises[0].name;
+
+  setPhase("greeting");
+  playCue("work");
+  if (sess.spa) {
+    await speakAndWait("Spa Sunday. Easy recovery, slow and gentle.");
+  } else {
+    await speakAndWait("Say it out loud with me, loud and proud: " + dayMantra + " " +
+      "Your light today is " + lightLabel + ". Starting with " + firstEx + ".");
+  }
+  const r1 = await sleep(1500);
+  if (r1 === "abort") return finalize(false);
+
+  sess.skipExercise = false;
+  startElapsed();
+
+  setPhase("getready");
+  await speakAndWait("Five seconds to the first block.");
+  const rGo = await countdown(5);
+  if (rGo === "abort") return finalize(false);
+
+  let preAnnounced = false;
+
+  for (let ci = 0; ci < circuits.length; ci++) {
+    const circuit = circuits[ci];
+
+    for (let r = 1; r <= circuit.rounds; r++) {
+      for (let ei = 0; ei < circuit.exercises.length; ei++) {
+        const ex = circuit.exercises[ei];
+        if (ex.rounds && r > ex.rounds) continue;
+        sess.skipExercise = false;
+        sess.currentEx = ex;
+        sess.ci = ci; sess.ei = ei; sess.round = r;
+        sess.exElapsed = 0;
+        setUpNext(circuits, ci, r, ei);
+
+        // ---------- WORK ----------
+        const work = ex.byReps ? 0 : exWork(ex);
+        playCue("work");
+        if (ex.byReps) {
+          setPhase("reps");
+          if (!preAnnounced) await speakAndWait(ex.name + "." + (ex.reset ? " " + ex.reset : "") + " Go.");
+          preAnnounced = false;
+          const result = await runRepsWithVoice(ex);
+          if (result === "abort") return finalize(false);
+        } else {
+          sess.timerSecs = work; sess.timerMax = work;
+          setPhase("work");
+          if (!preAnnounced) await speakAndWait(ex.name + "." + (ex.reset ? " " + ex.reset : "") + " Three, two, one, go.");
+          preAnnounced = false;
+
+          if (ex.eachSide) {
+            const half = Math.floor(work / 2);
+            sess.sideLabel = `${half}s first side`;
+            const r3 = await countdown(half);
+            if (r3 === "abort") return finalize(false);
+            if (r3 !== "skip") {
+              setPhase("sideswitch");
+              await speakAndWait("Nice. Switch sides — five to reset.");
+              const r4 = await countdown(SIDE_SWITCH_BUFFER);
+              if (r4 === "abort") return finalize(false);
+              if (r4 !== "skip") {
+                sess.sideLabel = `${half}s second side`;
+                setPhase("work");
+                await speakAndWait(ex.name + " second side. Three, two, one, go.");
+                const r5 = await countdown(half);
+                if (r5 === "abort") return finalize(false);
+              }
+            }
+            sess.sideLabel = "";
+          } else {
+            const r6 = await countdown(work);
+            if (r6 === "abort") return finalize(false);
+          }
+        }
+
+        const key = ci + "-" + ei;
+        // Clear the skip flag BEFORE the rest phase — leaving it set makes the
+        // rest countdown resolve "skip" instantly, so a skipped exercise used
+        // to also swallow its rest (and the justSkipped minimum below).
+        const wasSkipped = sess.skipExercise;
+        sess.skipExercise = false;
+        sess.exDone += 1;
+        if (wasSkipped) sess.exStatus[key] = "skipped";
+        else if (r === circuit.rounds) sess.exStatus[key] = "done";
+        if (r === 1) {
+          sess.perExercise.push({
+            name: ex.name,
+            block: ex.block || circuit.block,
+            driver: ex.driver || (ex.byReps ? "reps" : "time"),
+            dose: ex.dose || ex.repsDetail || "",
+            gate: ex.gate || null,
+            skipped: !!wasSkipped
+          });
+        }
+        // Form self-checks after main/prep work. Valgus-gated jumps get a
+        // BLOCKING landing check (grades feed the tier-drop); everything else
+        // keeps the optional clean/wobbly check answered during rest.
+        if ((circuit.block === "main" || circuit.block === "prep") && !wasSkipped) {
+          if (ex.gate === "valgus" && !sess.spa) {
+            const lg = await landingCheckPrompt(ex);
+            if (lg === "abort") return finalize(false);
+            // Jump-fatigue tier-drop: two wobbly landings in a row remove the
+            // highest remaining main round (🟢→🟡→🔴), never below the round
+            // in progress. The round loop reads circuit.rounds live.
+            if (circuit.block === "main") {
+              const dropped = tierDroppedRounds(circuit.rounds, sess.wobblyStreak, r);
+              if (dropped < circuit.rounds) {
+                circuit.rounds = dropped;
+                sess.tierDropped += 1;
+                sess.wobblyStreak = 0;
+                sess.plannedSecs = estimateSessionSecs(circuits);
+                notify("phase");
+                await speakAndWait("Two wobbly landings in a row — let's drop a round. Quality over quantity.");
+                if (sess.abort) return finalize(false);
+              }
+            }
+          } else {
+            sess.pendingCleanCheck = true;
+          }
+        }
+
+        // ---------- REST ----------
+        const isFinalEx =
+          ci === circuits.length - 1 &&
+          r === circuit.rounds &&
+          ei === circuit.exercises.length - 1;
+
+        if (!isFinalEx) {
+          const upcomingEx = nextExercise(circuits, ci, r, ei);
+          const isLastOfRound = ei === circuit.exercises.length - 1;
+          const isLastCircuit = ci === circuits.length - 1;
+          const isRoundBreak = isLastOfRound && r < circuit.rounds;
+          const isBlockBreak = isLastOfRound && r === circuit.rounds && !isLastCircuit;
+
+          if (isRoundBreak) {
+            if (circuit.block === "main" && r === 1 && !sess.intentWord && !sess.spa) {
+              const iw = await intentWordPrompt();
+              if (iw === "abort") return finalize(false);
+            }
+            playCue("rest");
+            setPhase("roundRest");
+            const roundProgress = `Round ${r} done! You've got ${circuit.rounds - r} more to crush!`;
+            await speakAndWait(roundProgress);
+            if (voiceOn()) speakIfIdle("Did that feel different from the first round? Just ask yourself.");
+            const leadTime = upcomingEx && HARD_EXERCISES.has(upcomingEx.name) ? 8 : 5;
+            const result = await countdown(configuredRoundRest(), {
+              onTick: (rem) => {
+                if (rem === leadTime && upcomingEx) {
+                  speakIfIdle("Get ready for " + upcomingEx.name + (upcomingEx.reset ? ". " + upcomingEx.reset : ""));
+                }
+              }
+            });
+            if (result === "abort") return finalize(false);
+            sess.roundsCompleted += 1;
+            if (result !== "skip" && voiceOn()) await speakAndWait(nextEncouragement());
+          } else if (isBlockBreak) {
+            playCue("rest");
+            setPhase("sectionRest");
+            await speakAndWait(`Block done! Next up: ${circuits[ci + 1].name}.`);
+            const result = await countdown(configuredSectionRest(), {
+              onTick: (rem) => {
+                if (rem === 4 && upcomingEx) {
+                  speakIfIdle("Get ready for " + upcomingEx.name + (upcomingEx.reset ? ". " + upcomingEx.reset : ""));
+                }
+              }
+            });
+            if (result === "abort") return finalize(false);
+          } else {
+            let restDuration = configuredExerciseRest();
+            if (sess.justSkipped) restDuration = Math.max(restDuration, 4);
+            sess.justSkipped = false;
+            playCue("rest");
+            sess.restCue = upcomingEx && upcomingEx.reset ? `Next: ${upcomingEx.reset}` : "Breathe and reset.";
+            setPhase("rest");
+            const nextName = upcomingEx ? upcomingEx.name : "";
+            if (voiceOn()) await speakAndWait(nextName ? `Rest. Next: ${nextName}.` : "Rest.");
+            let said = {};
+            const result = await countdown(restDuration, {
+              onTick: (rem) => {
+                if (rem >= 1 && rem <= 3 && !said[rem]) { said[rem] = true; speak(String(rem)); }
+              }
+            });
+            if (result === "abort") return finalize(false);
+            if (result !== "skip") { speak("Go"); preAnnounced = true; }
+          }
         }
       }
-
-      if (res === "stop") {
-        const decision = await this._handleStop();
-        if (decision === "end") { this._finish(false); return; }
-        continue; // resume → redo current phase
-      }
-      if (res === "skip" && ph.kind === "exercise") this.skipped.push(ph.ex.name);
-      this.idx++;
+      if (r === circuit.rounds && circuit.rounds > 1) sess.roundsCompleted += 1;
     }
-    if (!this.ended) this._finish(true);
+    if (circuit.rounds === 1) sess.roundsCompleted += 1;
+    recordBlockDone(circuit.block);
   }
 
-  _announce(ph) {
-    const parts = [];
-    if (ph.side) parts.push(ph.side + " side.");
-    if (ph.ex.reset) parts.push(ph.ex.reset);
-    else parts.push(ph.ex.name);
-    if (ph.ex.cue) parts.push(ph.ex.cue);
-    return parts.join(" ");
+  // Skate-skill extras: micro-loop Q&A + breath rehearsal (skipped on spa days)
+  if (!sess.spa) {
+    await microLoopPrompt();
+    if (sess.abort) return finalize(false);
+    setPhase("breath");
+    await speakAndWait("Wind-down. " + BREATH_REHEARSAL);
+    await sleep(1500);
+    if (sess.abort) return finalize(false);
   }
 
-  /* One handle resolves the current step so skip/stop/tap are immediate. */
-  _finishStep(result) {
-    clearInterval(this._iv);
-    const r = this._resolveStep; this._resolveStep = null;
-    if (r) r(result);
+  if (!sess.practice) clearDayProgress(sess.dayKey);
+  finalize(true);
+}
+
+/* ============================================================
+   FINALIZATION — ended-early sessions are now RECORDED
+   ("your progress is saved"), with endedEarly + pain flags.
+   ============================================================ */
+export function finalize(completed) {
+  sess.running = false;
+  sess.paused = false;
+  sess.abort = false;
+  sess.stopOverlay = false;
+  sess.confirmEnd = false;
+  cancelSpeech();
+  stopElapsed();
+
+  const elapsedSecs = sess.elapsed;
+  const day = DAYS[sess.dayKey] || {};
+  sess.endedEarly = !completed;
+
+  if (sess.practice) {
+    if (completed) speak("Practice run complete. Nothing recorded. You know the movements now.");
+    playCue("done");
+    setPhase("done");
+    return;
   }
-  _countdown(secs) {
-    return new Promise((resolve) => {
-      this.total = secs; this.remaining = secs;
-      this._resolveStep = resolve;
-      this.onTick(this.remaining, this.total);
-      clearInterval(this._iv);
-      this._iv = setInterval(() => {
-        if (this.paused) return;
-        this.remaining--;
-        if (this.remaining > 0 && this.remaining <= 3) tickBeep();
-        this.onTick(this.remaining, this.total);
-        if (this.remaining <= 0) { finishBeep(); this._finishStep("done"); }
-      }, 1000);
+
+  const entry = {
+    app: "figure-skating",
+    dayKey: sess.dayKey,
+    dayTitle: day.title || sess.dayKey,
+    isoDate: new Date().toISOString(),
+    durationSecs: elapsedSecs,
+    session: "morning",
+    planVersion: "2026.2",
+    sessionType: sess.spa ? "spa" : "main",
+    lightResult: sess.spa ? "recovery" : sess.light,
+    roundsDone: sess.spa ? 0 : Math.max(1, LIGHT_ROUNDS[sess.light] || 1),
+    perExercise: sess.perExercise || [],
+    microLoop: sess.microLoop || null,
+    intentWord: sess.intentWord || null,
+    prSentinel: sess.spa ? null : day.prSentinel || null,
+    skippedCount: sess.skipped.length,
+    pauseCount: sess.pauseCount || 0,
+    pausedSecs: sess.pausedSecs,
+    plannedSecs: sess.plannedSecs,
+    clean: sess.cleanCount, wobbly: sess.wobblyCount,
+    cleanLandings: sess.cleanCount, landings: sess.landings || {},
+    tierDropped: sess.tierDropped || 0,
+    light: sess.light, mini: sess.mini,
+    pain: !!sess.painFlag,
+    endedEarly: !completed,
+    completedFully: !!completed
+  };
+  saveSession(entry);
+  sess.savedEntry = true;
+  logEvent(completed ? "session_complete" : "session_abort", {
+    day: sess.dayKey, durationSecs: elapsedSecs,
+    skipped: sess.skipped.length, pauses: sess.pauseCount || 0,
+    pain: !!sess.painFlag
+  });
+
+  // Valgus earn-back: a completed session whose graded jump landings were ALL
+  // clean (and included the Box Jump → Stick anchor, not skipped) counts
+  // toward unlocking the gate.
+  const anchorDone = (sess.perExercise || []).some(p => p.name === "Box Jump → Stick" && !p.skipped);
+  const anyWobbly = Object.values(sess.landings || {}).some(l => (l.wobbly || 0) > 0);
+  const anyClean = Object.values(sess.landings || {}).some(l => (l.clean || 0) > 0);
+  if (completed && anchorDone && anyClean && !anyWobbly) {
+    const g = loadGate();
+    g.cleanCount = (g.cleanCount || 0) + 1;
+    saveGate(g);
+  }
+  if (sess.skipped.length) {
+    addSkipRecord({
+      createdAt: Date.now(),
+      sessionDate: new Date().toISOString(),
+      sessionType: sess.spa ? "spa" : "main",
+      skippedItems: sess.skipped
     });
   }
-  _waitTap() { return new Promise((resolve) => { this._resolveStep = resolve; }); }
-  _handleStop() {
-    this.stopOverlay = true; this.onChange();
-    return new Promise((resolve) => { this._stopRes = resolve; });
-  }
-  /* Landing self-check overlay after a gated jump; resolves 'clean' | 'wobbly'. */
-  _landingCheck(ph) {
-    this.landingCheck = ph.ex.name;
-    this.onChange();
-    return new Promise((resolve) => { this._landRes = resolve; });
-  }
-  gradeLanding(grade) {
-    this.landingCheck = null;
-    const r = this._landRes; this._landRes = null;
-    if (r) r(grade);
-  }
-  /* Drop ONE main-round tier (green3 → yellow2 → red1): remove the highest
-     still-planned main round (its exercises, rests, side-switches) plus the
-     round-rest leading into it. Never drops below the current round. */
-  _dropTier() {
-    const cur = (this.phase && this.phase.round) || 1;
-    let maxR = cur;
-    this.plan.forEach(ph => { if (ph.block === "main" && ph.round > maxR) maxR = ph.round; });
-    if (maxR <= cur) return false;                 // already at the floor
-    const target = maxR;
-    const before = this.plan.length;
-    this.plan = this.plan.filter((ph, i) =>
-      i <= this.idx ||
-      !((ph.block === "main" && ph.round === target) || (ph.kind === "roundRest" && ph.round === target - 1)));
-    this.effectiveRounds = Math.max(cur, target - 1);
-    this.totalPhases = this.plan.length || 1;
-    this.tierDropped = (this.tierDropped || 0) + 1;
-    return this.plan.length < before;
+
+  // XP: full completion earns move XP; ended-early earns half; spa earns none.
+  const fullXp = xpForSession(entry);
+  sess.xpEarned = completed ? fullXp : Math.round(fullXp / 2);
+  if (sess.xpEarned > 0) {
+    const { leveledUp } = addXp(sess.xpEarned);
+    sess.leveledUp = leveledUp;
+    patchLastSession({ xpEarned: sess.xpEarned });
   }
 
-  /* ---- controls (called from screen data-action handlers) ---- */
-  pause()  { this.paused = true; this.onChange(); }
-  resume() { this.paused = false; this.onChange(); }
-  togglePause() { this.paused ? this.resume() : this.pause(); }
-  skip()    { if (this._resolveStep) this._finishStep("skip"); }
-  tapDone() { if (this._resolveStep) this._finishStep("done"); }
-  requestStop() { if (this._resolveStep) this._finishStep("stop"); }
-  resumeFromStop() { this.stopOverlay = false; const r = this._stopRes; this._stopRes = null; if (r) r("resume"); this.onChange(); }
-  endFromStop()    { this.stopOverlay = false; this.painFlag = true; const r = this._stopRes; this._stopRes = null; if (r) r("end"); }
-  endEarly() { this.ended = true; clearInterval(this._iv); cancelSpeech(); this._finish(false); this._finishStep("end"); }
+  // Cloud mirror — keep the doc ID so mood/reflection can patch it later.
+  // Opt-out via Grown-up settings (privacy): when off, data stays on-device only.
+  if (settings.cloudMirror !== false) fsAddSession(entry).then(id => { sess.fsId = id; });
 
-  _finish(completedFully) {
-    if (this._finished) return;
-    this._finished = true;
-    this.ended = true;
-    clearInterval(this._iv);
-    cancelSpeech();
-    const now = new Date();
-    const durationSecs = Math.round((now - this.startTs) / 1000);
-    const progressPct = Math.min(100, Math.round((this.idx / this.totalPhases) * 100));
-    const entry = {
-      dayKey: this.dayKey, isoDate: now.toISOString(),
-      localDate: localDateKey(now),   // calendar day in the athlete's timezone
-      durationSecs, light: this.light, completedFully, endedEarly: !completedFully,
-      progressPct, pain: !!this.painFlag, moves: countMoves(this.day),
-      skipped: this.skipped.length, cleanLandings: this._cleanLandings,
-      landings: this.landings
-    };
-    let xp = null;
-    if (!this.settings.testMode) {
-      saveSession(entry);
-      xp = awardSessionXp(entry);
-      entry.xpEarned = xp.gained;
-      patchLastSession({ xpEarned: xp.gained });
-      // Best-effort cloud mirror (never blocks; offline-safe).
-      import("./firebase.js").then(m => m.fsAddSession && m.fsAddSession(entry)).catch(() => {});
-    }
-    this.complete = { entry, xp, mantra: this.day.mantra || DAY_MANTRA[this.dayKey], completedFully };
-    this.onChange();
-    this.onComplete(this.complete);
+  if (completed) {
+    playCue("done");
+    speak("Training complete. Fantastic effort.");
   }
+  setPhase("done");
+}
 
-  /* ---- snapshot for the renderer ---- */
-  snapshot() {
-    const ph = this.phase || {};
-    return {
-      dayKey: this.dayKey, dayTitle: this.day.title, light: this.light,
-      kind: ph.kind, ex: ph.ex || null, side: ph.side || null,
-      block: ph.block || null, blockLabel: BLOCK_LABEL[ph.block] || "",
-      round: ph.round || null, rounds: ph.block === "main" ? this.effectiveRounds : (ph.rounds || null),
-      next: ph.next || null, intentWord: this.intentWord || null,
-      remaining: this.remaining, total: this.total,
-      paused: this.paused, stopOverlay: this.stopOverlay,
-      landingCheck: this.landingCheck || null, tierDropped: this.tierDropped || 0,
-      ended: this.ended, complete: this.complete || null,
-      progressPct: Math.min(100, Math.round((this.idx / this.totalPhases) * 100)),
-      elapsedSecs: Math.round((Date.now() - this.startTs) / 1000)
-    };
+/* ============================================================
+   CONTROLS (called from the UI action layer)
+   ============================================================ */
+export function togglePause() {
+  sess.paused = !sess.paused;
+  if (sess.paused) sess.pauseCount = (sess.pauseCount || 0) + 1;
+  if (!sess.practice) logEvent(sess.paused ? "pause" : "resume", { ex: sess.currentEx ? sess.currentEx.name : null });
+  interruptSpeech(sess.paused ? "Paused." : "Resuming.");
+  notify("phase");
+}
+
+export function advance() {
+  // Tap the ring / Done: finishes a reps exercise early, ends a timed exercise
+  // early (counts as done, not skipped), skips the current rest, or dismisses
+  // an in-session prompt.
+  if (sess.phase === "reps" && sess.byRepsResolver) { sess.byRepsResolver("done"); return; }
+  if (sess.phase === "intent" && sess.intentResolver) { sess.intentResolver(null); return; }
+  if (sess.phase === "microloop" && sess.microResolver) { sess.microResolver(null); return; }
+  if (sess.phase === "landing" && sess.landingResolver) { sess.landingResolver(null); return; }
+  if (["work", "rest", "roundRest", "sectionRest", "sideswitch", "getready", "greeting", "breath"].includes(sess.phase)) {
+    sess.forceDone = true;   // running countdown/sleep resolves as "done" within 1s
+    sess.forceDoneAt = Date.now();
+    setTimeout(() => { sess.forceDone = false; }, 1200);
   }
+}
+
+export function skipCurrentExercise() {
+  // During rests and prompts no exercise is underway — Skip there means
+  // "skip the wait", not "log the exercise that just finished as skipped".
+  if (!["work", "reps", "sideswitch"].includes(sess.phase)) { advance(); return; }
+  if (sess.currentEx) {
+    sess.skipped.push({ name: sess.currentEx.name, round: `R${sess.round}`, at: Date.now() });
+    if (!sess.practice) logEvent("skip", { ex: sess.currentEx.name, block: sess.currentEx.block || null });
+  }
+  sess.skipExercise = true;
+  sess.justSkipped = true;
+  if (sess.byRepsResolver) sess.byRepsResolver("skip");
+  interruptSpeech("Okay, skipping — you've got the next one.");
+}
+
+export function openStopOverlay() {
+  sess.stopOverlay = true;
+  sess.paused = true;
+  cancelSpeech();
+  notify("phase");
+}
+export function resumeFromStop() {
+  sess.stopOverlay = false;
+  sess.paused = false;
+  notify("phase");
+}
+export function endFromStop() {
+  sess.stopOverlay = false;
+  sess.painFlag = true;
+  endEarly();
+}
+export function endEarly() {
+  sess.confirmEnd = false;
+  sess.abort = true;
+  if (sess.byRepsResolver) sess.byRepsResolver("abort");
+  if (sess.intentResolver) sess.intentResolver(null);
+  if (sess.microResolver) sess.microResolver(null);
+  if (sess.landingResolver) sess.landingResolver(null);
+  interruptSpeech("Session stopped.");
+}
+
+export function pickIntentWord(word) { if (sess.intentResolver) sess.intentResolver(word); }
+export function answerMicroLoop(answer) { if (sess.microResolver) sess.microResolver(answer); }
+export function gradeLanding(grade) { if (sess.landingResolver) sess.landingResolver(grade); }
+export function pickClean() { sess.pendingCleanCheck = false; sess.cleanCount += 1; sess.lastWobbly = false; notify("phase"); }
+export function pickWobbly() { sess.pendingCleanCheck = false; sess.wobblyCount += 1; sess.lastWobbly = true; notify("phase"); }
+
+/* Complete-screen interactions: patch the saved record + Firestore mirror. */
+export function setMood(key, emoji) {
+  sess.mood = key;
+  if (!sess.practice && sess.savedEntry) {
+    patchLastSession({ mood: key });
+    if (sess.fsId) import("./firebase.js").then(m => m.fsUpdateSession(sess.fsId, { mood: key }));
+  }
+  notify("phase");
+}
+export function setReflect(field, label) {
+  sess[field] = sess[field] === label ? null : label;
+  if (!sess.practice && sess.savedEntry) {
+    const patch = field === "wentWell" ? { wentWell: sess.wentWell } : { nextTime: sess.nextTime };
+    patchLastSession(patch);
+    if (sess.fsId) import("./firebase.js").then(m => m.fsUpdateSession(sess.fsId, patch));
+  }
+  notify("phase");
+}
+export function setQuizPick(i) { sess.quizPick = i; notify("phase"); }
+
+/* Full reset before Today re-renders (guards double-running timers). */
+export function exitSession() {
+  stopElapsed();
+  cancelSpeech();
+  Object.assign(sess, blankSession());
 }

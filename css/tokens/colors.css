@@ -1,42 +1,140 @@
-/* Skate with Grace — color tokens (sampled from product screens) */
+/* ============================================================
+   Skate with Grace — Color tokens
+   A warm rose/gold figure-skating palette for a 10-year-old skater.
+   The variable NAMES are inherited from the shared design system
+   (aqua/coral/sun/mint/grape/gum/stop) so every ported component
+   works unchanged; only the VALUES are re-tinted to rose/gold. Each
+   named family keeps its semantic ROLE (green-light stays green,
+   red-light stays red) so the readiness safety signal survives.
+   ============================================================ */
+
 :root {
-  /* Rose / berry scale — the brand's core hue */
+  /* ---- Raw brand scale (available for future use) ---- */
   --rose-50:  #FDF4F6;
   --rose-100: #F9E4EA;
   --rose-200: #F3CBD6;
   --rose-300: #EAA7B8;
   --rose-400: #D97A92;
-  --rose-500: #C25671; /* primary actions */
+  --rose-500: #C25671;
   --rose-600: #A84460;
-  --rose-700: #8E3453; /* deep berry headings */
+  --rose-700: #8E3453;
+  --gold:     #F2B84B;
+  --gold-soft:#F9DFA0;
+  --lilac:    #C9A6D9;
+  --pink-accent: #F06A9B;
 
-  /* Accents */
-  --pink-accent: #F06A9B;  /* hearts, petals, sparkles */
-  --pink-soft:   #F7B8CE;
-  --gold:        #F2B84B;  /* stars, trophies, achievement */
-  --gold-soft:   #F9DFA0;
-  --lilac:       #C9A6D9;  /* occasional sparkle accent */
+  /* ---- Ink / text (warm plum-brown, never pure black) ---- */
+  --ink:        #4A3A41;   /* primary text */
+  --ink-soft:   #6E5760;   /* secondary text, captions (WCAG AA on blush) */
+  --ink-faint:  #8C7480;   /* hints, disabled text, dividers */
 
-  /* Neutrals — warm, never pure gray */
-  --ink:        #4A3A41;
-  --ink-soft:   #6E5760;  /* darkened to clear WCAG AA on the blush bg */
-  --ink-faint:  #8C7480;  /* darkened for legibility while staying muted */
-  --surface:    #FFFFFF;
-  --bg:         #FBF1F3;   /* app background blush */
-  --bg-deep:    #F7E6EB;
-  --border:     #F2DCE3;
-  --border-strong: #E5C3CE;
+  /* ---- Aqua slot — primary brand color → rose ---- */
+  --aqua-wash:  #F9E4EA;
+  --aqua-light: #EAA7B8;
+  --aqua:       #C25671;   /* primary — brand rose */
+  --aqua-deep:  #A84460;   /* pressed / 3D edge */
+  --aqua-ink:   #8E3453;   /* text on light rose */
 
-  /* Semantic aliases */
-  --text-heading:   var(--rose-700);
+  /* ---- Deep-sea slot — richer accent → deep berry ---- */
+  --sea-wash:   #FDF4F6;
+  --sea-light:  #F3CBD6;
+  --sea:        #A84460;   /* deep berry */
+  --sea-deep:   #8E3453;
+  --sea-ink:    #8E3453;
+
+  /* ---- Coral slot — energy, the "GO / action" warm ---- */
+  --coral-wash: #FFEDE6;
+  --coral-light:#F7B79E;
+  --coral:      #F2856A;   /* warm coral that harmonizes with rose */
+  --coral-deep: #D9603F;   /* pressed / 3D edge */
+  --coral-ink:  #9E3C1F;
+
+  /* ---- Sunshine slot — rewards, stars, yellow light → gold ---- */
+  --sun-wash:   #FBEFC8;
+  --sun-light:  #F9DFA0;
+  --sun:        #F2B84B;
+  --sun-deep:   #D99A2E;   /* pressed / 3D edge */
+  --sun-ink:    #7A4E00;
+
+  /* ---- Mint slot — success, "clean rep", GREEN LIGHT (kept green) ---- */
+  --mint-wash:  #DEF3EA;
+  --mint-light: #A9DEC8;
+  --mint:       #4FB894;   /* soft sage-emerald, reads clearly as "go" */
+  --mint-deep:  #2F9A78;   /* pressed / 3D edge */
+  --mint-ink:   #1C6B50;
+
+  /* ---- Grape slot — learning, quizzes, recovery / purple light → lilac ---- */
+  --grape-wash: #F0E7F6;
+  --grape-light:#D9C1E6;
+  --grape:      #B08DC9;
+  --grape-deep: #8E68AB;   /* pressed / 3D edge */
+  --grape-ink:  #613B7C;
+
+  /* ---- Bubblegum slot — playful pink accents, side-switches ---- */
+  --gum-wash:   #FCE3EE;
+  --gum-light:  #F7B8CE;
+  --gum:        #F06A9B;
+  --gum-deep:   #D14A7D;
+  --gum-ink:    #A8285C;
+
+  /* ---- Stop slot — red flags, "stop and tell a grown-up" (kept red) ---- */
+  --stop-wash:  #FDE7E5;
+  --stop-light: #F3A29C;
+  --stop:       #E2564E;
+  --stop-deep:  #C23931;
+  --stop-ink:   #7A211C;
+
+  /* ---- Surfaces (warm blush) ---- */
+  --bg:         #FBF1F3;   /* app background — blush */
+  --bg-deep:    #F7E6EB;   /* lower wash / behind cards */
+  --surface:    #FFFFFF;   /* card surface */
+  --surface-2:  #FDF4F6;   /* nested / inset surface */
+  --hairline:   #F2DCE3;   /* subtle borders & dividers */
+
+  /* ============================================================
+     SEMANTIC ALIASES — reach for these in components
+     ============================================================ */
+
+  /* Text */
+  --text-strong:    var(--ink);
   --text-body:      var(--ink);
   --text-muted:     var(--ink-soft);
-  --text-on-rose:   #FFFFFF;
+  --text-faint:     var(--ink-faint);
+  --text-on-aqua:   #FFFFFF;
+  --text-on-coral:  #FFFFFF;
+  --text-on-sun:    var(--sun-ink);
+  --text-on-mint:   #FFFFFF;
+  --text-on-grape:  #FFFFFF;
+
+  /* Surfaces */
+  --surface-app:    var(--bg);
   --surface-card:   var(--surface);
-  --surface-page:   var(--bg);
-  --action-primary: var(--rose-500);
-  --action-primary-hover: var(--rose-600);
-  --accent-star:    var(--gold);
-  --accent-heart:   var(--pink-accent);
-  --focus-ring:     var(--rose-300);
+  --surface-inset:  var(--surface-2);
+  --border-card:    var(--hairline);
+
+  /* Primary action (rose candy button) */
+  --action-bg:      var(--aqua);
+  --action-edge:    var(--aqua-deep);
+  --action-text:    #FFFFFF;
+
+  /* GO / start (coral) */
+  --go-bg:          var(--coral);
+  --go-edge:        var(--coral-deep);
+  --go-text:        #FFFFFF;
+
+  /* Reward / star (gold) */
+  --reward-bg:      var(--sun);
+  --reward-edge:    var(--sun-deep);
+  --reward-text:    var(--sun-ink);
+
+  /* Readiness traffic lights */
+  --light-go:       var(--mint);     /* green  — feel great */
+  --light-careful:  var(--sun);      /* yellow — go easy   */
+  --light-stop:     var(--stop);     /* red    — rest/tell a grown-up */
+  --light-recovery: var(--grape);    /* recovery / spa day */
+
+  /* Quality / coaching feedback */
+  --quality-good:   var(--mint);     /* clean rep */
+  --quality-watch:  var(--coral);    /* form watch-out */
+  --quality-stop:   var(--stop);     /* hard stop / pain rule */
 }

@@ -1,35 +1,51 @@
-/* Skate with Grace — typography tokens */
+/* ============================================================
+   Skate with Grace — Typography tokens
+   Quicksand      : rounded, friendly display + UI — headings, timers, body
+   Dancing Script : flowing hand — the coach's encouraging voice / mantras
+   Fonts are self-hosted (see css/fonts.css) so the app works offline.
+   ============================================================ */
+
 :root {
-  /* Families (Google Fonts substitutes — see fonts.css) */
-  --font-script: "Dancing Script", "Brush Script MT", cursive;   /* brand moments: "Skate with Grace", "Great Job!" */
-  --font-ui: "Quicksand", "Nunito", "Avenir Next", sans-serif;   /* everything else */
+  /* ---- Families ---- */
+  --font-display: 'Quicksand', system-ui, sans-serif;              /* headings, hero numbers */
+  --font-ui:      'Quicksand', system-ui, -apple-system, sans-serif; /* UI, body, buttons */
+  --font-hand:    'Dancing Script', 'Quicksand', cursive;          /* coach voice, mantras */
 
-  /* Sizes (mobile-first, 390px frame) */
-  --text-xs: 12px;
-  --text-sm: 14px;
-  --text-md: 16px;
-  --text-lg: 18px;
-  --text-xl: 22px;   /* screen titles */
-  --text-2xl: 28px;  /* exercise names */
-  --text-timer: 64px;
-  --text-script-md: 30px;
-  --text-script-lg: 44px;
+  /* ---- Type scale (rem) ---- */
+  --fs-3xl: 3.25rem;   /* 52px — hero timer / big number */
+  --fs-2xl: 2.5rem;    /* 40px — screen titles */
+  --fs-xl:  2rem;      /* 32px — section headings */
+  --fs-lg:  1.5rem;    /* 24px — card titles, exercise name */
+  --fs-md:  1.25rem;   /* 20px — emphasised body */
+  --fs-base:1.0625rem; /* 17px — body (kid-readable minimum on screen) */
+  --fs-sm:  0.9375rem; /* 15px — captions */
+  --fs-xs:  0.8125rem; /* 13px — tiny labels (use sparingly) */
 
-  /* Weights — Quicksand reads soft; use 500–700 */
-  --weight-regular: 500;
-  --weight-medium: 600;
-  --weight-bold: 700;
+  /* ---- Weights ---- */
+  --fw-regular: 400;   /* @kind font */
+  --fw-medium:  600;   /* @kind font */
+  --fw-bold:    700;   /* @kind font */
+  --fw-black:   900;   /* @kind font */
 
-  --leading-tight: 1.15;
-  --leading-body: 1.5;
-  --tracking-label: 0.08em; /* uppercase micro-labels: "STRENGTH", "COACH CUE" */
+  /* ---- Line heights ---- */
+  --lh-tight:  1.05;   /* @kind font */
+  --lh-snug:   1.2;    /* @kind font */
+  --lh-body:   1.5;    /* @kind font */
+
+  /* ---- Letter spacing ---- */
+  --ls-tight:  -0.01em; /* @kind font */
+  --ls-normal: 0;       /* @kind font */
+  --ls-label:  0.04em;  /* @kind font */
+  --ls-loud:   0.08em;  /* @kind font */
+
+  /* ============================================================
+     SEMANTIC TYPE ROLES
+     ============================================================ */
+  --type-timer:    var(--fw-bold) var(--fs-3xl)/var(--lh-tight) var(--font-display);
+  --type-title:    var(--fw-medium) var(--fs-2xl)/var(--lh-snug) var(--font-display);
+  --type-heading:  var(--fw-medium) var(--fs-xl)/var(--lh-snug) var(--font-display);
+  --type-card:     var(--fw-medium) var(--fs-lg)/var(--lh-snug) var(--font-display);
+  --type-body:     var(--fw-bold) var(--fs-base)/var(--lh-body) var(--font-ui);
+  --type-label:    var(--fw-black) var(--fs-sm)/1 var(--font-ui);
+  --type-coach:    var(--fw-bold) var(--fs-md)/1.35 var(--font-hand);
 }
-
-body {
-  font-family: var(--font-ui);
-  color: var(--text-body);
-  font-weight: var(--weight-regular);
-}
-
-a { color: var(--rose-600); }
-a:hover { color: var(--rose-700); }

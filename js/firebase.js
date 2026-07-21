@@ -1,61 +1,86 @@
-/* ============================================================================
-   firebase.js — best-effort Firestore mirror of sessions.
-   The SDK is lazy-loaded from gstatic inside a try/catch, so importing this
-   module NEVER throws: if the network is blocked (offline / CSP), every helper
-   simply no-ops and the app keeps working on localStorage alone.
-   Collection: jenn_skating_sessions (unchanged from the original app).
-   ============================================================================ */
-const CONFIG = {
-  apiKey:            "AIzaSyBvasH4OqU76196ZmZSXX_e8-L2PYnvyaY",
-  authDomain:        "chore-tracker-a461b.firebaseapp.com",
-  projectId:         "chore-tracker-a461b",
-  storageBucket:     "chore-tracker-a461b.firebasestorage.app",
-  messagingSenderId: "282740057913",
-  appId:             "1:282740057913:web:72defcf2e53ae13237eae8"
-};
-const COL = "jenn_skating_sessions";
+/* ============================================================
+   FIREBASE — Firestore mirror for completed sessions.
+   The CDN modules are loaded lazily inside a catch so the app
+   still boots and saves locally when offline.
+   ============================================================ */
 
-let _db = null, _api = null, _tried = false;
+const SESSIONS_COL = "jenn_skating_sessions"; // dedicated collection for this app
 
-async function init() {
-  if (_tried) return _db;
-  _tried = true;
-  try {
-    const appMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
-    const fsMod  = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
-    const app = appMod.initializeApp(CONFIG);
-    _db = fsMod.getFirestore(app);
-    _api = fsMod;
-  } catch (e) {
-    _db = null; _api = null;   // offline / blocked — degrade to local-only
+let _fbPromise = null;
+function fb() {
+  if (!_fbPromise) {
+    _fbPromise = (async () => {
+      const { initializeApp } =
+        await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+      const fs =
+        await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+      const app = initializeApp({
+        apiKey:            "AIzaSyBvasH4OqU76196ZmZSXX_e8-L2PYnvyaY",
+        authDomain:        "chore-tracker-a461b.firebaseapp.com",
+        projectId:         "chore-tracker-a461b",
+        storageBucket:     "chore-tracker-a461b.firebasestorage.app",
+        messagingSenderId: "282740057913",
+        appId:             "1:282740057913:web:72defcf2e53ae13237eae8"
+      });
+      return { db: fs.getFirestore(app), ...fs };
+    })().catch(e => {
+      console.warn("Firebase unavailable (offline?):", e);
+      return null;
+    });
   }
-  return _db;
+  return _fbPromise;
 }
 
+/* ---- Fire-and-forget Firestore helpers ---- */
+// Returns the new doc ID (or null on failure) — caller decides whether to store it
 export async function fsAddSession(entry) {
-  const db = await init(); if (!db || !_api) return null;
+  const f = await fb();
+  if (!f) return null;
   try {
-    const ref = await _api.addDoc(_api.collection(db, COL), { ...entry, createdAt: _api.serverTimestamp() });
+    const ref = await f.addDoc(f.collection(f.db, SESSIONS_COL), {
+      ...entry,
+      createdAt: f.serverTimestamp()
+    });
     return ref.id;
-  } catch { return null; }
+  } catch (e) {
+    console.warn("Firestore write failed:", e);
+    return null;
+  }
 }
-export async function fsUpdateSession(id, patch) {
-  const db = await init(); if (!db || !_api || !id) return;
-  try { await _api.updateDoc(_api.doc(db, COL, id), patch); } catch {}
+
+export async function fsUpdateSession(fsId, patch) {
+  if (!fsId) return;
+  const f = await fb();
+  if (!f) return;
+  try {
+    await f.updateDoc(f.doc(f.db, SESSIONS_COL, fsId), patch);
+  } catch (e) {
+    console.warn("Firestore update failed:", e);
+  }
 }
+
 export async function fsGetRecent(n = 7) {
-  const db = await init(); if (!db || !_api) return [];
+  const f = await fb();
+  if (!f) return [];
   try {
-    const q = _api.query(_api.collection(db, COL), _api.orderBy("createdAt", "desc"), _api.limit(n));
-    const snap = await _api.getDocs(q);
+    const q = f.query(f.collection(f.db, SESSIONS_COL), f.orderBy("createdAt", "desc"), f.limit(n));
+    const snap = await f.getDocs(q);
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  } catch { return []; }
+  } catch (e) {
+    console.warn("Firestore read failed:", e);
+    return [];
+  }
 }
+
 export async function fsGetAll() {
-  const db = await init(); if (!db || !_api) return [];
+  const f = await fb();
+  if (!f) return [];
   try {
-    const q = _api.query(_api.collection(db, COL), _api.orderBy("createdAt", "asc"));
-    const snap = await _api.getDocs(q);
+    const q = f.query(f.collection(f.db, SESSIONS_COL), f.orderBy("createdAt", "asc"));
+    const snap = await f.getDocs(q);
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  } catch { return []; }
+  } catch (e) {
+    console.warn("Firestore read failed:", e);
+    return [];
+  }
 }

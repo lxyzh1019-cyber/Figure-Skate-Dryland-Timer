@@ -1,26 +1,302 @@
-/* ============================================================================
-   data.js — Jenn Skating Dryland 2026.2 (v10) plan content.
-   Pure data + builders, ported verbatim from the original single-file app so
-   the V2 UI renders the real plan. No DOM, no storage, no side effects.
-   AM micro-activation and evening variants are intentionally dropped (V2):
-   GO = the day's main workout, Sunday = recovery circuit.
-   ============================================================================ */
+/* ============================================================
+   2026.2 CONTENT MODEL — workout data, overload, and static tables.
+   Each training day = Warm-up → Coordination → Main (Traffic-Light
+   rounds) → Finisher → Skate-Skill. Sunday = Spa (recovery only).
+   Plan content is the Jenn Skating Dryland 2026.2 (v10) plan on the
+   Splash-style engine: GO always runs the day's main workout.
+   ============================================================ */
 
-/* ---- Progressive overload (anchored to Mon May 25 2026, capped week 7 /
-   mid-July). Timed work +2s every 2 weeks; rep-based +1 rep every 2 weeks. ---- */
-const OVERLOAD_ANCHOR = new Date(2026, 4, 25);
-const OVERLOAD_CAP_WEEKS = 7;
+/* ------------------------------------------------------------
+   PROGRESSIVE OVERLOAD  (v2)
+   Anchored to the week of Mon May 25, 2026. Capped mid-July.
+   Timed work: +2s every 2 weeks.  Rep-based: +1 rep every 2 weeks.
+   ------------------------------------------------------------ */
+export const OVERLOAD_ANCHOR = new Date(2026, 4, 25);   // May 25 2026 (month is 0-indexed)
+export const OVERLOAD_CAP_WEEKS = 7;                    // week 7 ~= mid-July, then frozen
+
+// Returns 1-based training week (1..OVERLOAD_CAP_WEEKS)
 export function overloadWeek() {
   const now = new Date();
   if (now < OVERLOAD_ANCHOR) return 1;
   const days = Math.floor((now - OVERLOAD_ANCHOR) / 86400000);
   return Math.min(OVERLOAD_CAP_WEEKS, Math.floor(days / 7) + 1);
 }
-export function adjWork(baseSeconds) { return baseSeconds + Math.floor((overloadWeek() - 1) / 2) * 2; }
-export function repBonus() { return Math.floor((overloadWeek() - 1) / 2); }
+// Timed work seconds for a given base value, adjusted for the current week.
+export function adjWork(baseSeconds) {
+  return baseSeconds + Math.floor((overloadWeek() - 1) / 2) * 2;
+}
+// Extra reps for rep-based sets: +1 every 2 weeks.
+export function repBonus() {
+  return Math.floor((overloadWeek() - 1) / 2);
+}
 
-/* X() normalizes an exercise into the shape the timer/voice engine expects
-   (work / byReps+repsDetail / reset / cue / redFlag …). */
+/* 2026.2 runs with overload PAUSED (mirrors the reference app: the manual
+   table shows PAUSED). Flip this to false to re-enable auto-progression. */
+export const OVERLOAD_PAUSED = true;
+
+/* Overload-adjusted work seconds for a timed exercise. */
+export function exWork(ex) {
+  if (ex.work == null) return ex.work;
+  return OVERLOAD_PAUSED ? ex.work : adjWork(ex.work);
+}
+/* Rep count shown for a rep-based exercise, with the +1-rep bonus applied
+   to the leading "N reps" figure in repsDetail. */
+export function exRepsDetail(ex) {
+  if (OVERLOAD_PAUSED) return ex.repsDetail;
+  const bonus = repBonus();
+  if (!bonus || !ex.repsDetail) return ex.repsDetail;
+  return ex.repsDetail.replace(/^(\d+)/, n => parseInt(n, 10) + bonus);
+}
+/* Overload-adjusted dose string for display (bumps a leading rep count,
+   or a leading seconds figure for timed work). */
+export function exDose(ex) {
+  if (ex.byReps || ex.driver === "reps") return exRepsDetail(ex) || ex.dose;
+  if (ex.driver === "time" && ex.work != null) {
+    const w = exWork(ex);
+    return ex.eachSide ? Math.floor(w / 2) + "s/side" : (ex.dose || w + "s");
+  }
+  return ex.dose;
+}
+
+export const MANTRA = "I am STRONG. I am GRACEFUL. I can SKATE THIS.";
+
+export const PRONUNCIATION_MAP = {
+  "Pallof Press": "Pal-off Press",
+  "SL-RDL": "Single-Leg Romanian Deadlift",
+  "Carioca": "Ka-ree-oh-ka",
+  "Copenhagen Plank": "Copen-hah-gen Plank",
+  "Hip CARs": "Hip Cars"
+};
+
+export const ENCOURAGEMENTS_BY_STYLE = {
+  classic: [
+    "Strong finish.",
+    "Good control on that set.",
+    "Clean round. Stay steady.",
+    "Solid effort.",
+    "Discipline is showing. Nice work.",
+    "Power and calm. Good combo.",
+    "That round looked sharp.",
+    "Quality work.",
+    "Hold your line.",
+    "Keep the form tidy."
+  ],
+  fun: [
+    "Boom. That was awesome!",
+    "Level up unlocked!",
+    "Big energy. Love it!",
+    "You're a beast — keep rolling!",
+    "Crushing it. High five!",
+    "Whoa, that was clean!",
+    "Sparkly form. So good!",
+    "You stayed cool under pressure. Nice!",
+    "Banger of a round!",
+    "That was straight up fire!"
+  ],
+  encouraging: [
+    "You're doing great. Keep going.",
+    "Every rep counts. Proud of you.",
+    "One round at a time. You've got this.",
+    "Breathe — you're strong.",
+    "Trust the work. It's adding up.",
+    "Steady. Strong. Calm.",
+    "You showed up. That matters.",
+    "Small wins build big wins.",
+    "Your body remembers. Keep teaching it.",
+    "Soft knees, strong core. Beautiful."
+  ]
+};
+
+/* ------------------------------------------------------------
+   HOW-TO / VALIDATED COACHING CHANNELS — each block routes to ONE
+   trusted channel covering that kind of work. The demo link is a
+   broad YouTube search with the channel NAME appended, so it always
+   returns real videos while biasing toward the validated channel.
+   ------------------------------------------------------------ */
+export const COACH_CHANNELS = {
+  skate:    { label: "Figure-skating off-ice", name: "iSk8 Mom Maja", url: "https://www.youtube.com/@iSk8MomMaja" },
+  mobility: { label: "Mobility & warm-up",     name: "Tom Merrick",   url: "https://www.youtube.com/@TomMerrick" },
+  speed:    { label: "Speed & coordination",   name: "ALTIS",         url: "https://www.youtube.com/@ALTIS" },
+  strength: { label: "Strength & core",        name: "ATHLEAN-X",     url: "https://www.youtube.com/@athleanx" }
+};
+export const BLOCK_CHANNEL = {
+  warmup: "mobility", recovery: "mobility",
+  coordination: "speed",
+  main: "strength", prep: "strength", finisher: "strength",
+  skateskill: "skate"
+};
+export const channelForBlock = b => COACH_CHANNELS[BLOCK_CHANNEL[b]] || COACH_CHANNELS.strength;
+export const yt = (q, ch) =>
+  "https://www.youtube.com/results?search_query=" + encodeURIComponent(q + " " + ch.name);
+
+export const EXERCISE_HOWTO = {
+  // — skate-skill drills —
+  "Axis Micro": {
+    text: "Stand tall in front of a mirror, crown of the head stacked over the skating foot. Hold your arm carriage and run the 4 self-checks OUT LOUD: Am I stacked? Did I lean right? Was my checkout quiet? Am I holding without gripping?",
+    search: "releve balance port de bras posture drill"
+  },
+  "Spin Board Backspin Hold": {
+    text: "On the spinner board, set your backspin position: crown up, free leg checked, arms pulled in tight. Hold 10+ rotations. You can't change feet on the board. Dizzy for more than 30–45 seconds → STOP.",
+    search: "off ice spinner backward scratch spin practice"
+  },
+  "Spin Board Layback Hold": {
+    text: "Start with a clean upright hold on the spinner board. Only then add a small layback line — chest opens up, hips stay pressed forward, crown stays tall. Follow the 10/15/20-second on-ramp.",
+    search: "off ice spinner layback spin position"
+  },
+  "Turn-and-Stick Single-Leg Landing": {
+    text: "Small jump with a ¼ or ½ turn, land on ONE foot and freeze for 2 full seconds — knee over toe, free leg checked, arms in landing position. If you can't freeze it, make the turn smaller.",
+    search: "off ice jump landing position hold one foot"
+  },
+  "Active Split Slide": {
+    text: "Slide slowly toward YOUR end-range split with hips square, using sliders or a smooth floor. Active flexibility only — never a passive over-split, never partner-pressed. Post-session only.",
+    search: "active split flexibility drill safe progression"
+  },
+  "Active Hamstring Lengthening": {
+    text: "Lie on your back, raise one straight leg as high as YOUR muscles can hold it — no hands pulling. Hold 3 seconds, lower with control. The strength holds the flexibility.",
+    search: "active straight leg raise hamstring exercise"
+  },
+  "Half-Kneeling Hip-Flexor Hold": {
+    text: "Half-kneel, tuck the pelvis (posterior tilt), grow tall through the crown. You should feel the front of the kneeling-side hip lengthen — this serves the spiral and layback line.",
+    search: "half kneeling hip flexor stretch posterior tilt"
+  },
+  // — jumps & landings (the heart of the plan) —
+  "Box Jump → Stick": {
+    text: "Jump onto a low plyo box with a fast, quiet contact — then FREEZE for 2 seconds. Knees track over toes, chest tall. The freeze IS the exercise: a landing you can't hold doesn't count.",
+    search: "box jump stick landing drill youth"
+  },
+  "Lateral Bound → Stick": {
+    text: "Push sideways off one leg, land on the other and FREEZE 2 seconds. Stillness is the training — no continuous bouncing. Land soft, knee over toe.",
+    search: "lateral bound stick landing drill"
+  },
+  "Skater Jump": {
+    text: "Bound side to side, single-leg to single-leg, landing soft with a frozen finish each side. Grade each landing 1–5 in your head — wobbly past 2 seconds means shorten the distance.",
+    search: "skater jump lateral bound landing technique"
+  },
+  "Rotational Jump w/ Frozen Landing": {
+    text: "Two-foot jump with a ¼ turn, then ½, then full — crown up, free arms checked, freeze the landing 2–3 seconds. Progress the turn only when the landing stays quiet.",
+    search: "off ice rotation jump landing hold quarter half"
+  },
+  "Band Arm-Pull-In": {
+    text: "Hold a light band out wide, then snap the arms into your rotation position — fast pull, FROZEN finish. This is your air-position speed, trained on the floor.",
+    search: "off ice rotation arm pull in drill figure skating"
+  },
+  "Eccentric Step-Down": {
+    text: "Stand on a low step on one leg. Lower the free heel to the floor over a slow 4-count — knee tracking over the toe the whole way. This builds the landing leg.",
+    search: "single leg eccentric step down knee control"
+  },
+  "Low Box Step-Up Drive": {
+    text: "Step onto a low box driving through the WHOLE foot, then punch the opposite knee up tall. Control down. Left knee tracks over the toe — no caving.",
+    search: "box step up knee drive exercise"
+  },
+  // — strength & core —
+  "SL-RDL": {
+    text: "Single-leg Romanian deadlift: hinge from the hip with a flat back, free leg reaching long behind. Right-side quality matters most. Feel the hamstring, not the low back.",
+    search: "single leg romanian deadlift bodyweight tutorial"
+  },
+  "Push-up": {
+    text: "Ribs down, body in one line, full range — chest to just above the floor. Use an incline (bench or counter) if the hips sag. Quality beats count.",
+    search: "push up progression incline correct form"
+  },
+  "Suitcase Carry": {
+    text: "Carry one weight at your side and walk tall. Don't side-bend — resist the lean. This is your axis, under load.",
+    search: "suitcase carry anti lateral core exercise"
+  },
+  "Pallof Press": {
+    text: "Hold a band at your chest, press straight out and hold 2 seconds while the band tries to twist you. Hips square, no rotation. Anti-rotation = quiet checkouts.",
+    search: "pallof press anti rotation exercise The Prehab Guys"
+  },
+  "Glute Bridge": {
+    text: "Lie on your back, feet flat, drive the hips up and SQUEEZE at the top 2 seconds — don't arch the low back. The hip is the motor for every jump.",
+    search: "glute bridge exercise correct form"
+  },
+  "Dead Bug": {
+    text: "Low back glued to the floor. Extend opposite arm and leg while exhaling slowly. If the back lifts, make the range smaller.",
+    search: "dead bug exercise correct form The Prehab Guys"
+  },
+  "Bird Dog": {
+    text: "From all fours, reach opposite arm and leg LONG — length, not lift. Flat back, no low-back arch, no hip rotation.",
+    search: "bird dog exercise correct form The Prehab Guys"
+  },
+  "Superman": {
+    text: "Lie face-down, lift arms and legs into a long line — thoracic extension, length not crunch. Hold, breathe, lower.",
+    search: "superman exercise back extension correct form"
+  },
+  "Copenhagen Plank": {
+    text: "Side plank with the top foot on a low bench, bottom leg lifted. Adductors actively working — this is edge control, not just hanging. Short holds, switch sides.",
+    search: "copenhagen plank adductor exercise progression"
+  },
+  "Resisted Band March": {
+    text: "Band around the hips anchored behind you. March with fast knee drive, trunk tall — don't let the band fold you forward.",
+    search: "resisted band march knee drive drill"
+  },
+  "Pull-Up (heavy)": {
+    text: "3 slow 4-second eccentric lowers, then max CLEAN reps. Shoulders depress first, then pull. Never to failure, never kipping — one swing = set over.",
+    search: "strict pull up eccentric lower tutorial"
+  },
+  "Scap Pull-Up + Dead Hang": {
+    text: "Hang from the bar, slide the shoulders DOWN away from the ears (no elbow bend), then relax into a dead hang and decompress.",
+    search: "scapular pull up dead hang exercise"
+  },
+  // — prep pair —
+  "Monster Walk": {
+    text: "Mini-band around the ankles or knees, quarter-squat, step sideways keeping tension — knees pushed OUT over the toes. This wakes up the muscles that guard your landing knee.",
+    search: "monster walk lateral band walk glute exercise"
+  },
+  "Side Plank Reach": {
+    text: "Side plank, hips stacked and lifted; reach the top arm under and back through. If the hip drops, shorten the reach.",
+    search: "side plank reach under exercise tutorial"
+  },
+  "Band External Rotation": {
+    text: "Elbow pinned to your side, rotate the forearm out slowly against the band. Builds shoulder durability for carriage and pull work.",
+    search: "band external rotation shoulder exercise The Prehab Guys"
+  },
+  "Side-Lying ER": {
+    text: "Lie on your side, elbow on ribs, rotate a light weight up slowly. Second cuff angle — light and slow beats heavy and fast.",
+    search: "side lying external rotation shoulder exercise The Prehab Guys"
+  },
+  // — warm-up / mobility (biased toward clean mobility demos) —
+  "Jump Rope": { search: "jump rope basic bounce technique tutorial" },
+  "Band Pass-Through": { search: "resistance band pass through shoulder mobility drill Tom Merrick" },
+  "Cat-Camel": { search: "cat camel spine mobility exercise tutorial" },
+  "90/90 Hip Switch": { search: "90 90 hip switch mobility drill Tom Merrick" },
+  "Leg Swings": { search: "leg swings dynamic warm up drill tutorial" },
+  "Wall Slides": { search: "wall slides shoulder mobility exercise tutorial" },
+  "Knee-to-Wall Ankle": { search: "knee to wall ankle mobility drill tutorial" },
+  "Half-Kneeling Ankle Rock": { search: "half kneeling ankle dorsiflexion rock mobility drill" },
+  "Calf Raise": { search: "full range calf raise exercise tutorial" },
+  "Hip CARs": { search: "hip CARs controlled articular rotations tutorial" },
+  // — coordination / running mechanics —
+  "A-March": { search: "A march running drill technique" },
+  "A-Skip": { search: "A skip running drill technique" },
+  "Carioca": { search: "carioca drill running technique" },
+  "Skip for Height": { search: "skip for height power drill technique" },
+  "Lateral Shuffle → Stick": { search: "lateral shuffle stop stick agility drill" },
+  // — recovery (foam rolling / breathing) —
+  "Calves — foam roller": { search: "foam rolling calves technique tutorial" },
+  "Quads — roller or gun": { search: "foam rolling quads technique tutorial" },
+  "Lats / upper back — roller, arms overhead": { search: "foam rolling lats upper back technique tutorial" },
+  "Glutes — foam roller": { search: "foam rolling glutes technique tutorial" },
+  "Touch-up — massage gun (parent)": { search: "massage gun technique legs safe use tutorial" }
+};
+
+/* Best available YouTube search query for an exercise: a hand-picked
+   query (biased toward a specific, kid-appropriate demo source) when
+   one exists in EXERCISE_HOWTO, else a generic fallback. */
+export function videoSearchQuery(ex) {
+  if (!ex || !ex.name) return "";
+  const howto = EXERCISE_HOWTO[ex.name];
+  if (howto && howto.search) return howto.search;
+  return (ex.searchableName || ex.name) + " exercise tutorial correct form";
+}
+export function videoSearchUrl(ex) {
+  const q = videoSearchQuery(ex);
+  return q ? "https://www.youtube.com/results?search_query=" + encodeURIComponent(q) : "#";
+}
+
+/* ------------------------------------------------------------
+   X() — exercise factory. Returns an object compatible with the
+   timer/voice runner (work / byReps+repsDetail / reset / cue / redFlag).
+   ------------------------------------------------------------ */
 export function X(o) {
   const driver = o.driver ||
     (o.work != null ? "time" : (o.repsDetail != null ? "reps" : null));
@@ -31,9 +307,9 @@ export function X(o) {
     dose: o.dose || "",
     reset: o.reset || "",                 // short setup phrase spoken first
     cue: o.cue || "",
-    redFlag: o.fix || null,               // correction (shown as red-flag)
+    redFlag: o.fix || null,               // correction (shown as red-flag / "the fix")
     parentWatch: o.parentWatch || null,   // "what to watch" (feeds quiz/cards)
-    swimTransfer: o.swimTransfer || null, // skill it builds (feeds quiz/cards)
+    skateTransfer: o.skateTransfer || null, // skill it builds on the ice (feeds quiz/cards)
     faultAnchor: !!o.faultAnchor,
     gate: o.gate || null,                 // null | "valgus"
     parentEcho: !!o.parentEcho,           // anti-extension breath gate
@@ -50,28 +326,7 @@ export function X(o) {
 /* Light → number of rounds for the Main block. */
 export const LIGHT_ROUNDS = { green: 3, yellow: 2, red: 1, recovery: 0 };
 
-export const MANTRA = "I am STRONG. I am FAST. I can SWIM THIS.";
-export const DAY_MANTRA = {
-  monday:    "Practice makes perfect.",
-  tuesday:   "I am STRONG. I am FAST. I can SWIM THIS.",
-  wednesday: "Practice makes perfect.",
-  thursday:  "I am STRONG. I am FAST. I can SWIM THIS.",
-  friday:    "Sweat in training, no tears in competition.",
-  saturday:  "I am STRONG. I am FAST. I can SWIM THIS.",
-  sunday:    "Sweat in training, no tears in competition."
-};
-
-export const READINESS_QUESTIONS = [
-  { id: "q1", text: "Are you ready to become a better skater today?" },
-  { id: "q2", text: "Is your body pain-free — ankles, knees, hips, back, shoulders?", painGate: true },
-  { id: "q3", text: "Did you sleep okay and is your energy full?" },
-  { id: "q4", text: "Does your body feel light, not heavy from skating?" },
-  { id: "q5", text: "Can you stack your axis — crown over your skating foot, no lean right?" },
-  { id: "q6", text: "Can you land and FREEZE for 2 seconds, knee over toe?" },
-  { id: "q7", text: "Do your shoulders stay DOWN when you hang or pull?" },
-  { id: "q8", text: "Do you WANT to give this 100% today?" }
-];
-
+/* Top-7 exercises tracked on the Independence Ladder. */
 export const TOP7 = [
   "Eccentric Step-Down", "Pull-Up (heavy)", "Box Jump → Stick",
   "Skater Jump", "Rotational Jump w/ Frozen Landing",
@@ -81,86 +336,119 @@ export const TOP7 = [
 export const MICRO_LOOP = { q: "Where does a clean landing freeze?", a: "knee over toe" };
 export const BREATH_REHEARSAL =
   "Axis self-check out loud: Am I stacked? Did I lean right? Was my checkout quiet? Did I hold without gripping?";
-export const INTENT_WORDS = ["SHARP", "LOCK", "DRIVE", "HOLD", "PULL"];
 
+/* Shared finisher + skate-skill block builders */
 const FINISHER = () => [
   X({ name: "Copenhagen Plank", block: "finisher", driver: "time", work: 35, eachSide: true,
       dose: "15–20s/side", reset: "Switch sides only.",
       cue: "Adductors actively working — edge control, not just hanging.",
-      swimTransfer: "Edge / adductor control", searchableName: "copenhagen plank adductor" })
+      skateTransfer: "Edge / adductor control", searchableName: "copenhagen plank adductor" })
 ];
 
 /* Skating-Skill block = Axis Micro + Spin Board (+ landing work).
    A = Spin/Push days (Tue/Fri); B = Single-Leg days (Mon/Thu); SAT = power days. */
 const SKATESKILL_A = () => [
-  X({ name: "Axis Micro", block: "swimskill", driver: "time", work: 60, dose: "~2 min + 4 self-checks",
+  X({ name: "Axis Micro", block: "skateskill", driver: "time", work: 60, dose: "~2 min + 4 self-checks",
       reset: "Crown over the skating foot.",
       cue: "Mirror balance + arm carriage. Run the 4 self-checks OUT LOUD: stacked? leaned right? quiet checkout? holding without gripping?",
-      swimTransfer: "Axis / alignment", searchableName: "releve balance port de bras ballet" }),
-  X({ name: "Spin Board Backspin Hold", block: "swimskill", driver: "reps", repsDetail: "10+ rotations ×3", dose: "10+ rot ×3",
+      skateTransfer: "Axis / alignment", searchableName: "releve balance port de bras ballet" }),
+  X({ name: "Spin Board Backspin Hold", block: "skateskill", driver: "reps", repsDetail: "10+ rotations ×3", dose: "10+ rot ×3",
       reset: "Crown up, free leg checked.",
       cue: "Backward one-foot / scratch spin on the board. You can't change feet on the board. Dizzy >30–45s → STOP.",
-      swimTransfer: "Backspin position", searchableName: "off-ice spinner backward scratch spin" }),
-  X({ name: "Spin Board Layback Hold", block: "swimskill", driver: "time", work: 40, dose: "10/15/20s on-ramp ×2",
+      skateTransfer: "Backspin position", searchableName: "off-ice spinner backward scratch spin" }),
+  X({ name: "Spin Board Layback Hold", block: "skateskill", driver: "time", work: 40, dose: "10/15/20s on-ramp ×2",
       reset: "Upright first, then small layback.",
       cue: "Train the upright hold; add a small layback line. Keep the on-ramp progressing.",
-      swimTransfer: "Layback line", searchableName: "off-ice spinner upright spin" }),
-  X({ name: "Turn-and-Stick Single-Leg Landing", block: "swimskill", driver: "reps", repsDetail: "≤5/side ×2", dose: "≤5/side ×2", eachSide: true,
+      skateTransfer: "Layback line", searchableName: "off-ice spinner upright spin" }),
+  X({ name: "Turn-and-Stick Single-Leg Landing", block: "skateskill", driver: "reps", repsDetail: "≤5/side ×2", dose: "≤5/side ×2",
       gate: "valgus", reset: "Crown up, free leg checked.",
       cue: "¼/½ turn, land on ONE foot, freeze 2s.",
-      parentWatch: "left-knee valgus / can't freeze", fix: "Reduce the turn.",
-      swimTransfer: "Single-leg rotational landing", searchableName: "off-ice jump landing position hold one foot" })
+      parentWatch: "Left-knee valgus / can't freeze", fix: "Reduce the turn.",
+      skateTransfer: "Single-leg rotational landing", searchableName: "off-ice jump landing position hold one foot" })
 ];
 const SKATESKILL_B = () => [
-  X({ name: "Active Split Slide", block: "swimskill", driver: "time", work: 60, eachSide: true, dose: "3×20–30s/side",
+  X({ name: "Active Split Slide", block: "skateskill", driver: "time", work: 60, eachSide: true, dose: "3×20–30s/side",
       reset: "Own end-range only.",
       cue: "Slide to YOUR end-range — hips square. Never passive over-split or partner-pressed. Post-session only.",
-      parentWatch: "pelvis twists or pain", fix: "Back off the range.",
-      swimTransfer: "Spiral / split line", searchableName: "active split flexibility drill" }),
-  X({ name: "Active Hamstring Lengthening", block: "swimskill", driver: "reps", repsDetail: "5×3s/side", dose: "5×3s/side", eachSide: true,
+      parentWatch: "Pelvis twists or pain", fix: "Back off the range.",
+      skateTransfer: "Spiral / split line", searchableName: "active split flexibility drill" }),
+  X({ name: "Active Hamstring Lengthening", block: "skateskill", driver: "reps", repsDetail: "5×3s/side", dose: "5×3s/side",
       reset: "Supine, raise the leg.",
       cue: "Hold the leg up with your OWN quad/hip-flexor — no hands pulling.",
-      swimTransfer: "Active flexibility", searchableName: "active straight leg raise hamstring" }),
-  X({ name: "Half-Kneeling Hip-Flexor Hold", block: "swimskill", driver: "time", work: 60, eachSide: true, dose: "30s/side",
+      skateTransfer: "Active flexibility", searchableName: "active straight leg raise hamstring" }),
+  X({ name: "Half-Kneeling Hip-Flexor Hold", block: "skateskill", driver: "time", work: 60, eachSide: true, dose: "30s/side",
       reset: "Posterior tilt, tall.",
       cue: "Tuck the pelvis, stay tall — serves spiral + layback line.",
-      swimTransfer: "Hip-flexor length", searchableName: "half kneeling hip flexor stretch" }),
-  X({ name: "Axis Micro", block: "swimskill", driver: "time", work: 40, dose: "4 self-checks + short layback",
+      skateTransfer: "Hip-flexor length", searchableName: "half kneeling hip flexor stretch" }),
+  X({ name: "Axis Micro", block: "skateskill", driver: "time", work: 40, dose: "4 self-checks + short layback",
       reset: "Crown over the skating foot.",
       cue: "Self-checks KEPT on split days (the drift instrument). 4 yes/no out loud. Add a short layback hold on-ramp ×2.",
-      swimTransfer: "Axis / alignment", searchableName: "releve balance port de bras ballet" })
+      skateTransfer: "Axis / alignment", searchableName: "releve balance port de bras ballet" })
 ];
 const SKATESKILL_SAT = () => [
-  X({ name: "Axis Micro", block: "swimskill", driver: "time", work: 60, dose: "~3 min + 4 self-checks",
+  X({ name: "Axis Micro", block: "skateskill", driver: "time", work: 60, dose: "~3 min + 4 self-checks",
       reset: "Crown over the skating foot.",
       cue: "Short mirror Axis Micro + 4 self-checks out loud.",
-      swimTransfer: "Axis / alignment", searchableName: "releve balance port de bras ballet" }),
-  X({ name: "Active Split Slide", block: "swimskill", driver: "time", work: 40, eachSide: true, dose: "2×20s/side",
+      skateTransfer: "Axis / alignment", searchableName: "releve balance port de bras ballet" }),
+  X({ name: "Active Split Slide", block: "skateskill", driver: "time", work: 40, eachSide: true, dose: "2×20s/side",
       reset: "Own end-range only.",
       cue: "Cooldown flexibility — active end-range, post-session only.",
-      swimTransfer: "Spiral / split line", searchableName: "active split flexibility drill" })
+      skateTransfer: "Spiral / split line", searchableName: "active split flexibility drill" })
 ];
 
-export const HARD_EXERCISES = new Set([
-  "Box Jump", "Squat Jump", "Lateral Bound", "Bosu Squat",
-  "Wide-Grip Pull-Up", "Wide Pull-Up", "Box Jump-Down",
-  "Box Jump / Lateral Bound", "Jump Rope Simulation", "Squat Jump (light)"
-]);
+const SCAP_HANG = () => [
+  X({ name: "Scap Pull-Up + Dead Hang", block: "skateskill", driver: "time", work: 30, dose: "30s",
+      reset: "Hang tall, shoulders ready.", cue: "Shoulders slide DOWN, hang and decompress.",
+      skateTransfer: "Shoulder control / decompression", searchableName: "scapular pull up dead hang" })
+];
+
+/* Shared prep pairs (inserted after the Main block when present). */
+const PREP_LANDING = () => [
+  X({ name: "Monster Walk", block: "main", driver: "reps", repsDetail: "8 steps/dir ×2", dose: "8 steps/dir ×2",
+      cue: "Band tension on, knees pushed OUT over the toes — guard the landing knee.",
+      parentWatch: "Knees collapse inward", fix: "Smaller steps, keep tension.",
+      skateTransfer: "Landing-knee control", searchableName: "monster walk lateral band walk" }),
+  X({ name: "Side Plank Reach", block: "main", driver: "time", work: 40, eachSide: true, dose: "20s/side",
+      cue: "Hips stacked and lifted, reach under and back.",
+      parentWatch: "Hip drops", fix: "Lift the hip, shorten the reach.",
+      skateTransfer: "Anti-side-bend / axis" })
+];
+const PREP_SHOULDER = () => [
+  X({ name: "Band External Rotation", block: "main", driver: "reps", repsDetail: "12/side", dose: "12/side",
+      cue: "Elbow pinned to the side, rotate slow.",
+      parentWatch: "Elbow drifts off the ribs", fix: "Pin the elbow, slow down.",
+      skateTransfer: "Shoulder durability" }),
+  X({ name: "Side-Lying ER", block: "main", driver: "reps", repsDetail: "10/side", dose: "10/side",
+      cue: "Second cuff angle — light, slow.",
+      parentWatch: "Rushing / too heavy", fix: "Lighter, slower.",
+      skateTransfer: "Shoulder durability" })
+];
+
+/* Coach-handoff + landing-fork notes shown on the skate-skill brief. */
+export const COACH_HANDOFF = "Jump TIMING is an ICE skill — hand the coach: on-ice rotation timing, entry edges, and checkout under speed. Land builds the parts (landing leg, air position, spin posture); the ice assembles the timing.";
+export const BREATH_DECISION = "Landing = land and FREEZE, knee over toe — never ride out a wobble to save the rep. A landing you can't hold for 2 seconds doesn't count. Coach preference overrides this.";
+
+/* Intent words picked AFTER Round 1 (targets what R1 revealed). */
+export const INTENT_WORDS = ["SHARP", "LOCK", "DRIVE", "HOLD", "PULL"];
 
 export const DAYS = {
   monday: {
     title: "Single-Leg + Axis",
     subtitle: "PM · ice day · keep light, ice carries the jump load",
-    badge: "MON", theme: "Single-Leg + Axis",
+    badge: "MON",
+    theme: "Single-Leg + Axis",
+    tag: "SINGLE-LEG + AXIS",
     mantra: "Crown up. Land and freeze.",
-    poolLoad: "pm", defaultLight: "green", timeLo: 22, timeHi: 28,
-    equipment: ["Low step", "Mat", "Mirror", "Pull-up bar"],
-    prSentinel: "Layback hold — longest clean seconds", amActivation: null,
+    iceLoad: "pm",
+    defaultLight: "green",
+    timeLo: 22, timeHi: 28,
+    equipment: ["Low step", "Mat", "Mirror", "Pull-up bar", "Mini band"],
+    prSentinel: "Layback hold — longest clean seconds",
     blocks: {
       warmup: [
         X({ name: "Jump Rope", block: "warmup", driver: "time", work: 75, dose: "60–90s", cue: "Off the toes, quiet, tall." }),
         X({ name: "Cat-Camel", block: "warmup", driver: "reps", repsDetail: "8 cycles", dose: "8 cycles", cue: "Move segment by segment." }),
-        X({ name: "Half-Kneeling Ankle Rock", block: "warmup", driver: "reps", repsDetail: "8/side (+2 R)", dose: "8/side", eachSide: true, cue: "Heel nailed down — both ankles, right a touch deeper." }),
+        X({ name: "Half-Kneeling Ankle Rock", block: "warmup", driver: "reps", repsDetail: "8/side (+2 R)", dose: "8/side", cue: "Heel nailed down — both ankles, right a touch deeper." }),
         X({ name: "Leg Swings", block: "warmup", driver: "reps", repsDetail: "8/dir/leg", dose: "8/dir/leg", cue: "Relaxed, build range." })
       ],
       coordination: [
@@ -169,48 +457,47 @@ export const DAYS = {
         X({ name: "Lateral Shuffle → Stick", block: "coordination", driver: "time", work: 60, eachSide: true, dose: "8m/side", cue: "Low, stop dead each end." })
       ],
       main: [
-        X({ name: "Eccentric Step-Down", block: "main", driver: "reps", repsDetail: "5 · 4s lower/side", dose: "5 · 4s/side", eachSide: true, gate: "valgus", faultAnchor: true,
+        X({ name: "Eccentric Step-Down", block: "main", driver: "reps", repsDetail: "5 · 4s lower/side", dose: "5 · 4s/side", gate: "valgus", faultAnchor: true,
             reset: "Slow lower, knee over toe.", cue: "Slow lower, knee over toe.",
             parentWatch: "Left-knee valgus", fix: "Shorter range.",
-            swimTransfer: "Landing-leg control", searchableName: "single leg eccentric step down" }),
-        X({ name: "SL-RDL", block: "main", driver: "reps", repsDetail: "6/side (R emphasis)", dose: "6/side", eachSide: true,
+            skateTransfer: "Landing-leg control", searchableName: "single leg eccentric step down" }),
+        X({ name: "SL-RDL", block: "main", driver: "reps", repsDetail: "6/side (R emphasis)", dose: "6/side",
             reset: "Hinge, flat back.", cue: "Hinge from the hip, flat back, R-side quality.",
             parentWatch: "Back rounds", fix: "Reduce range.",
-            swimTransfer: "Hip hinge / posterior", searchableName: "single leg romanian deadlift bodyweight" }),
-        X({ name: "Dead Bug", block: "main", driver: "reps", repsDetail: "8/side", dose: "8/side", eachSide: true, faultAnchor: true,
+            skateTransfer: "Hip hinge / posterior", searchableName: "single leg romanian deadlift bodyweight" }),
+        X({ name: "Dead Bug", block: "main", driver: "reps", repsDetail: "8/side", dose: "8/side", faultAnchor: true,
             reset: "Back flat, exhale on extend.", cue: "Exhale as limbs extend, low back glued.",
             parentWatch: "Low back lifts off floor", fix: "Smaller range.",
-            swimTransfer: "Anti-extension core", searchableName: "dead bug core exercise" }),
-        X({ name: "Bird Dog", block: "main", driver: "reps", repsDetail: "8/side", dose: "8/side", eachSide: true,
+            skateTransfer: "Anti-extension core", searchableName: "dead bug core exercise" }),
+        X({ name: "Bird Dog", block: "main", driver: "reps", repsDetail: "8/side", dose: "8/side",
             reset: "Thoracic-led, length not crunch.", cue: "Reach long, no low-back arch.",
             parentWatch: "Low-back arches", fix: "Reset, lead from the upper back.",
-            swimTransfer: "Posterior body line", searchableName: "bird dog exercise" })
+            skateTransfer: "Posterior body line", searchableName: "bird dog exercise" })
       ],
       finisher: FINISHER(),
-      swimskill: [
-        ...SKATESKILL_B(),
-        X({ name: "Scap Pull-Up + Dead Hang", block: "swimskill", driver: "time", work: 30, dose: "30s",
-            reset: "Hang tall, shoulders ready.", cue: "Shoulders slide DOWN, hang and decompress.",
-            swimTransfer: "Shoulder control / decompression", searchableName: "scapular pull up dead hang" })
-      ]
+      skateskill: [...SKATESKILL_B(), ...SCAP_HANG()]
     },
-    prepMenu: []
+    prepMenu: PREP_LANDING()
   },
 
   tuesday: {
     title: "Spin + Push/Carry",
     subtitle: "PM · ice day · skill + accessory, low CNS",
-    badge: "TUE", theme: "Spin + Push/Carry",
+    badge: "TUE",
+    theme: "Spin + Push/Carry",
+    tag: "SPIN + PUSH/CARRY",
     mantra: "Quiet spins. Strong shoulders.",
-    poolLoad: "pm", defaultLight: "green", timeLo: 20, timeHi: 26,
+    iceLoad: "pm",
+    defaultLight: "green",
+    timeLo: 20, timeHi: 26,
     equipment: ["Spinner board", "Resistance band", "Light weight", "Mat", "Mirror"],
-    prSentinel: "Clean push-ups", amActivation: null,
+    prSentinel: "Clean push-ups",
     blocks: {
       warmup: [
         X({ name: "Band Pass-Through", block: "warmup", driver: "reps", repsDetail: "8–10", dose: "8–10", cue: "Wide, no shrug." }),
         X({ name: "Wall Slides", block: "warmup", driver: "reps", repsDetail: "8", dose: "8", cue: "Back on wall, ribs down." }),
-        X({ name: "90/90 Hip Switch", block: "warmup", driver: "reps", repsDetail: "6/side", dose: "6/side", eachSide: true, cue: "Knees lead." }),
-        X({ name: "Half-Kneeling Ankle Rock", block: "warmup", driver: "reps", repsDetail: "8/side (+2 R)", dose: "8/side", eachSide: true, cue: "Heel down, both sides, right deeper." })
+        X({ name: "90/90 Hip Switch", block: "warmup", driver: "reps", repsDetail: "6/side", dose: "6/side", cue: "Knees lead." }),
+        X({ name: "Half-Kneeling Ankle Rock", block: "warmup", driver: "reps", repsDetail: "8/side (+2 R)", dose: "8/side", cue: "Heel down, both sides, right deeper." })
       ],
       coordination: [
         X({ name: "Carioca", block: "coordination", driver: "time", work: 60, eachSide: true, dose: "10m/side", cue: "Hip over hip — trunk-hip separation." }),
@@ -221,40 +508,44 @@ export const DAYS = {
         X({ name: "Push-up", block: "main", driver: "reps", repsDetail: "5–8 (incline if needed)", dose: "5–8",
             reset: "Ribs down, full range.", cue: "Ribs down, full range.",
             parentWatch: "Hips sag", fix: "Incline higher.",
-            swimTransfer: "Pressing strength", searchableName: "push up progression incline" }),
+            skateTransfer: "Pressing strength", searchableName: "push up progression incline" }),
         X({ name: "Suitcase Carry", block: "main", driver: "time", work: 40, eachSide: true, dose: "20s/side",
             reset: "Stand tall, one weight.", cue: "Don't side-bend — resist the lean right.",
             parentWatch: "Trunk tilts toward the weight", fix: "Lighter load.",
-            swimTransfer: "Anti-lateral / axis", searchableName: "suitcase carry anti lateral core" }),
-        X({ name: "Pallof Press", block: "main", driver: "reps", repsDetail: "12/side · 2s hold", dose: "12/side · 2s", eachSide: true,
+            skateTransfer: "Anti-lateral / axis", searchableName: "suitcase carry anti lateral core" }),
+        X({ name: "Pallof Press", block: "main", driver: "reps", repsDetail: "12/side · 2s hold", dose: "12/side · 2s",
             reset: "Hips square.", cue: "Press out, resist the rotation.",
             parentWatch: "Hip rotates", fix: "Wider stance.",
-            swimTransfer: "Anti-rotation core", searchableName: "pallof press band" }),
+            skateTransfer: "Anti-rotation core", searchableName: "pallof press band" }),
         X({ name: "Glute Bridge", block: "main", driver: "reps", repsDetail: "12 · 2s squeeze", dose: "12 · 2s",
             reset: "Squeeze the top.", cue: "Squeeze top, don't arch.",
             parentWatch: "Low-back arch", fix: "Reduce range.",
-            swimTransfer: "Hip extension power", searchableName: "glute bridge exercise" })
+            skateTransfer: "Hip extension power", searchableName: "glute bridge exercise" })
       ],
       finisher: [],
-      swimskill: SKATESKILL_A()
+      skateskill: SKATESKILL_A()
     },
-    prepMenu: []
+    prepMenu: PREP_SHOULDER()
   },
 
   wednesday: {
     title: "POWER A — Jump + Pull + Drive",
     subtitle: "AM · NO ice · the real power day",
-    badge: "WED", theme: "Jump + Pull + Drive",
+    badge: "WED",
+    theme: "Jump + Pull + Drive",
+    tag: "POWER A",
     mantra: "I am SHARP. I am STRONG. I can SKATE THIS.",
-    poolLoad: "none", defaultLight: "green", timeLo: 30, timeHi: 35,
+    iceLoad: "none",
+    defaultLight: "green",
+    timeLo: 30, timeHi: 35,
     equipment: ["Plyo box", "Pull-up bar", "Resistance band", "Mat"],
-    prSentinel: "Pull-up clean reps (after 3 eccentric)", amActivation: null,
+    prSentinel: "Pull-up clean reps (after 3 eccentric)",
     blocks: {
       warmup: [
         X({ name: "Jump Rope", block: "warmup", driver: "time", work: 90, dose: "90s", cue: "Reactive, quiet." }),
         X({ name: "Calf Raise", block: "warmup", driver: "reps", repsDetail: "12 · full range", dose: "12", cue: "Heel below the step." }),
-        X({ name: "Leg Swings", block: "warmup", driver: "reps", repsDetail: "6–8/side", dose: "6–8/side", eachSide: true, cue: "Open the hips (+ 90/90)." }),
-        X({ name: "Half-Kneeling Ankle Rock", block: "warmup", driver: "reps", repsDetail: "8/side (+2 R)", dose: "8/side", eachSide: true, cue: "Heel down, both sides, right deeper." })
+        X({ name: "Leg Swings", block: "warmup", driver: "reps", repsDetail: "6–8/side", dose: "6–8/side", cue: "Open the hips (+ 90/90)." }),
+        X({ name: "Half-Kneeling Ankle Rock", block: "warmup", driver: "reps", repsDetail: "8/side (+2 R)", dose: "8/side", cue: "Heel down, both sides, right deeper." })
       ],
       coordination: [
         X({ name: "A-Skip", block: "coordination", driver: "time", work: 60, dose: "10m", cue: "Light, rhythmic — primes the jumps." })
@@ -263,35 +554,35 @@ export const DAYS = {
         X({ name: "Box Jump → Stick", block: "main", driver: "time", work: 30, dose: "30s · stick each", gate: "valgus", faultAnchor: true,
             reset: "Fast contact, freeze.", cue: "Fast contact, freeze 2s.",
             parentWatch: "Left-knee valgus / can't freeze", fix: "Drop a round tier.",
-            swimTransfer: "Jump takeoff + landing", searchableName: "box jump stick landing" }),
+            skateTransfer: "Jump takeoff + landing", searchableName: "box jump stick landing" }),
         X({ name: "Skater Jump", block: "main", driver: "time", work: 30, dose: "30s · single→single", gate: "valgus",
             reset: "Full push.", cue: "Full push, land soft + freeze. Grade landing 1–5.",
             parentWatch: "Unstable past 2s", fix: "Shorten the distance.",
-            swimTransfer: "Lateral push + single-leg landing", searchableName: "skater jump lateral bound landing" }),
+            skateTransfer: "Lateral push + single-leg landing", searchableName: "skater jump lateral bound landing" }),
         X({ name: "Rotational Jump w/ Frozen Landing", block: "main", driver: "reps", repsDetail: "≤6 · ¼→½→full · 2-foot", dose: "≤6", gate: "valgus",
             reset: "Crown up, free leg checked.", cue: "Crown up, free leg checked, freeze 2–3s.",
             parentWatch: "Free-leg flail", fix: "Reduce the turn.",
-            swimTransfer: "Rotation + landing", searchableName: "off-ice rotation jump landing hold quarter half" }),
+            skateTransfer: "Rotation + landing", searchableName: "off-ice rotation jump landing hold quarter half" }),
         X({ name: "Band Arm-Pull-In", block: "main", driver: "time", work: 20, dose: "20s · fast intent",
             reset: "Fast pull.", cue: "Fast pull, frozen finish.",
             parentWatch: "Loose finish", fix: "Slow down, fix the freeze.",
-            swimTransfer: "Pull-in / rotation speed", searchableName: "off-ice rotation pull in drill arms" })
+            skateTransfer: "Pull-in / rotation speed", searchableName: "off-ice rotation pull in drill arms" })
       ],
       finisher: [
         X({ name: "Resisted Band March", block: "finisher", driver: "time", work: 20, dose: "20s · drive knee",
             reset: "Band on hips, tall trunk.", cue: "Drive the knee fast, stay tall.",
             parentWatch: "Trunk leans", fix: "Slow down, square up.",
-            swimTransfer: "Posterior-chain drive", searchableName: "resisted band march drive" }),
-        X({ name: "Low Box Step-Up Drive", block: "finisher", driver: "reps", repsDetail: "6/side · low box", dose: "6/side", eachSide: true, gate: "valgus",
+            skateTransfer: "Posterior-chain drive", searchableName: "resisted band march drive" }),
+        X({ name: "Low Box Step-Up Drive", block: "finisher", driver: "reps", repsDetail: "6/side · low box", dose: "6/side", gate: "valgus",
             reset: "Whole-foot drive.", cue: "Drive through the whole foot, opposite knee up.",
             parentWatch: "Left-knee valgus", fix: "Lower box / stop.",
-            swimTransfer: "Single-leg drive power", searchableName: "box step up drive knee" }),
+            skateTransfer: "Single-leg drive power", searchableName: "box step up drive knee" }),
         X({ name: "Pull-Up (heavy)", block: "finisher", driver: "reps", repsDetail: "3 × 4s ecc, then max clean", dose: "3 × 4s ecc + max",
             reset: "Depress shoulders first.", cue: "Shoulders down first. No failure, no kip.",
             parentWatch: "Swing / shrug", fix: "Dead-hang only.",
-            swimTransfer: "Pulling strength", searchableName: "strict pull up eccentric lower" })
+            skateTransfer: "Pulling strength", searchableName: "strict pull up eccentric lower" })
       ],
-      swimskill: SKATESKILL_SAT()
+      skateskill: SKATESKILL_SAT()
     },
     prepMenu: []
   },
@@ -299,17 +590,21 @@ export const DAYS = {
   thursday: {
     title: "Single-Leg + Core",
     subtitle: "PM · ice day · light, mirrors Monday",
-    badge: "THU", theme: "Single-Leg + Core",
+    badge: "THU",
+    theme: "Single-Leg + Core",
+    tag: "SINGLE-LEG + CORE",
     mantra: "Crown up. Land and freeze.",
-    poolLoad: "pm", defaultLight: "green", timeLo: 22, timeHi: 28,
-    equipment: ["Low step", "Mat", "Mirror", "Resistance band"],
-    prSentinel: "Single-leg eccentric hold seconds", amActivation: null,
+    iceLoad: "pm",
+    defaultLight: "green",
+    timeLo: 22, timeHi: 28,
+    equipment: ["Low step", "Mat", "Mirror", "Resistance band", "Mini band"],
+    prSentinel: "Single-leg eccentric hold seconds",
     blocks: {
       warmup: [
-        X({ name: "Knee-to-Wall Ankle", block: "warmup", driver: "reps", repsDetail: "8/side both", dose: "8/side", eachSide: true, cue: "Heel flat, knee past toes." }),
+        X({ name: "Knee-to-Wall Ankle", block: "warmup", driver: "reps", repsDetail: "8/side both", dose: "8/side", cue: "Heel flat, knee past toes." }),
         X({ name: "Cat-Camel", block: "warmup", driver: "reps", repsDetail: "8 cycles", dose: "8 cycles", cue: "Segment by segment." }),
         X({ name: "Leg Swings", block: "warmup", driver: "reps", repsDetail: "8/dir/leg", dose: "8/dir/leg", cue: "Relaxed, build range." }),
-        X({ name: "Half-Kneeling Ankle Rock", block: "warmup", driver: "reps", repsDetail: "8/side (+2 R)", dose: "8/side", eachSide: true, cue: "Heel down, both sides, right deeper." })
+        X({ name: "Half-Kneeling Ankle Rock", block: "warmup", driver: "reps", repsDetail: "8/side (+2 R)", dose: "8/side", cue: "Heel down, both sides, right deeper." })
       ],
       coordination: [
         X({ name: "Lateral Shuffle → Stick", block: "coordination", driver: "time", work: 60, eachSide: true, dose: "8m/side", cue: "Low, dead stop." }),
@@ -317,51 +612,55 @@ export const DAYS = {
         X({ name: "Carioca", block: "coordination", driver: "time", work: 60, eachSide: true, dose: "10m/side", cue: "Hip-trunk separation." })
       ],
       main: [
-        X({ name: "Eccentric Step-Down", block: "main", driver: "reps", repsDetail: "5 · 4s lower/side", dose: "5 · 4s/side", eachSide: true, gate: "valgus", faultAnchor: true,
+        X({ name: "Eccentric Step-Down", block: "main", driver: "reps", repsDetail: "5 · 4s lower/side", dose: "5 · 4s/side", gate: "valgus", faultAnchor: true,
             reset: "Slow, knee over toe.", cue: "Slow lower, knee over toe.",
             parentWatch: "Left-knee valgus", fix: "Shorter range.",
-            swimTransfer: "Landing-leg control", searchableName: "single leg eccentric step down" }),
-        X({ name: "SL-RDL", block: "main", driver: "reps", repsDetail: "6/side (R)", dose: "6/side", eachSide: true,
+            skateTransfer: "Landing-leg control", searchableName: "single leg eccentric step down" }),
+        X({ name: "SL-RDL", block: "main", driver: "reps", repsDetail: "6/side (R)", dose: "6/side",
             reset: "Flat back, hinge.", cue: "Hinge from the hip, flat back.",
             parentWatch: "Back rounds", fix: "Reduce range.",
-            swimTransfer: "Hip hinge / posterior", searchableName: "single leg romanian deadlift bodyweight" }),
-        X({ name: "Dead Bug", block: "main", driver: "reps", repsDetail: "8/side", dose: "8/side", eachSide: true, faultAnchor: true,
+            skateTransfer: "Hip hinge / posterior", searchableName: "single leg romanian deadlift bodyweight" }),
+        X({ name: "Dead Bug", block: "main", driver: "reps", repsDetail: "8/side", dose: "8/side", faultAnchor: true,
             reset: "Exhale, back glued.", cue: "Exhale as limbs extend, low back glued.",
             parentWatch: "Low back lifts", fix: "Smaller range.",
-            swimTransfer: "Anti-extension core", searchableName: "dead bug core exercise" }),
-        X({ name: "Bird Dog", block: "main", driver: "reps", repsDetail: "8/side", dose: "8/side", eachSide: true,
+            skateTransfer: "Anti-extension core", searchableName: "dead bug core exercise" }),
+        X({ name: "Bird Dog", block: "main", driver: "reps", repsDetail: "8/side", dose: "8/side",
             reset: "Thoracic-led, length not crunch.", cue: "Reach long, no low-back arch.",
             parentWatch: "Low-back arches", fix: "Reset, lead from the upper back.",
-            swimTransfer: "Posterior body line", searchableName: "bird dog exercise" })
+            skateTransfer: "Posterior body line", searchableName: "bird dog exercise" })
       ],
       finisher: [
-        X({ name: "Pallof Press", block: "finisher", driver: "reps", repsDetail: "12/side · 2s hold", dose: "12/side · 2s", eachSide: true,
+        X({ name: "Pallof Press", block: "finisher", driver: "reps", repsDetail: "12/side · 2s hold", dose: "12/side · 2s",
             reset: "Hips square.", cue: "Press out, resist the twist.",
             parentWatch: "Hip rotates", fix: "Wider stance.",
-            swimTransfer: "Anti-rotation core", searchableName: "pallof press band" }),
+            skateTransfer: "Anti-rotation core", searchableName: "pallof press band" }),
         X({ name: "Copenhagen Plank", block: "finisher", driver: "time", work: 35, eachSide: true, dose: "15–20s/side",
             reset: "Switch sides only.", cue: "Adductors actively working — edge control.",
-            swimTransfer: "Edge / adductor control", searchableName: "copenhagen plank adductor" })
+            skateTransfer: "Edge / adductor control", searchableName: "copenhagen plank adductor" })
       ],
-      swimskill: SKATESKILL_B()
+      skateskill: SKATESKILL_B()
     },
-    prepMenu: []
+    prepMenu: PREP_LANDING()
   },
 
   friday: {
     title: "Spin + Push/Carry",
     subtitle: "PM · ice day · save energy for Saturday",
-    badge: "FRI", theme: "Spin + Push/Carry",
+    badge: "FRI",
+    theme: "Spin + Push/Carry",
+    tag: "SPIN + PUSH/CARRY",
     mantra: "Sweat in training, no tears in competition.",
-    poolLoad: "pm", defaultLight: "green", timeLo: 20, timeHi: 26,
+    iceLoad: "pm",
+    defaultLight: "green",
+    timeLo: 20, timeHi: 26,
     equipment: ["Spinner board", "Resistance band", "Light weight", "Mat", "Mirror", "Pull-up bar"],
-    prSentinel: "Clean push-ups OR layback hold", amActivation: null,
+    prSentinel: "Clean push-ups OR layback hold",
     blocks: {
       warmup: [
         X({ name: "Jump Rope", block: "warmup", driver: "time", work: 75, dose: "60–90s", cue: "Off the toes, quiet." }),
         X({ name: "Band Pass-Through", block: "warmup", driver: "reps", repsDetail: "8–10", dose: "8–10", cue: "Wide, no shrug." }),
-        X({ name: "90/90 Hip Switch", block: "warmup", driver: "reps", repsDetail: "6/side", dose: "6/side", eachSide: true, cue: "Knees lead." }),
-        X({ name: "Half-Kneeling Ankle Rock", block: "warmup", driver: "reps", repsDetail: "8/side (+2 R)", dose: "8/side", eachSide: true, cue: "Heel down, both sides, right deeper." })
+        X({ name: "90/90 Hip Switch", block: "warmup", driver: "reps", repsDetail: "6/side", dose: "6/side", cue: "Knees lead." }),
+        X({ name: "Half-Kneeling Ankle Rock", block: "warmup", driver: "reps", repsDetail: "8/side (+2 R)", dose: "8/side", cue: "Heel down, both sides, right deeper." })
       ],
       coordination: [
         X({ name: "Skip for Height", block: "coordination", driver: "time", work: 60, dose: "8m", cue: "Knee + opposite arm drive." }),
@@ -372,45 +671,44 @@ export const DAYS = {
         X({ name: "Push-up", block: "main", driver: "reps", repsDetail: "5–8 (incline if needed)", dose: "5–8",
             reset: "Ribs down, full range.", cue: "Ribs down, full range.",
             parentWatch: "Hips sag", fix: "Incline higher.",
-            swimTransfer: "Pressing strength", searchableName: "push up progression incline" }),
+            skateTransfer: "Pressing strength", searchableName: "push up progression incline" }),
         X({ name: "Suitcase Carry", block: "main", driver: "time", work: 40, eachSide: true, dose: "20s/side",
             reset: "Stand tall, one weight.", cue: "Don't side-bend — resist the lean right.",
             parentWatch: "Trunk tilts toward the weight", fix: "Lighter load.",
-            swimTransfer: "Anti-lateral / axis", searchableName: "suitcase carry anti lateral core" }),
-        X({ name: "Pallof Press", block: "main", driver: "reps", repsDetail: "12/side · 2s hold", dose: "12/side · 2s", eachSide: true,
+            skateTransfer: "Anti-lateral / axis", searchableName: "suitcase carry anti lateral core" }),
+        X({ name: "Pallof Press", block: "main", driver: "reps", repsDetail: "12/side · 2s hold", dose: "12/side · 2s",
             reset: "Hips square.", cue: "Press out, resist the rotation.",
             parentWatch: "Hip rotates", fix: "Wider stance.",
-            swimTransfer: "Anti-rotation core", searchableName: "pallof press band" }),
+            skateTransfer: "Anti-rotation core", searchableName: "pallof press band" }),
         X({ name: "Glute Bridge", block: "main", driver: "reps", repsDetail: "12 · 2s squeeze", dose: "12 · 2s",
             reset: "Squeeze the top.", cue: "Squeeze top, don't arch.",
             parentWatch: "Low-back arch", fix: "Reduce range.",
-            swimTransfer: "Hip extension power", searchableName: "glute bridge exercise" })
+            skateTransfer: "Hip extension power", searchableName: "glute bridge exercise" })
       ],
       finisher: [],
-      swimskill: [
-        ...SKATESKILL_A(),
-        X({ name: "Scap Pull-Up + Dead Hang", block: "swimskill", driver: "time", work: 30, dose: "30s",
-            reset: "Hang tall, shoulders ready.", cue: "Shoulders slide DOWN, hang and decompress.",
-            swimTransfer: "Shoulder control / decompression", searchableName: "scapular pull up dead hang" })
-      ]
+      skateskill: [...SKATESKILL_A(), ...SCAP_HANG()]
     },
-    prepMenu: []
+    prepMenu: PREP_SHOULDER()
   },
 
   saturday: {
     title: "POWER B — Jump + Pull + Drive",
     subtitle: "AM · NO ice · second power day, 72h from Wed",
-    badge: "SAT", theme: "Jump + Pull + Drive",
+    badge: "SAT",
+    theme: "Jump + Pull + Drive",
+    tag: "POWER B",
     mantra: "I am SHARP. I am STRONG. I can SKATE THIS.",
-    poolLoad: "none", defaultLight: "green", timeLo: 30, timeHi: 35,
+    iceLoad: "none",
+    defaultLight: "green",
+    timeLo: 30, timeHi: 35,
     equipment: ["Plyo box", "Pull-up bar", "Resistance band", "Mat"],
-    prSentinel: "Rotational-jump landing grade 1–5", amActivation: null,
+    prSentinel: "Rotational-jump landing grade 1–5",
     blocks: {
       warmup: [
         X({ name: "Jump Rope", block: "warmup", driver: "time", work: 90, dose: "90s", cue: "Reactive, quiet." }),
         X({ name: "Calf Raise", block: "warmup", driver: "reps", repsDetail: "12 · full range", dose: "12", cue: "Heel below the step." }),
-        X({ name: "Leg Swings", block: "warmup", driver: "reps", repsDetail: "8/dir/leg", dose: "8/dir/leg", eachSide: true, cue: "Open the hips." }),
-        X({ name: "Half-Kneeling Ankle Rock", block: "warmup", driver: "reps", repsDetail: "8/side (+2 R)", dose: "8/side", eachSide: true, cue: "Heel down, both sides, right deeper." })
+        X({ name: "Leg Swings", block: "warmup", driver: "reps", repsDetail: "8/dir/leg", dose: "8/dir/leg", cue: "Open the hips." }),
+        X({ name: "Half-Kneeling Ankle Rock", block: "warmup", driver: "reps", repsDetail: "8/side (+2 R)", dose: "8/side", cue: "Heel down, both sides, right deeper." })
       ],
       coordination: [
         X({ name: "Skip for Height", block: "coordination", driver: "time", work: 60, dose: "8m", cue: "Explosive — primes the jumps." })
@@ -419,39 +717,39 @@ export const DAYS = {
         X({ name: "Lateral Bound → Stick", block: "main", driver: "time", work: 30, dose: "30s · stick each", gate: "valgus", faultAnchor: true,
             reset: "Stillness is the training.", cue: "Push laterally, land and FREEZE 2s.",
             parentWatch: "Continuous bounce", fix: "Hold each landing.",
-            swimTransfer: "Lateral power + landing", searchableName: "lateral bound stick landing drill" }),
+            skateTransfer: "Lateral power + landing", searchableName: "lateral bound stick landing drill" }),
         X({ name: "Skater Jump", block: "main", driver: "time", work: 30, dose: "30s", gate: "valgus",
             reset: "Full push.", cue: "Full push, freeze. Grade landing 1–5.",
             parentWatch: "Unstable past 2s", fix: "Shorten the distance.",
-            swimTransfer: "Lateral push + single-leg landing", searchableName: "skater jump lateral bound landing" }),
+            skateTransfer: "Lateral push + single-leg landing", searchableName: "skater jump lateral bound landing" }),
         X({ name: "Rotational Jump w/ Frozen Landing", block: "main", driver: "reps", repsDetail: "≤6 · progress turn", dose: "≤6", gate: "valgus",
             reset: "Crown up, free leg checked.", cue: "Crown up, freeze 2–3s.",
             parentWatch: "Free-leg flail", fix: "Reduce the turn.",
-            swimTransfer: "Rotation + landing", searchableName: "off-ice rotation jump landing hold quarter half" }),
+            skateTransfer: "Rotation + landing", searchableName: "off-ice rotation jump landing hold quarter half" }),
         X({ name: "Band Arm-Pull-In", block: "main", driver: "time", work: 20, dose: "20s", reset: "Fast pull.",
             cue: "Fast pull, frozen finish.",
             parentWatch: "Loose finish", fix: "Slow down, fix the freeze.",
-            swimTransfer: "Pull-in / rotation speed", searchableName: "off-ice rotation pull in drill arms" })
+            skateTransfer: "Pull-in / rotation speed", searchableName: "off-ice rotation pull in drill arms" })
       ],
       finisher: [
         X({ name: "Resisted Band March", block: "finisher", driver: "time", work: 20, dose: "20s",
             reset: "Band on hips, tall trunk.", cue: "Drive the knee, stay tall.",
             parentWatch: "Trunk leans", fix: "Square up.",
-            swimTransfer: "Posterior-chain drive", searchableName: "resisted band march drive" }),
-        X({ name: "Low Box Step-Up Drive", block: "finisher", driver: "reps", repsDetail: "6/side", dose: "6/side", eachSide: true, gate: "valgus",
+            skateTransfer: "Posterior-chain drive", searchableName: "resisted band march drive" }),
+        X({ name: "Low Box Step-Up Drive", block: "finisher", driver: "reps", repsDetail: "6/side", dose: "6/side", gate: "valgus",
             reset: "Whole-foot drive.", cue: "Drive through the whole foot.",
             parentWatch: "Left-knee valgus", fix: "Lower box / stop.",
-            swimTransfer: "Single-leg drive power", searchableName: "box step up drive knee" }),
+            skateTransfer: "Single-leg drive power", searchableName: "box step up drive knee" }),
         X({ name: "Pull-Up (heavy)", block: "finisher", driver: "reps", repsDetail: "3 × 4s ecc + max clean", dose: "3 × 4s ecc + max",
             reset: "Depress shoulders first.", cue: "No failure, no kip.",
             parentWatch: "Swing / shrug", fix: "Dead-hang only.",
-            swimTransfer: "Pulling strength", searchableName: "strict pull up eccentric lower" }),
-        X({ name: "Bird Dog", block: "finisher", driver: "reps", repsDetail: "8/side (3rd weekly)", dose: "8/side", eachSide: true,
+            skateTransfer: "Pulling strength", searchableName: "strict pull up eccentric lower" }),
+        X({ name: "Bird Dog", block: "finisher", driver: "reps", repsDetail: "8/side (3rd weekly)", dose: "8/side",
             reset: "Thoracic-led.", cue: "Reach long, no low-back arch.",
             parentWatch: "Low-back arches", fix: "Reset, lead from the upper back.",
-            swimTransfer: "Posterior body line", searchableName: "bird dog exercise" })
+            skateTransfer: "Posterior body line", searchableName: "bird dog exercise" })
       ],
-      swimskill: SKATESKILL_SAT()
+      skateskill: SKATESKILL_SAT()
     },
     prepMenu: []
   },
@@ -459,12 +757,16 @@ export const DAYS = {
   sunday: {
     title: "Foam Roll + Review — Recovery Only",
     subtitle: "No training · recovery + weekly look-back",
-    badge: "SUN", theme: "Recovery",
+    badge: "SUN",
+    theme: "Recovery",
+    tag: "",
     mantra: "Rest IS training.",
-    poolLoad: "none", defaultLight: "recovery", timeLo: 10, timeHi: 14, spa: true,
-    amActivation: null,
+    iceLoad: "none",
+    defaultLight: "recovery",
+    timeLo: 10, timeHi: 14,
+    spa: true,
     equipment: ["Foam roller", "Massage gun (parent-operated)", "Mat"],
-    safety: "Foam roll slow (2–3 cm/sec), pause 20s on tender spots. ⚠ NEVER roll the lower-back spine or neck — parent-guided. Massage gun is PARENT-OPERATED only, lowest speed, big muscles only — never on bones, joints, spine, neck, or growth plates.",
+    safety: "Foam roll slow (2–3 cm/sec), pause 20s on tender spots. NEVER roll the lower-back spine or neck — parent-guided. Massage gun is PARENT-OPERATED only, lowest speed, big muscles only — never on bones, joints, spine, neck, or growth plates.",
     recovery: [
       { name: "Calves — foam roller", dose: "60s/side", why: "Jump rope + landing volume lands here." },
       { name: "Quads — roller or gun", dose: "60s/side", why: "Power days (Wed/Sat)." },
@@ -473,12 +775,12 @@ export const DAYS = {
       { name: "Touch-up — massage gun (parent)", dose: "30–45s/muscle", why: "Lowest speed, comfort not pain. No spine/neck." }
     ],
     recoveryHolds: [
-      X({ name: "Hip CARs", block: "swimskill", driver: "reps", repsDetail: "3/dir each side", dose: "3/dir", eachSide: true, cue: "Gentle, controlled rotations." }),
-      X({ name: "Superman", block: "swimskill", driver: "time", work: 24, dose: "3×8s", cue: "Thoracic extension — length, not crunch.", searchableName: "superman thoracic extension hold" }),
-      X({ name: "Active Split Slide", block: "swimskill", driver: "time", work: 60, eachSide: true, dose: "3×20–30s/side", cue: "Own end-range, hips square — never passive over-split.", searchableName: "active split flexibility drill" }),
-      X({ name: "Half-Kneeling Hip-Flexor Hold", block: "swimskill", driver: "time", work: 60, eachSide: true, dose: "30s/side", cue: "Posterior tilt, tall — spiral + layback line.", searchableName: "half kneeling hip flexor stretch" })
+      X({ name: "Hip CARs", block: "skateskill", driver: "reps", repsDetail: "3/dir each side", dose: "3/dir", cue: "Gentle, controlled rotations." }),
+      X({ name: "Superman", block: "skateskill", driver: "time", work: 24, dose: "3×8s", cue: "Thoracic extension — length, not crunch.", searchableName: "superman thoracic extension hold" }),
+      X({ name: "Active Split Slide", block: "skateskill", driver: "time", work: 60, eachSide: true, dose: "3×20–30s/side", cue: "Own end-range, hips square — never passive over-split.", searchableName: "active split flexibility drill" }),
+      X({ name: "Half-Kneeling Hip-Flexor Hold", block: "skateskill", driver: "time", work: 60, eachSide: true, dose: "30s/side", cue: "Posterior tilt, tall — spiral + layback line.", searchableName: "half kneeling hip flexor stretch" })
     ],
-    blocks: { warmup: [], coordination: [], main: [], finisher: [], swimskill: [] },
+    blocks: { warmup: [], coordination: [], main: [], finisher: [], skateskill: [] },
     prepMenu: []
   }
 };
@@ -495,29 +797,187 @@ export const STANDING_RULES = [
 
 export const ENGAGEMENT_SYSTEMS = {
   peer: { label: "Peer Challenge vs Parent", desc: "Same timer/drill, parent genuinely tries. Compare after both are done." },
-  roleflip: { label: "Role Flip", desc: "Jenn demos one unit + gives the parent ONE coaching cue before the round." }
+  roleflip: { label: "Role Flip", desc: "Jenn demos one exercise + gives the parent ONE coaching cue before the round." }
 };
 
-export const COACH_CHANNELS = {
-  skate:    { label: "Figure-skating off-ice", name: "iSk8 Mom Maja", url: "https://www.youtube.com/@iSk8MomMaja" },
-  mobility: { label: "Mobility & warm-up",      name: "Tom Merrick",   url: "https://www.youtube.com/@TomMerrick" },
-  speed:    { label: "Speed & coordination",    name: "ALTIS",         url: "https://www.youtube.com/@ALTIS" },
-  strength: { label: "Strength & core",         name: "ATHLEAN-X",     url: "https://www.youtube.com/@athleanx" }
+/* ------------------------------------------------------------
+   Day keys — repo uses monday..sunday; the design's week strip
+   runs Mon-first with short keys. One mapping, applied everywhere.
+   ------------------------------------------------------------ */
+export const WEEK_ORDER = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+export const DAY_SHORT = {
+  monday: "Mon", tuesday: "Tue", wednesday: "Wed", thursday: "Thu",
+  friday: "Fri", saturday: "Sat", sunday: "Sun"
+};
+export const DAY_LONG = {
+  monday: "Monday", tuesday: "Tuesday", wednesday: "Wednesday", thursday: "Thursday",
+  friday: "Friday", saturday: "Saturday", sunday: "Sunday"
 };
 
-export const HR_ZONES = {
-  z2: { label: "Z1–Z2 · Quality / Skill",     bpm: "<130 bpm",    color: "var(--rose-400)" },
-  z3: { label: "Z2 · Working",                bpm: "130–150 bpm", color: "var(--gold)" },
-  z4: { label: "Power Peak · Full Recovery",  bpm: "150–170 bpm", color: "var(--stop)" }
+export const BLOCK_ORDER = ["warmup", "coordination", "main", "finisher", "skateskill"];
+export const BLOCK_LABEL = {
+  warmup: "Warm-up", coordination: "Coordination", main: "Main Circuit",
+  prep: "Prep Pair", finisher: "Finisher", skateskill: "Skate-Skill", recovery: "Recovery"
+};
+/* Per-block emoji + token color so the kid always knows which part she's in. */
+export const BLOCK_META = {
+  warmup:       { emoji: "🔥", color: "var(--coral)",  wash: "var(--coral-wash)",  ink: "var(--coral-ink)" },
+  coordination: { emoji: "⚡", color: "var(--sun)",    wash: "var(--sun-wash)",    ink: "var(--sun-ink)" },
+  main:         { emoji: "💪", color: "var(--sea)",    wash: "var(--sea-wash)",    ink: "var(--sea-ink)" },
+  prep:         { emoji: "🎯", color: "var(--grape)",  wash: "var(--grape-wash)",  ink: "var(--grape-ink)" },
+  finisher:     { emoji: "🪝", color: "var(--mint)",   wash: "var(--mint-wash)",   ink: "var(--mint-ink)" },
+  skateskill:   { emoji: "⛸️", color: "var(--aqua)",   wash: "var(--aqua-wash)",   ink: "var(--aqua-ink)" },
+  recovery:     { emoji: "🧊", color: "var(--grape)",  wash: "var(--grape-wash)",  ink: "var(--grape-ink)" }
 };
 
-export const DAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-export const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+export const MIN_REST = 3;
+export const SIDE_SWITCH_BUFFER = 5;
+export const ROUND_REST = 25;   // flat all weeks (settings can override)
 
-/* Count the "moves" in a day's session (main + coordination + finisher + skill),
-   used for the day-card "N moves" label. Warm-up is athlete-led, not counted. */
-export function countMoves(day) {
-  const b = day.blocks || {};
-  return (b.coordination?.length || 0) + (b.main?.length || 0) +
-         (b.finisher?.length || 0) + (b.swimskill?.length || 0);
+/* ============================================================
+   SKATE WITH GRACE DESIGN DATA — journey ranks, lore, prizes, readiness.
+   ============================================================ */
+
+export const CHEERS = [
+  "Boom — that was awesome! 🌟", "Sparkly form, keep it up! ✨", "Big energy. Love it! 💪",
+  "You stayed steady. Nice! ❄️", "Clean round — power and grace! ⛸️"
+];
+
+/* Rank ladder — keeps the original 7 skating ranks AND their level
+   thresholds (so no one's rank ever moves backwards), plus 3 new top
+   ranks to discover. levelCost() below is likewise unchanged from V2. */
+export const LADDER = [
+  { level: 1,  name: "First Glide",   icon: "❄️", habitat: "#F5C2CE" },
+  { level: 3,  name: "Snowflake",     icon: "❄️", habitat: "#E8EEF7" },
+  { level: 5,  name: "Frost Spinner", icon: "🌀", habitat: "#C9D8F0" },
+  { level: 8,  name: "Edge Dancer",   icon: "⛸️", habitat: "#D9A7B8" },
+  { level: 12, name: "Axel Rising",   icon: "🌟", habitat: "#E8B54D" },
+  { level: 16, name: "Ice Star",      icon: "⭐", habitat: "#C77A93" },
+  { level: 21, name: "Rink Royalty",  icon: "👑", habitat: "#B0486B" },
+  { level: 26, name: "Crystal Blade", icon: "💎", habitat: "#9FD8EA" },
+  { level: 31, name: "Aurora Edge",   icon: "🌌", habitat: "#8E7CC3" },
+  { level: 36, name: "Ice Legend",    icon: "🏆", habitat: "#F2C14E" }
+];
+
+// Each rank gets a rich story chapter + a skating tie-in + a real ice/winter fact.
+// Future ranks stay locked (mystery cards) so there's always something to discover.
+export const RANK_LORE = {
+  "First Glide":   { chapter: "Chapter 1 · The Frozen Pond", story: "Every champion's story starts with one push. The first glide is wobbly and short — and that's exactly how it's supposed to be. You showed up, you pushed off, and the ice remembered you. Courage comes before skill, always.", skate: "This is your body learning to balance over one blade — the base of everything.", fact: "Ice is slippery because your blade melts a micro-thin layer of water as it glides — you're really skating on water!" },
+  "Snowflake":     { chapter: "Chapter 1 · The Frozen Pond", story: "No two snowflakes are the same — and no two skaters are either. You've stopped copying and started finding YOUR way of moving: your rhythm, your carriage, your line. Light, unique, unafraid to fall and float back up.", skate: "Soft knees and light landings — falling quietly is a skill, and you're building it.", fact: "Every snowflake has exactly six sides, but scientists have never found two identical ones." },
+  "Frost Spinner": { chapter: "Chapter 2 · The Practice Rink", story: "The world blurs, but you don't. A spinner learns the biggest secret on the ice: the calmer your centre, the faster you can turn. While everything whirls around you, your crown stays tall and your core stays quiet.", skate: "Your spin-board holds become real spins here — centred, stacked, unhurried.", fact: "Elite skaters spin up to 6 times per second — faster than a ceiling fan — and train their brains to ignore the dizziness." },
+  "Edge Dancer":   { chapter: "Chapter 2 · The Practice Rink", story: "Now the blade sings. An edge dancer doesn't fight the ice — she leans into it and lets the curve carry her. Inside edge, outside edge, one smooth line into the next. This is where skating stops being steps and starts being dancing.", skate: "Copenhagen planks and suitcase carries built this: your edges hold because your middle does.", fact: "A skating blade has TWO edges with a hollow groove between them — every curve you carve uses just one edge at a time." },
+  "Axel Rising":   { chapter: "Chapter 3 · The Cold Air", story: "The axel is the only jump that takes off facing FORWARD — a leap of pure bravery into an extra half-turn. Rising means you're not afraid of the hard thing anymore; you take off toward it. Land, freeze, smile, again.", skate: "Every Box Jump → Stick and frozen landing was practice for this exact moment.", fact: "The axel is named after Axel Paulsen, who first landed it in 1882 — on speed-skating blades!" },
+  "Ice Star":      { chapter: "Chapter 3 · The Cold Air", story: "A star doesn't shine because someone is watching — it shines because that's what it is. Your practice habits glow now: you check your own axis, grade your own landings, coach your own corrections. The work became part of you.", skate: "The 4 self-checks out loud — stacked, no lean, quiet checkout, no gripping — are YOUR voice now.", fact: "Starlight you see tonight left its star years ago — steady work, like starlight, shows up later and lasts." },
+  "Rink Royalty":  { chapter: "Chapter 4 · The Big Ice", story: "The rink is yours now. Royalty isn't about a crown — it's about how you carry yourself when a program gets hard: tall, calm, generous to other skaters, brave on the big ice. Younger skaters watch how you practice. That's the real crown.", skate: "Strength, spins, landings, and grace — the whole week's work, skating as one.", fact: "Olympic rinks are 30×60 metres — big enough that a full program can cover more than a kilometre of skating." },
+  "Crystal Blade": { chapter: "Chapter 4 · The Big Ice", story: "A crystal forms under pressure, slowly, layer by layer — and comes out harder and clearer than everything around it. Seasons of practice pressed you into something rare: precision that looks effortless because it isn't.", skate: "Your jump landings freeze crystal-still now — 2 whole seconds, knee over toe, every time.", fact: "Glacier ice looks deep blue because centuries of pressure squeeze out every air bubble — the clearest ice is the oldest." },
+  "Aurora Edge":   { chapter: "Chapter 5 · The Midnight Ice", story: "Some nights the sky itself dances. The aurora doesn't perform for anyone — it moves because the energy inside it has to come out. Your skating is like that now: power and artistry in the same breath, impossible to look away from.", skate: "Spirals, laybacks, split lines — flexibility you OWN, held by your own strength.", fact: "The northern lights happen when particles from the sun crash into the sky 100 km up — nature's own light show over the ice." },
+  "Ice Legend":    { chapter: "Chapter 5 · The Midnight Ice", story: "Legends aren't born on competition day. They're built on quiet Tuesday drylands, on landings frozen when nobody was watching, on getting up one more time than falling down. You did the work every single day — and now the ice tells your story.", skate: "Everything you built — axis, edges, spins, jumps, grace — all in one skater.", fact: "The oldest ice skates ever found are over 3,000 years old, carved from horse bones — skating is one of humanity's oldest joys." }
+};
+export const RANK_TEASE = {
+  "Snowflake": "Something one-of-a-kind is drifting closer…", "Frost Spinner": "A calm centre in a spinning world awaits…",
+  "Edge Dancer": "The blade is learning to sing…", "Axel Rising": "A brave forward leap lies ahead…",
+  "Ice Star": "A steady glow is starting to shine…", "Rink Royalty": "A crown waits on the big ice…",
+  "Crystal Blade": "Something rare is forming under pressure…", "Aurora Edge": "The midnight sky is starting to dance…",
+  "Ice Legend": "The legend of the ice awaits at the very top…"
+};
+
+// Level-up prize pool — a grown-up curates this in Settings.
+// Default rewards lean on experiences, privileges, and autonomy rather than food
+// or screen time — linking a child's training to food ("earn dessert") or iPad
+// bargaining is a pattern child-sport psychologists caution against. Grown-ups
+// can still add whatever they like in Settings; this is only the starting pool.
+export const PRIZE_POOL = [
+  { icon: "🎡", label: "Plan a weekend outing" },
+  { icon: "✨", label: "Skip one chore" },
+  { icon: "⚽", label: "+30 min play time" },
+  { icon: "🎬", label: "Family movie pick" },
+  { icon: "🛌", label: "Stay up 20 min later" },
+  { icon: "🎯", label: "Choose the next family activity" },
+  { icon: "⛸️", label: "Pick a fun game at practice" },
+  { icon: "🎨", label: "One-on-one time with a grown-up" }
+];
+
+/* XP cost of going from level n to n+1.
+   UNCHANGED from the V2 curve — changing it would silently move the
+   athlete's existing level, so it must stay 100 + (n-1)*20 forever. */
+export function levelCost(n) { return 100 + (n - 1) * 20; }
+export function fmtXp(n) { return Math.round(n).toLocaleString("en-US"); }
+/* Rank for a given level — highest ladder entry at or below the level. */
+export function rankForLevel(level) {
+  let rank = LADDER[0];
+  for (const r of LADDER) if (level >= r.level) rank = r;
+  return rank;
 }
+
+export const COACH_VOICE_ITEMS = [
+  "Count your time", "Tell you the next exercise", "Remind you to breathe",
+  "Warn about common mistakes", "Prompt a self-check"
+];
+
+/* ------------------------------------------------------------
+   READINESS CHECK (4-Q + body map).
+   ------------------------------------------------------------ */
+export const READINESS_QS = [
+  { id: "q_pain",  text: "Any aches or sore spots today?", isPain: true, yesLabel: "😊 All good", noLabel: "😣 A bit sore" },
+  { id: "q_sleep", text: "How well did you sleep last night?", yesLabel: "😴 Good", noLabel: "🥱 Not great" },
+  { id: "q_light", text: "How do your muscles feel from your last skate?", yesLabel: "💪 Fresh", noLabel: "😮‍💨 Tired" },
+  { id: "q_ready", text: "What's your energy like right now?", yesLabel: "⚡ Full", noLabel: "💤 Low" }
+];
+
+// Anatomically distinct front vs. back regions — only true shared joints
+// (head/neck, shoulders, arms, knees) carry one zone number across both views.
+export const BODY_ZONES = [
+  { n: 1,  label: "Head",         group: "shared" },
+  { n: 17, label: "Neck",         group: "shared" },
+  { n: 2,  label: "Shoulders",    group: "shared" },
+  { n: 3,  label: "Arms",         group: "shared" },
+  { n: 4,  label: "Knees",        group: "shared" },
+  { n: 5,  label: "Chest / Ribs", group: "front" },
+  { n: 6,  label: "Abs / Core",   group: "front" },
+  { n: 7,  label: "Hip / Groin",  group: "front" },
+  { n: 8,  label: "Quads (Front Thigh)", group: "front" },
+  { n: 9,  label: "Shin",         group: "front" },
+  { n: 10, label: "Ankle / Foot", group: "front" },
+  { n: 11, label: "Upper Back",   group: "back" },
+  { n: 12, label: "Lower Back",   group: "back" },
+  { n: 13, label: "Glutes",       group: "back" },
+  { n: 14, label: "Hamstrings (Back Thigh)", group: "back" },
+  { n: 15, label: "Calf",         group: "back" },
+  { n: 16, label: "Achilles / Heel", group: "back" }
+];
+
+export const SEVERITY_LEVELS = [
+  { level: 1, emoji: "🙂", label: "OK",                   color: "var(--mint)",  desc: "Moved normally. Both sides feel similar." },
+  { level: 2, emoji: "😐", label: "Tired but controlled", color: "var(--sun)",   desc: "Tired or shaky, but still controlled. Better after 1–2 minutes rest." },
+  { level: 3, emoji: "😟", label: "Changed movement",     color: "var(--coral)", desc: "Limp, lean, twist, shake, or less range. Tell coach or parent." },
+  { level: 4, emoji: "🥺", label: "Pain / Stop",          color: "var(--stop)",  desc: "Pain, sharp pain, swelling, numbness, tingling, or affects normal activity. Stop now." }
+];
+
+// Unified colored-circle icon set (🟢🟡🔴🟣). The CTA carries the light's OWN
+// color — a red-light day shows a warm caution button, not the same yellow as
+// a green day — so the safety signal survives all the way to the action.
+export const LIGHT_META = {
+  green:    { emoji: "🟢", color: "var(--mint)",  btnColor: "var(--mint)",  btnDeep: "var(--mint-deep)",  btnText: "#fff",           btnIcon: "💪", label: "Green Light — Full power!",  btnLabel: "Start Training!", desc: "You're good to go! Full 3 rounds. Focus on quality." },
+  yellow:   { emoji: "🟡", color: "var(--sun)",   btnColor: "var(--sun)",   btnDeep: "var(--sun-deep)",   btnText: "var(--sun-ink)", btnIcon: "❄️", label: "Yellow Light — Go easy",     btnLabel: "Start Training!", desc: "2 rounds max. Listen to your body — clean form over effort." },
+  red:      { emoji: "🔴", color: "var(--stop)",  btnColor: "var(--coral)", btnDeep: "var(--coral-deep)", btnText: "#fff",           btnIcon: "💙", label: "Red Light — Light day",      btnLabel: "Start easy day",  desc: "1 round only. Something feels off — take it easy today." },
+  recovery: { emoji: "🟣", color: "var(--grape)", btnColor: "var(--grape)", btnDeep: "var(--grape-deep)", btnText: "#fff",           btnIcon: "🧊", label: "Recovery — Rest is training", btnLabel: "Start Recovery",  desc: "Rest day. Tell a grown-up, then stretch and hydrate." }
+};
+
+export const BODY_RESULTS = {
+  1: { emoji: "✅", color: "var(--mint)",  desc: "You are OK. Keep moving with control.",          cta: "Continue to Training",    ctaIcon: "💪", ctaColor: "var(--mint)", ctaDeep: "var(--mint-deep)", ctaText: "#fff", action: "continue" },
+  2: { emoji: "⏱️", color: "var(--sun)",   desc: "Take 1–2 minutes rest, then go easy — 2 rounds max, clean form.", cta: "Start easy — Yellow light", ctaIcon: "💛", ctaColor: "var(--sun)", ctaDeep: "var(--sun-deep)", ctaText: "var(--sun-ink)", action: "continue", secondary: "retry", secondaryLabel: "Rest 1–2 min, then re-check" },
+  3: { emoji: "🗣️", color: "var(--coral)", desc: "Tell your coach or parent first. If they say OK — light day only, 1 easy round.", cta: "Start light day — Red light", ctaIcon: "💙", ctaColor: "var(--coral)", ctaDeep: "var(--coral-deep)", ctaText: "#fff", action: "continue", secondary: "back", secondaryLabel: "Stop — back to Today", needsGrownup: true },
+  4: { emoji: "🛑", color: "var(--stop)",  desc: "Stop now. Tell your coach or parent right away.",   cta: "Stop — back to Today",    ctaIcon: "🛑", ctaColor: "var(--stop)", ctaDeep: "var(--stop-deep)", ctaText: "#fff", action: "back" }
+};
+
+/* Per-day mascot greeting rotates through the illustration set. */
+export const POSES = {
+  welcome: "assets/skate/illo-welcome.png",
+  greatwork: "assets/skate/illo-great-job.png",
+  celebrate: "assets/skate/illo-way-to-go.png",
+  keepgoing: "assets/skate/illo-keep-going.png",
+  breath: "assets/skate/illo-take-a-breath.png",
+  think: "assets/skate/illo-focus.png",
+  seeyou: "assets/skate/illo-nice-work.png",
+  remember: "assets/skate/illo-you-can-do-it.png"
+};

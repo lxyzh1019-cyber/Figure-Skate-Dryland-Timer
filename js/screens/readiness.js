@@ -1,239 +1,221 @@
-/* ============================================================================
-   screens/readiness.js — "Body Check" readiness (V2 Assessment).
-   4 yes/no questions → if sore, an inline SVG body map (front/back) with a
-   per-zone severity popup → computed traffic-light (grown-up can override) →
-   Start CTA. Ported from "Skate Timer - Assessment.dc.html" logic; the body
-   map is an inline SVG silhouette (the design PNGs exceed the 256 KiB fetch
-   cap), so it works offline with no binary dependency.
-   Outcome light drives LIGHT_ROUNDS exactly as the original engine expects.
-   ============================================================================ */
-import { LIGHT_ROUNDS } from "../data.js";
-import { loadSettings, loadLastCheck } from "../store.js";
+/* ============================================================
+   READINESS screen — 4 questions + body-map branch.
+   Markup transcribed from the Assessment prototype; the zone
+   rectangle/badge coordinates are encoded as data tables so the
+   front/back maps share one renderer.
+   ============================================================ */
 
-export const RQS = [
-  { id: "q_pain",  text: "Any aches or sore spots today?",             isPain: true, yes: "😊 All good", no: "😣 A bit sore" },
-  { id: "q_sleep", text: "How well did you sleep last night?",         yes: "😴 Good",  no: "🥱 Not great" },
-  { id: "q_light", text: "How do your muscles feel from last practice?", yes: "💪 Fresh", no: "😮‍💨 Tired" },
-  { id: "q_ready", text: "What's your energy like right now?",          yes: "⚡ Full",  no: "💤 Low" }
+import { escapeHtml } from "../util.js";
+
+/* Zone hit-areas & highlights: percent coords per view. A zone can appear
+   twice in a view (shoulders, arms). r = border-radius px. */
+const FRONT_RECTS = [
+  { n: 1,  l: 25.7, t: 1.0,  w: 48.0, h: 19.0, r: 50, label: "Head" },
+  { n: 17, l: 38,   t: 20.0, w: 24,   h: 4.5,  r: 30, label: "Neck" },
+  { n: 2,  l: 15,   t: 22.5, w: 26,   h: 6.5,  r: 30, label: "Shoulders" },
+  { n: 2,  l: 59,   t: 22.5, w: 26,   h: 6.5,  r: 30, label: "Shoulders" },
+  { n: 3,  l: 3.4,  t: 30.3, w: 27.4, h: 27.1, r: 30, label: "Arms" },
+  { n: 3,  l: 69.5, t: 30.3, w: 27.4, h: 27.1, r: 30, label: "Arms" },
+  { n: 5,  l: 31.7, t: 24.8, w: 36.0, h: 11.2, r: 24, label: "Chest / Ribs" },
+  { n: 6,  l: 25.4, t: 36.4, w: 48.4, h: 7.2,  r: 24, label: "Abs / Core" },
+  { n: 7,  l: 24.0, t: 43.6, w: 50.6, h: 5.4,  r: 24, label: "Hip / Groin" },
+  { n: 8,  l: 24.9, t: 48.8, w: 49.7, h: 16.3, r: 30, label: "Quads (Front Thigh)" },
+  { n: 4,  l: 26.6, t: 66.0, w: 46.3, h: 5.4,  r: 20, label: "Knees" },
+  { n: 9,  l: 26.6, t: 72.5, w: 46.3, h: 12.7, r: 24, label: "Shin" },
+  { n: 10, l: 19.7, t: 85.2, w: 58.3, h: 12.9, r: 24, label: "Ankle / Foot" }
+];
+const FRONT_BADGES = [
+  { n: 1, l: 49.7, t: 10.5 }, { n: 17, l: 50, t: 22.25 },
+  { n: 2, l: 28, t: 25.75 }, { n: 2, l: 72, t: 25.75 },
+  { n: 3, l: 17.1, t: 43.85 }, { n: 3, l: 83.2, t: 43.85 },
+  { n: 5, l: 49.7, t: 30.4 }, { n: 6, l: 49.6, t: 40.0 },
+  { n: 7, l: 49.3, t: 46.3 }, { n: 8, l: 49.75, t: 56.95 },
+  { n: 4, l: 49.75, t: 68.7 }, { n: 9, l: 49.75, t: 78.85 },
+  { n: 10, l: 48.85, t: 91.65 }
+];
+const BACK_RECTS = [
+  { n: 1,  l: 19.6, t: 1.2,  w: 59.4, h: 19.0, r: 50, label: "Head" },
+  { n: 17, l: 34,   t: 20.2, w: 26,   h: 4.8,  r: 30, label: "Neck" },
+  { n: 2,  l: 14,   t: 22.5, w: 27,   h: 6.5,  r: 30, label: "Shoulders" },
+  { n: 2,  l: 59,   t: 22.5, w: 27,   h: 6.5,  r: 30, label: "Shoulders" },
+  { n: 3,  l: 2.2,  t: 32.0, w: 30.9, h: 24.3, r: 30, label: "Arms" },
+  { n: 3,  l: 69.1, t: 32.0, w: 28.5, h: 24.3, r: 30, label: "Arms" },
+  { n: 11, l: 24.8, t: 27.1, w: 49.5, h: 9.4,  r: 24, label: "Upper Back" },
+  { n: 12, l: 23.5, t: 36.8, w: 52.0, h: 8,    r: 24, label: "Lower Back" },
+  { n: 13, l: 24.8, t: 44.8, w: 49.5, h: 8,    r: 24, label: "Glutes" },
+  { n: 14, l: 29,   t: 54.4, w: 41,   h: 12.7, r: 24, label: "Hamstrings (Back Thigh)" },
+  { n: 4,  l: 33,   t: 66.0, w: 34,   h: 5.4,  r: 20, label: "Knees" },
+  { n: 15, l: 33,   t: 72.5, w: 33,   h: 12.7, r: 24, label: "Calf" },
+  { n: 16, l: 37,   t: 85.2, w: 26,   h: 12.9, r: 20, label: "Achilles / Heel" }
+];
+const BACK_BADGES = [
+  { n: 1, l: 49.3, t: 10.7 }, { n: 17, l: 49, t: 22.6 },
+  { n: 2, l: 27.5, t: 25.75 }, { n: 2, l: 72.5, t: 25.75 },
+  { n: 3, l: 17.65, t: 44.15 }, { n: 3, l: 83.35, t: 44.15 },
+  { n: 11, l: 49.55, t: 31.8 }, { n: 12, l: 49.5, t: 40.8 },
+  { n: 13, l: 49.55, t: 48.8 }, { n: 14, l: 49.5, t: 60.75 },
+  { n: 4, l: 50, t: 68.7 }, { n: 15, l: 49.5, t: 78.85 },
+  { n: 16, l: 50, t: 91.65 }
 ];
 
-export const SEVERITY = [
-  { level: 1, emoji: "🙂", label: "OK",                   color: "var(--mint)",  desc: "Moved normally. Both sides feel similar." },
-  { level: 2, emoji: "😐", label: "Tired but controlled", color: "var(--gold)",  desc: "Tired or shaky, but still controlled. Better after 1–2 min rest." },
-  { level: 3, emoji: "😟", label: "Changed movement",     color: "var(--coral)", desc: "Limp, lean, twist, shake, or less range. Tell coach or parent." },
-  { level: 4, emoji: "🥺", label: "Pain / Stop",          color: "var(--stop)",  desc: "Pain, swelling, numbness or tingling. Stop now." }
-];
-
-export const LIGHTS = {
-  green:    { emoji: "💚", color: "var(--mint)",  label: "Green Light — Full power!",  desc: "You're good to go! Full 3 rounds. Focus on quality." },
-  yellow:   { emoji: "💛", color: "var(--gold)",  label: "Yellow Light — Train smart", desc: "Go easy today — 2 rounds, all quality. Smart skaters listen to their bodies. 💛" },
-  red:      { emoji: "🔴", color: "var(--stop)",  label: "Red Light — Protect today",  desc: "Something feels off — 1 easy round. Resting smart is how champions come back stronger. 💙" },
-  recovery: { emoji: "🧊", color: "var(--lilac)", label: "Recovery — Rest is training", desc: "Your body needs rest — and rest IS training. Tell a grown-up, then stretch and hydrate. 🧊" }
-};
-
-/* Body zones, positioned as %s over an SVG silhouette. group: front | back | shared */
-const ZONES = [
-  { n: "head",     label: "Head",        view: "both",  x: 38, y: 2,  w: 24, h: 11 },
-  { n: "neck",     label: "Neck",        view: "both",  x: 42, y: 13, w: 16, h: 5 },
-  { n: "shoulders",label: "Shoulders",   view: "both",  x: 20, y: 18, w: 60, h: 7 },
-  { n: "arms",     label: "Arms",        view: "both",  x: 6,  y: 25, w: 20, h: 26 },
-  { n: "arms2",    label: "Arms",        view: "both",  x: 74, y: 25, w: 20, h: 26, alias: "arms" },
-  { n: "chest",    label: "Chest / Ribs",view: "front", x: 34, y: 25, w: 32, h: 10 },
-  { n: "core",     label: "Abs / Core",  view: "front", x: 36, y: 35, w: 28, h: 10 },
-  { n: "hip",      label: "Hip / Groin", view: "front", x: 36, y: 45, w: 28, h: 7 },
-  { n: "quads",    label: "Quads",       view: "front", x: 30, y: 53, w: 40, h: 16 },
-  { n: "shin",     label: "Shin",        view: "front", x: 32, y: 78, w: 36, h: 12 },
-  { n: "ankleF",   label: "Ankle / Foot",view: "front", x: 34, y: 90, w: 32, h: 8, alias: "ankle" },
-  { n: "upperback",label: "Upper Back",  view: "back",  x: 32, y: 25, w: 36, h: 11 },
-  { n: "lowerback",label: "Lower Back",  view: "back",  x: 34, y: 37, w: 32, h: 8 },
-  { n: "glutes",   label: "Glutes",      view: "back",  x: 32, y: 46, w: 36, h: 9 },
-  { n: "hams",     label: "Hamstrings",  view: "back",  x: 30, y: 56, w: 40, h: 15 },
-  { n: "calf",     label: "Calf",        view: "back",  x: 32, y: 78, w: 36, h: 12 },
-  { n: "achilles", label: "Achilles",    view: "back",  x: 34, y: 90, w: 32, h: 8 },
-  { n: "knees",    label: "Knees",       view: "both",  x: 32, y: 70, w: 36, h: 7 }
-];
-
-export function freshReadiness() {
-  return { step: "questions", answers: {}, zoneSev: {}, pendingZone: null,
-           view: "front", light: "green", overridden: false, done: false, resultSource: "readiness" };
-}
-
-/* Compute the light from the 3 non-pain answers (pain === yes path). */
-export function lightFromAnswers(a) {
-  const yes = ["q_sleep", "q_light", "q_ready"].filter(k => a[k] === "yes").length;
-  return yes >= 3 ? "green" : yes === 2 ? "yellow" : yes === 1 ? "red" : "recovery";
-}
-export function lightFromZones(zoneSev) {
-  const vals = Object.values(zoneSev || {});
-  const worst = vals.length ? Math.max(...vals) : 0;
-  return { worst, light: { 0: "green", 2: "yellow", 3: "red", 4: "recovery" }[worst] || (worst === 1 ? "green" : "green") };
-}
-
-/* ---- rendering ---- */
-const GRAD = "linear-gradient(165deg,var(--rose-300) 0%,var(--rose-500) 60%,var(--rose-600) 100%)";
-
-function yesNoBtn(on, kind) {
-  const active = kind === "yes"
-    ? "background:var(--mint);color:#fff;border-color:var(--mint);"
-    : "background:var(--stop);color:#fff;border-color:var(--stop);";
-  const idle = "background:var(--surface);color:var(--ink);border-color:var(--hairline);";
-  return `min-height:48px;padding:0 16px;border-radius:var(--radius-pill);border:2px solid;font-family:inherit;font-weight:900;font-size:15px;cursor:pointer;${on ? active : idle}`;
-}
-
-function questionsStep(r, settings) {
-  const last = loadLastCheck();
-  const cards = RQS.map(q => {
-    const val = r.answers[q.id];
-    return `
-    <div style="background:var(--bg);border:2px solid var(--hairline);border-radius:var(--radius-lg);padding:16px 18px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;">
-      <div style="flex:1 1 220px;font-weight:700;font-size:16px;line-height:1.4;color:var(--ink);">${q.text}</div>
-      <div style="display:flex;gap:8px;flex-shrink:0;">
-        <button type="button" data-action="rdyAnswer" data-q="${q.id}" data-val="yes" style="${yesNoBtn(val === 'yes','yes')}">${q.yes}</button>
-        <button type="button" data-action="rdyAnswer" data-q="${q.id}" data-val="no" style="${yesNoBtn(val === 'no','no')}">${q.no}</button>
-      </div>
-    </div>`;
-  }).join("");
+function bodyMap(vm, view) {
+  const rects = view === "front" ? FRONT_RECTS : BACK_RECTS;
+  const badges = view === "front" ? FRONT_BADGES : BACK_BADGES;
+  const img = view === "front" ? "assets/skate/body-front.png" : "assets/skate/body-back.png";
+  const pill = view === "front"
+    ? `<span style="background:var(--aqua);color:#fff;font-size:12px;font-weight:900;letter-spacing:0.06em;padding:6px 16px;border-radius:var(--radius-pill);margin-bottom:8px;">FRONT VIEW</span>`
+    : `<span style="background:var(--sea);color:#fff;font-size:12px;font-weight:900;letter-spacing:0.06em;padding:6px 16px;border-radius:var(--radius-pill);margin-bottom:8px;">BACK VIEW</span>`;
   return `
-    <div style="display:flex;flex-wrap:wrap;flex:1;">
-      <div style="width:320px;flex:1 1 280px;background:${GRAD};color:#fff;padding:26px 28px;display:flex;flex-direction:column;">
-        <button type="button" data-action="goToday" style="width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,0.22);border:none;color:#fff;font-size:18px;cursor:pointer;">←</button>
-        <img src="assets/skate/illo-welcome.png" style="width:120px;height:120px;object-fit:contain;margin:20px 0 10px;" alt="" onerror="this.style.display='none'">
-        <div style="font-family:var(--font-display);font-weight:600;font-size:30px;line-height:1.1;">Body Check ✓</div>
-        <div style="font-size:15px;font-weight:700;opacity:0.9;margin-top:8px;line-height:1.4;">A few quick checks before we hit the ice, ${settings.athleteName}!</div>
-      </div>
-      <div style="flex:2 1 420px;padding:24px 26px;display:flex;flex-direction:column;gap:12px;">
-        ${last ? `<button type="button" data-action="rdySameYesterday" style="display:flex;align-items:center;justify-content:center;gap:10px;background:var(--rose-50);border:3px solid var(--rose-300);border-radius:var(--radius-pill);padding:13px 20px;cursor:pointer;font-weight:900;font-size:16px;color:var(--rose-700);min-height:54px;">🔁 Feel the same as yesterday? One tap!</button>` : ""}
-        ${cards}
-        <div style="text-align:center;font-size:14px;font-weight:700;color:var(--ink-soft);padding-top:4px;">No wrong answers — Coach picks the right workout for today.</div>
-        ${r.done ? resultCard(r) : ""}
-      </div>
-    </div>`;
+  <div style="flex:1;background:var(--bg);border:2px solid var(--hairline);border-radius:22px;padding:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+    ${pill}
+    <div style="position:relative;height:480px;width:fit-content;">
+      <img src="${img}" alt="${view === "front" ? "Front" : "Back"} view body map" style="height:100%;width:auto;display:block;pointer-events:none;">
+      ${rects.map(z => `<div style="position:absolute;left:${z.l}%;top:${z.t}%;width:${z.w}%;height:${z.h}%;border-radius:${z.r}px;pointer-events:none;${vm.zoneHighlight["n" + z.n]}"></div>`).join("")}
+      ${badges.map(b => `<div style="position:absolute;left:${b.l}%;top:${b.t}%;transform:translate(-50%,-50%);width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:#fff;pointer-events:none;background:${vm.zoneBadgeBg["n" + b.n]};">${vm.zoneBadge["n" + b.n]}</div>`).join("")}
+      ${rects.map(z => `<button type="button" data-action="rPickZone" data-arg="${z.n}" style="position:absolute;left:${z.l}%;top:${z.t}%;width:${z.w}%;height:${z.h}%;background:none;border:none;padding:0;cursor:pointer;" aria-label="${z.label}"></button>`).join("")}
+    </div>
+  </div>`;
 }
 
-function bodySilhouette() {
-  // Simple gender-neutral skater silhouette (fills the 0..100 box vertically).
+/* Result card (shared by the readiness path and the body-check path). */
+function resultCard(vm, { areaLabel = "" } = {}) {
+  const c = vm.resultCta;
   return `
-    <path d="M50 3 q7 0 7 7 q0 7 -7 8 q-7 -1 -7 -8 q0 -7 7 -7 Z" fill="var(--rose-200)"/>
-    <rect x="46" y="15" width="8" height="6" rx="3" fill="var(--rose-200)"/>
-    <path d="M30 24 q20 -6 40 0 l-3 26 q-2 4 -6 3 l-4 -22 h-8 l-4 22 q-4 1 -6 -3 Z" fill="var(--rose-200)"/>
-    <rect x="14" y="25" width="10" height="26" rx="5" fill="var(--rose-200)"/>
-    <rect x="76" y="25" width="10" height="26" rx="5" fill="var(--rose-200)"/>
-    <path d="M34 50 h32 l-2 46 q-1 3 -6 3 l-4 -34 h-8 l-4 34 q-5 0 -6 -3 Z" fill="var(--rose-200)"/>`;
+  <div style="width:100%;max-width:${areaLabel ? 680 : 720}px;box-sizing:border-box;margin-top:${areaLabel ? "18px" : "40px"};${areaLabel ? "margin-left:auto;margin-right:auto;" : ""}background:var(--surface);border-radius:var(--radius-xl);padding:24px;box-shadow:var(--shadow-lift);border-top:6px solid ${vm.light.color};">
+    ${areaLabel ? `<div style="font-size:12px;font-weight:900;letter-spacing:0.04em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:10px;">${areaLabel}</div>` : ""}
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;">
+      <div style="font-size:56px;line-height:1;">${vm.light.emoji}</div>
+      <div>
+        <div style="font-family:var(--font-display);font-weight:600;font-size:22px;color:${vm.light.color};line-height:1.1;">${vm.light.label}</div>
+        <div style="font-size:15px;font-weight:700;color:var(--ink-soft);margin-top:5px;line-height:1.45;">${vm.resultDesc}</div>
+      </div>
+    </div>
+    <div style="background:var(--surface-2);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:18px;">
+      <div style="font-size:12px;font-weight:900;letter-spacing:0.04em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:9px;">Coach suggests this light — a grown-up can change it:</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        ${vm.lightOptions.map(lo => `
+          <button type="button" data-action="rPickLight" data-arg="${lo.key}" style="${lo.style}">
+            <span style="font-size:18px;line-height:1;">${lo.emoji}</span>
+            <span style="font-weight:800;font-size:13px;letter-spacing:0.02em;">${lo.label}</span>
+          </button>`).join("")}
+      </div>
+    </div>
+    ${vm.needsGrownupConfirm ? `
+    <button type="button" data-action="rGrownupOk" style="width:100%;display:flex;align-items:center;gap:12px;background:${vm.grownupConfirmed ? "var(--mint-wash)" : "var(--surface-2)"};border:2px solid ${vm.grownupConfirmed ? "var(--mint)" : "var(--hairline)"};border-radius:var(--radius-lg);padding:14px 16px;cursor:pointer;text-align:left;margin-bottom:14px;min-height:56px;">
+      <span style="font-size:24px;flex-shrink:0;">${vm.grownupConfirmed ? "☑️" : "⬜"}</span>
+      <span style="font-weight:800;font-size:15px;color:var(--ink);line-height:1.35;">A grown-up said it's OK to do a light day. <span style="color:var(--ink-soft);font-weight:700;">Tap after you've checked in.</span></span>
+    </button>` : ""}
+    <button type="button" ${vm.needsGrownupConfirm && !vm.grownupConfirmed ? "disabled" : `data-action="rResultCta" data-arg="${c.action}"`} style="width:100%;display:flex;align-items:center;justify-content:center;gap:12px;background:${c.color};color:${c.text};border:none;border-radius:var(--radius-pill);padding:18px;font-family:var(--font-display);font-weight:600;font-size:22px;${vm.needsGrownupConfirm && !vm.grownupConfirmed ? "opacity:0.45;cursor:default;" : "cursor:pointer;box-shadow:0 5px 0 " + c.deep + ";"}">
+      <span style="font-size:22px;">${c.icon}</span> ${c.label}
+    </button>
+    ${c.secondaryLabel ? `<button type="button" data-action="rResultSecondary" data-arg="${c.secondaryAction}" style="width:100%;background:none;border:none;cursor:pointer;font-weight:800;font-size:14px;color:var(--ink-soft);text-decoration:underline;padding:12px 6px 2px;min-height:44px;">${c.secondaryLabel}</button>` : ""}
+  </div>`;
 }
 
-function zoneButtons(r) {
-  return ZONES.filter(z => z.view === r.view || z.view === "both").map(z => {
-    const key = z.alias || z.n;
-    const sev = r.zoneSev[key];
-    const sc = sev ? (SEVERITY.find(s => s.level === sev)?.color || "var(--gold)") : "transparent";
-    const fill = sev ? sc : "rgba(194,86,113,0.10)";
-    const border = sev ? sc : "var(--rose-300)";
-    return `
-      <button type="button" data-action="rdyPickZone" data-zone="${key}" aria-label="${z.label}"
-        style="position:absolute;left:${z.x}%;top:${z.y}%;width:${z.w}%;height:${z.h}%;border-radius:14px;
-               background:${fill};border:2px ${sev ? 'solid' : 'dashed'} ${border};cursor:pointer;padding:0;
-               display:flex;align-items:center;justify-content:center;">
-        ${sev ? `<span style="width:22px;height:22px;border-radius:50%;background:${sc};color:#fff;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;">${sev}</span>` : ""}
-      </button>`;
-  }).join("");
+function stepper(vm, gap) {
+  return vm.stepperRows.map(st => `
+    <div style="display:flex;align-items:center;gap:${gap}px;">
+      <span style="${st.circleStyle}">${st.icon}</span>
+      <span style="${st.labelStyle}">${st.label}</span>
+    </div>`).join("");
 }
 
-function bodyMap(r) {
-  return `
-    <div style="flex:1;min-width:240px;background:var(--bg);border:2px solid var(--hairline);border-radius:22px;padding:14px;display:flex;flex-direction:column;align-items:center;">
-      <span style="background:var(--rose-500);color:#fff;font-size:12px;font-weight:900;letter-spacing:0.06em;padding:6px 16px;border-radius:var(--radius-pill);margin-bottom:10px;">${r.view === 'front' ? 'FRONT VIEW' : 'BACK VIEW'}</span>
-      <div style="position:relative;width:200px;height:440px;">
-        <img src="assets/skate/body-${r.view}.png" alt="${r.view} body map" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none;"
-          onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="display:none;position:absolute;inset:0;width:100%;height:100%;">${bodySilhouette()}</svg>
-        ${zoneButtons(r)}
-      </div>
-      <div style="display:flex;gap:8px;margin-top:12px;">
-        <button type="button" data-action="rdyView" data-view="front" style="padding:8px 16px;border-radius:var(--radius-pill);border:2px solid var(--rose-300);cursor:pointer;font-weight:900;font-family:inherit;background:${r.view==='front'?'var(--rose-500)':'var(--surface)'};color:${r.view==='front'?'#fff':'var(--rose-600)'};">Front</button>
-        <button type="button" data-action="rdyView" data-view="back" style="padding:8px 16px;border-radius:var(--radius-pill);border:2px solid var(--rose-300);cursor:pointer;font-weight:900;font-family:inherit;background:${r.view==='back'?'var(--rose-500)':'var(--surface)'};color:${r.view==='back'?'#fff':'var(--rose-600)'};">Back</button>
-      </div>
-    </div>`;
-}
+export function readinessScreen(vm) {
+  const name = escapeHtml(vm.athleteName);
+  const backBtn = `<button type="button" data-action="rExit" style="width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,0.22);display:flex;align-items:center;justify-content:center;font-size:18px;border:none;cursor:pointer;color:#fff;flex-shrink:0;" aria-label="Back to Today">←</button>`;
 
-function severityPopup(r) {
-  if (!r.pendingZone) return "";
-  const z = ZONES.find(zz => (zz.alias || zz.n) === r.pendingZone);
-  const opts = SEVERITY.map(s => `
-    <button type="button" data-action="rdySetSev" data-zone="${r.pendingZone}" data-sev="${s.level}"
-      style="display:flex;align-items:center;gap:12px;text-align:left;background:var(--surface);border:2px solid var(--hairline);border-radius:var(--radius-md);padding:12px 14px;cursor:pointer;font-family:inherit;">
-      <span style="font-size:26px;">${s.emoji}</span>
-      <span style="flex:1;"><span style="display:block;font-weight:900;color:${s.color};">${s.label}</span>
-      <span style="font-size:13px;font-weight:700;color:var(--ink-soft);">${s.desc}</span></span>
-    </button>`).join("");
-  return `
-    <div data-action="rdyClosePopup" style="position:absolute;inset:0;z-index:20;background:rgba(142,52,83,0.5);display:flex;align-items:center;justify-content:center;padding:24px;">
-      <div data-stop="1" style="background:var(--surface);border-radius:var(--radius-xl);box-shadow:var(--shadow-float);max-width:440px;width:100%;padding:22px;">
-        <div style="font-family:var(--font-display);font-weight:600;font-size:22px;color:var(--ink);margin-bottom:6px;">How does your <span style="color:var(--rose-600);">${z ? z.label : "body"}</span> feel?</div>
-        <div style="font-size:13px;font-weight:700;color:var(--ink-soft);margin-bottom:14px;">Pick the one that matches best.</div>
-        <div style="display:flex;flex-direction:column;gap:8px;">${opts}</div>
-        <button type="button" data-action="rdySetSev" data-zone="${r.pendingZone}" data-sev="0" style="margin-top:12px;width:100%;background:none;border:none;color:var(--ink-soft);font-weight:800;cursor:pointer;font-family:inherit;">Actually, it's fine — clear this spot</button>
-      </div>
-    </div>`;
-}
+  const questionsStep = vm.isQuestionsStep ? `
+    ${vm.isNarrow ? `
+      <div style="background:linear-gradient(165deg,var(--aqua-light) 0%,var(--aqua) 60%,var(--aqua-deep) 100%);color:#fff;padding:18px 20px 16px;display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          ${backBtn}
+          <img src="assets/skate/hero-home.png" style="width:56px;height:56px;object-fit:contain;flex-shrink:0;" alt="">
+          <div style="min-width:0;">
+            <div style="font-family:var(--font-display);font-weight:600;font-size:24px;line-height:1.1;display:flex;align-items:center;gap:8px;">Body Check <span style="width:24px;height:24px;border-radius:50%;background:var(--mint);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;"><span style="color:#fff;font-size:14px;font-weight:900;">✓</span></span></div>
+            <div style="font-size:13px;font-weight:700;opacity:0.9;margin-top:3px;line-height:1.3;">A few quick checks before we hit the ice, ${name}!</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">${stepper(vm, 7)}</div>
+      </div>` : `
+      <div style="width:340px;flex-shrink:0;background:linear-gradient(165deg,var(--aqua-light) 0%,var(--aqua) 60%,var(--aqua-deep) 100%);color:#fff;display:flex;flex-direction:column;padding:26px 28px;">
+        ${backBtn}
+        <img src="assets/skate/hero-home.png" style="width:140px;height:140px;object-fit:contain;margin:22px 0 10px;" alt="">
+        <div style="font-family:var(--font-display);font-weight:600;font-size:32px;line-height:1.1;display:flex;align-items:center;gap:12px;">Body Check <span style="width:30px;height:30px;border-radius:50%;background:var(--mint);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;"><span style="color:#fff;font-size:17px;font-weight:900;">✓</span></span></div>
+        <div style="font-size:15px;font-weight:700;opacity:0.9;margin-top:8px;line-height:1.4;">A few quick checks before we hit the ice, ${name}!</div>
+        <div style="margin-top:26px;display:flex;flex-direction:column;gap:12px;">${stepper(vm, 10)}</div>
+        <div style="flex:1;"></div>
+      </div>`}
 
-function resultCard(r) {
-  const L = LIGHTS[r.light];
-  const rounds = LIGHT_ROUNDS[r.light];
-  const worstSev = r.zoneSev ? Math.max(0, ...Object.values(r.zoneSev)) : 0;
-  const isStop = r.light === "recovery" && r.resultSource === "bodycheck" && worstSev === 4;
-  // A "changed movement" (severity 3) body flag asks for a grown-up OK before starting.
-  const needGrownup = r.resultSource === "bodycheck" && worstSev === 3;
-  const lightOpts = ["green", "yellow", "red", "recovery"].map(k => {
-    const on = r.light === k;
-    return `<button type="button" data-action="rdyOverride" data-light="${k}"
-      style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--radius-pill);border:2px solid ${on ? LIGHTS[k].color : 'var(--hairline)'};cursor:pointer;font-family:inherit;font-weight:800;font-size:13px;background:${on ? LIGHTS[k].color : 'var(--surface)'};color:${on ? '#fff' : 'var(--ink)'};">
-      <span>${LIGHTS[k].emoji}</span>${LIGHTS[k].label.split(" — ")[0]}</button>`;
-  }).join("");
-  return `
-    <div style="margin-top:26px;background:var(--surface);border-radius:var(--radius-xl);padding:22px;box-shadow:var(--shadow-lift);border-top:6px solid ${L.color};">
-      <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px;">
-        <div style="font-size:52px;line-height:1;">${L.emoji}</div>
-        <div><div style="font-family:var(--font-display);font-weight:600;font-size:22px;color:${L.color};">${L.label}</div>
-        <div style="font-size:14px;font-weight:700;color:var(--ink-soft);margin-top:4px;line-height:1.45;">${L.desc}</div></div>
+    <div style="${vm.bodyContentStyle}">
+      <div style="display:flex;flex-direction:column;gap:12px;width:100%;max-width:720px;">
+        ${vm.hasYesterday ? `
+          <button type="button" data-action="rSameYesterday" style="display:flex;align-items:center;justify-content:center;gap:10px;background:var(--aqua-wash);border:3px solid var(--aqua);border-radius:var(--radius-pill);padding:13px 20px;cursor:pointer;font-weight:900;font-size:16px;color:var(--aqua-ink);min-height:56px;">
+            <span style="font-size:20px;">🔁</span> Feel the same as yesterday? One tap!
+          </button>` : ""}
+        ${vm.questions.map(q => `
+          <div style="background:var(--bg);border:2px solid var(--hairline);border-radius:var(--radius-lg);padding:16px 18px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 16px;">
+            <div style="flex:1 1 220px;font-weight:700;font-size:17px;line-height:1.4;color:var(--ink);">${q.text}</div>
+            <div style="display:flex;gap:8px;flex-shrink:0;">
+              <button type="button" data-action="rAnswer" data-arg="${q.id}|yes" style="${q.yesStyle}">${q.yesLabel}</button>
+              <button type="button" data-action="rAnswer" data-arg="${q.id}|no" style="${q.noStyle}">${q.noLabel}</button>
+            </div>
+          </div>`).join("")}
+        <div style="text-align:center;font-family:var(--font-hand);font-size:20px;font-weight:700;color:var(--ink-soft);padding-top:4px;">No wrong answers — Coach picks the right workout for today.</div>
       </div>
-      <div style="background:var(--surface-2);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:16px;">
-        <div class="micro-label" style="margin-bottom:9px;">Coach suggests this light — a grown-up can change it${r.overridden ? " (changed)" : ""}:</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">${lightOpts}</div>
-      </div>
-      ${needGrownup ? `<div style="display:flex;align-items:center;gap:10px;background:var(--stop-wash);border:2px solid var(--stop);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:16px;">
-        <span style="font-size:22px;">🗣️</span>
-        <div style="font-size:14px;font-weight:800;color:var(--stop-ink);line-height:1.4;">That spot changed how you move — check with a coach or parent <b>before</b> you start. If they say OK, keep it to this easy day.</div></div>` : ""}
-      ${isStop
-        ? `<button type="button" data-action="goToday" style="width:100%;border:none;border-radius:var(--radius-pill);padding:18px;background:var(--stop);color:#fff;font-family:var(--font-display);font-weight:600;font-size:20px;cursor:pointer;box-shadow:0 5px 0 var(--stop-deep);">🛑 Stop — back to Today</button>`
-        : `<button type="button" data-action="rdyStart" style="width:100%;border:none;border-radius:var(--radius-pill);padding:18px;background:var(--gold);color:var(--sun-ink);font-family:var(--font-display);font-weight:600;font-size:21px;cursor:pointer;box-shadow:0 5px 0 var(--sun-deep);">${rounds === 0 ? "🧊 Start Recovery" : `💪 Start Training! · ${rounds} round${rounds > 1 ? "s" : ""}`}</button>`}
-    </div>`;
-}
+      ${vm.showInlineReadinessResult ? resultCard(vm) : ""}
+    </div>` : "";
 
-function bodyAreaStep(r) {
-  const anyRated = Object.keys(r.zoneSev).length > 0;
-  return `
-    <div style="position:relative;flex:1;display:flex;flex-direction:column;padding:24px 26px;box-sizing:border-box;">
-      <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:14px;">
-        <button type="button" data-action="rdyBack" style="width:46px;height:46px;border-radius:50%;background:var(--bg);border:2px solid var(--hairline);font-size:20px;color:var(--rose-700);cursor:pointer;flex-shrink:0;">←</button>
-        <div style="flex:1;text-align:center;">
-          <div style="font-family:var(--font-display);font-weight:600;font-size:28px;color:var(--ink);line-height:1.1;">Where does it feel different?</div>
-          <div style="font-size:14px;font-weight:700;color:var(--ink-soft);margin-top:6px;">Tap each spot that feels off — Coach will ask how it feels. Tap again to change it.</div>
+  const bodyStep = vm.showBodyArea ? `
+    <div style="width:100%;display:flex;flex-direction:column;padding:24px 30px;box-sizing:border-box;">
+      <div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px 16px;margin-bottom:12px;">
+        <button type="button" data-action="rGoBack" style="width:46px;height:46px;border-radius:50%;background:var(--bg);border:2px solid var(--hairline);display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--aqua-ink);cursor:pointer;flex-shrink:0;" aria-label="Back">←</button>
+        <div style="text-align:center;flex:1;">
+          <div style="font-family:var(--font-display);font-weight:600;font-size:34px;color:var(--ink);line-height:1.1;">Where does it feel different?</div>
+          <div style="font-size:15px;font-weight:700;color:var(--ink-soft);margin-top:6px;">Tap each spot that feels off — Coach will ask how it feels. Tap again to change it.</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;background:var(--sun-wash);border:2px solid var(--sun);border-radius:18px;padding:10px 14px;flex-shrink:0;max-width:180px;">
+          <span style="font-size:18px;">⭐</span>
+          <span style="font-size:12px;font-weight:800;color:var(--sun-ink);line-height:1.3;">If unsure, ask a coach or parent.</span>
         </div>
       </div>
-      <div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;">${bodyMap(r)}</div>
-      ${anyRated ? resultCard(r) : `<div style="text-align:center;font-size:14px;font-weight:800;color:var(--ink-soft);margin-top:18px;">Tap a sore spot to rate it, or ${""}<button type="button" data-action="rdyAllFine" style="background:none;border:none;color:var(--rose-600);font-weight:900;text-decoration:underline;cursor:pointer;font-family:inherit;font-size:14px;">nothing hurts — I'm good</button>.</div>`}
-      ${severityPopup(r)}
-    </div>`;
-}
 
-export function renderReadiness(state) {
-  const r = state.readiness;
-  const settings = loadSettings();
-  const body = r.step === "bodyArea" ? bodyAreaStep(r) : questionsStep(r, settings);
+      <div style="${vm.mapsRow}">
+        ${bodyMap(vm, "front")}
+        ${bodyMap(vm, "back")}
+        <div style="${vm.legendStyle}">
+          ${vm.legendRows.map(lg => lg.isHeader
+            ? `<div style="font-size:11px;font-weight:900;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-faint);padding:10px 4px 2px;">${lg.label}</div>`
+            : `<button type="button" data-action="rPickZone" data-arg="${lg.num}" style="${lg.rowStyle}">
+                 <span style="${lg.badgeStyle}">${lg.num}</span>
+                 <span style="font-size:14px;font-weight:800;color:var(--ink);text-align:left;line-height:1.2;">${lg.label}</span>
+               </button>`).join("")}
+        </div>
+      </div>
+
+      ${vm.noZonesYet ? `<div style="text-align:center;font-family:var(--font-hand);font-size:22px;font-weight:700;color:var(--ink-soft);margin-top:16px;">Tap the spot that feels different — Coach will ask how it feels.</div>` : ""}
+      ${vm.showInlineBodyResult ? resultCard(vm, { areaLabel: vm.areaLabel }) : ""}
+
+      ${vm.showZonePopup ? `
+        <div data-action="rClosePopup" style="position:fixed;inset:0;background:rgba(20,59,74,0.45);z-index:50;display:flex;align-items:center;justify-content:center;">
+          <div data-stop-propagation="1" style="background:var(--surface);border-radius:22px;padding:22px 24px;width:420px;max-width:90vw;box-sizing:border-box;box-shadow:var(--shadow-pop);display:flex;flex-direction:column;gap:10px;">
+            <div style="font-family:var(--font-display);font-weight:600;font-size:24px;color:var(--ink);">${vm.pendingZoneLabel} — how does it feel?</div>
+            ${vm.popupOptions.map(po => `
+              <button type="button" data-action="rSetZoneSev" data-arg="${vm.pendingZone}|${po.level}" style="display:flex;align-items:center;gap:12px;background:var(--bg);border:3px solid ${po.color};border-radius:var(--radius-lg);padding:12px 14px;cursor:pointer;text-align:left;min-height:60px;">
+                <span style="font-size:28px;line-height:1;flex-shrink:0;">${po.emoji}</span>
+                <div>
+                  <div style="font-weight:900;font-size:16px;color:${po.color};">${po.label}</div>
+                  <div style="font-size:13px;font-weight:700;color:var(--ink-soft);line-height:1.3;margin-top:2px;">${po.desc}</div>
+                </div>
+              </button>`).join("")}
+            ${vm.popupHasMark ? `<button type="button" data-action="rSetZoneSev" data-arg="${vm.pendingZone}|0" style="display:flex;align-items:center;justify-content:center;gap:8px;background:var(--mint-wash);border:2px solid var(--mint);border-radius:var(--radius-pill);padding:12px;cursor:pointer;font-weight:900;font-size:14px;color:var(--mint-ink);min-height:48px;">✨ Feels fine now — remove mark</button>` : ""}
+            <button type="button" data-action="rClosePopup" style="background:none;border:none;cursor:pointer;font-weight:800;font-size:14px;color:var(--ink-soft);text-decoration:underline;padding:6px;">Cancel</button>
+          </div>
+        </div>` : ""}
+    </div>` : "";
+
   return `
-  <div style="width:100%;max-width:1242px;margin:0 auto;box-sizing:border-box;padding:18px;">
-    <div style="display:flex;background:var(--surface);border-radius:30px;box-shadow:0 18px 44px rgba(142,52,83,0.16);overflow:hidden;min-height:640px;">
-      ${body}
-    </div>
+  <div style="display:flex;flex-direction:${vm.cardDir};background:var(--surface);border-radius:30px;box-shadow:0 18px 44px rgba(20,59,74,0.16);overflow:hidden;min-height:800px;">
+    ${questionsStep}
+    ${bodyStep}
   </div>`;
 }

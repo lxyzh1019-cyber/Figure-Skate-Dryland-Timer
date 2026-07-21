@@ -1,273 +1,355 @@
-/* ============================================================================
-   main.js — app state, render() dispatcher, event delegation, boot.
-   V2 entry point. Screens not yet rebuilt render a graceful placeholder so the
-   app never crashes while the rebuild proceeds phase by phase.
-   ============================================================================ */
-import { LIGHT_ROUNDS, DAYS } from "./data.js";
-import { seedJourneyOnce, saveReadiness, loadLastCheck, loadSettings, patchLastSession } from "./store.js";
-import { renderToday } from "./screens/today.js";
-import { todayKeyNow } from "./vm/today.js";
-import { rail, bottomNav, setNavWide } from "./screens/rail.js";
-import {
-  renderReadiness, freshReadiness, lightFromAnswers, lightFromZones, LIGHTS
-} from "./screens/readiness.js";
-import { Session } from "./engine.js";
-import { renderSession, updateTimer } from "./screens/session.js";
-import { renderPrizeDraw, freshPrizeDraw } from "./screens/prizedraw.js";
-import { renderQuizDeck, freshQuiz } from "./screens/quizdeck.js";
-import { claimPrize, recordQuizResult, redeemPrize, saveSettings, loadSessions } from "./store.js";
-import { renderProgress } from "./screens/progress.js";
-import { renderGrownup } from "./screens/grownup.js";
-import { getWeather } from "./weather.js";
+/* ============================================================
+   MAIN — app state, render dispatcher, event delegation, boot.
+   Screens are innerHTML render functions in js/screens/*; their
+   dynamic values come from pure view-model builders in js/vm/*.
+   Buttons carry data-action / data-arg attributes handled by one
+   delegated click listener below.
+   ============================================================ */
 
-const state = {
-  nav: "today",          // today | progress | grownup | session | readiness | quizdeck | prizedraw
-  selectedDay: null,     // null → today
-  isWide: true,
-  readiness: freshReadiness(),
-  pendingSession: null,  // { dayKey, light, rounds }
-  session: null,         // live Session engine instance
-  weather: null,
-  __mood: null,
+import { migrate, settings, updateSettings, saveReadiness, addXp, patchLastSession, pendingDrawCount } from "./store.js";
+import { edmontonDayKey } from "./util.js";
+import { buildTodayVM, journeyPathScrollIntoView } from "./vm/today.js";
+import { todayWide, todayNarrow } from "./screens/today.js";
+import { page, shellWithRail, bottomNav } from "./screens/shell.js";
+import { newReadinessFlow, answerQuestion, sameAsYesterday, setZoneSev, resetBodyCheck, confirmGrownup, buildReadinessVM } from "./vm/readiness.js";
+import { readinessScreen } from "./screens/readiness.js";
+import * as engine from "./engine.js";
+import { buildSessionVM, sessionQuizFor } from "./vm/session.js";
+import { sessionScreen, updateSessionTick } from "./screens/session.js";
+import { buildQuizDeck, answerQuizDeck, finishQuizDeck, quizDeckHtml, newPrizeDraw, claimPrize, prizeDrawHtml } from "./screens/overlays.js";
+import { buildProgressVM, toggleRedeem } from "./vm/progress.js";
+import { progressScreen } from "./screens/progress.js";
+import { buildGrownupVM, exportCsv } from "./vm/grownup.js";
+import { grownupScreen } from "./screens/grownup.js";
+import { loadGate, saveGate, loadLadderRungs, saveLadderRungs, loadTracker, saveTracker, getCurrentTrackerWeek, setEngagementPick } from "./store.js";
+
+export const state = {
+  nav: "today",                 // 'today' | 'progress' | 'grownup'
+  grownupTab: "overview",       // 'overview' | 'analytics' | 'library' | 'settings' | 'coaching'
+  gsScope: "week",
+  logScope: "week",
+  expanded: {},                 // day-card block expansion
+  selectedDay: null,            // monday..sunday
+  practiceMode: false,
+  inSession: false,
+  readiness: null,              // active readiness-check flow state (null = not in flow)
+  pendingSession: null,         // { light, dayKey, mini?, practice? } — readiness → session handoff
+  quizDeck: null,
   prizeDraw: null,
-  quiz: null,
-  grownupTab: "overview",
-  libDetail: null,
+  detailOverlay: false,
+  detailEx: null,
+  weather: null,                // { icon, temp, caption } once fetched
+  isWide: true
 };
 
-const REST_LIMITS = { exerciseRestSeconds: [0, 30], roundRestSeconds: [5, 60], sectionRestSeconds: [5, 90] };
+const root = document.getElementById("app");
 
-function downloadCsv() {
-  const rows = [["date", "day", "light", "minutes", "completedFully", "endedEarly", "pain", "mood", "xpEarned"]];
-  loadSessions().forEach(s => rows.push([
-    s.isoDate || "", s.dayKey || "", s.light || "", Math.round((s.durationSecs || 0) / 60),
-    s.completedFully ? "yes" : "no", s.endedEarly ? "yes" : "no", s.pain ? "yes" : "no", s.mood || "", s.xpEarned || 0
-  ]));
-  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = "skate-sessions.csv"; document.body.appendChild(a); a.click();
-  a.remove(); URL.revokeObjectURL(url);
+function computeIsWide() {
+  return window.innerWidth >= 900 && window.innerWidth > window.innerHeight;
 }
 
-function computeWide() {
-  state.isWide = window.innerWidth >= 900 && window.innerWidth > window.innerHeight;
-}
-function sessionDayKey() { return state.selectedDay || todayKeyNow(); }
+/* ---- screen renderers (filled in phase by phase) ---- */
 
-/* Placeholder for screens still being rebuilt (keeps navigation working). */
-function renderPlaceholder(title, note) {
-  return `
-  <div style="width:100%;max-width:1242px;margin:0 auto;box-sizing:border-box;padding:18px;">
-    <div style="display:flex;flex-wrap:wrap;background:var(--surface);border-radius:30px;box-shadow:0 18px 44px rgba(142,52,83,0.16);overflow:hidden;min-height:520px;">
-      ${rail(state.nav)}
-      <div style="flex:1;min-width:280px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:40px;text-align:center;">
-        <img src="assets/skate/illo-nice-work.png" alt="" style="height:150px;object-fit:contain;" onerror="this.style.display='none'">
-        <div style="font-family:var(--font-display);font-weight:600;font-size:30px;color:var(--rose-700);">${title}</div>
-        <div style="font-size:15px;font-weight:700;color:var(--ink-soft);max-width:420px;line-height:1.5;">${note}</div>
-        <button type="button" data-action="goToday" class="btn btn-primary" style="padding:14px 28px;font-size:16px;">← Back to Today</button>
-      </div>
-    </div>
-  </div>`;
+function renderToday() {
+  const vm = buildTodayVM(state);
+  const inner = state.isWide
+    ? shellWithRail(vm, todayWide(vm))
+    : todayNarrow(vm) + bottomNav(vm);
+  root.innerHTML = page(inner);
+  journeyPathScrollIntoView(root);
 }
 
-const RAIL_SCREENS = new Set(["today", "progress", "grownup"]);
+function renderReadiness() {
+  const vm = buildReadinessVM(state.readiness, state.isWide);
+  root.innerHTML = page(readinessScreen(vm));
+}
 
-function render() {
-  const app = document.getElementById("app");
-  setNavWide(state.isWide);
-  let html;
-  switch (state.nav) {
-    case "today":     html = renderToday(state); break;
-    case "readiness": html = renderReadiness(state); break;
-    case "session":   html = state.session ? renderSession(state) : renderToday(state); break;
-    case "prizedraw": html = state.prizeDraw ? renderPrizeDraw(state) : renderToday(state); break;
-    case "quizdeck":  html = state.quiz ? renderQuizDeck(state) : renderToday(state); break;
-    case "progress":  html = renderProgress(state); break;
-    case "grownup":   html = renderGrownup(state); break;
-    default:          html = renderPlaceholder("Coming soon", "This screen is part of a later build phase.");
+function renderSession() {
+  const vm = buildSessionVM(state);
+  root.innerHTML = page(sessionScreen(vm));
+}
+
+engine.onSessionUpdate(kind => {
+  if (!state.inSession) return;
+  if (kind === "tick") updateSessionTick(buildSessionVM(state));
+  else renderSession();
+});
+
+function overlaysHtml() {
+  let html = "";
+  if (state.quizDeck) html += quizDeckHtml(state.quizDeck);
+  if (state.prizeDraw) html += prizeDrawHtml(state.prizeDraw);
+  return html;
+}
+
+export function render() {
+  state.isWide = computeIsWide();
+  if (state.readiness) { renderReadiness(); }
+  else if (state.inSession) { renderSession(); }
+  else if (state.nav === "progress") {
+    const railVm = buildTodayVM(state);
+    const pvm = buildProgressVM(state);
+    root.innerHTML = page(state.isWide
+      ? shellWithRail(railVm, progressScreen(pvm))
+      : `<div style="display:flex;background:var(--surface);border-radius:24px;box-shadow:0 14px 34px rgba(20,59,74,0.16);overflow:hidden;">${progressScreen(pvm)}</div>` + bottomNav(railVm));
   }
-  // Narrow: use the fixed bottom-nav on the three primary screens.
-  const showBottom = !state.isWide && RAIL_SCREENS.has(state.nav);
-  if (showBottom) html += bottomNav(state.nav);
-  document.body.classList.toggle("has-bottom-nav", showBottom);
-  app.innerHTML = html;
-}
-
-/* Instantiate + run the session engine for the pending readiness result. */
-function startEngine() {
-  const ps = state.pendingSession;
-  if (!ps) return;
-  state.__mood = null;
-  state.session = new Session({
-    dayKey: ps.dayKey, light: ps.light, settings: loadSettings(),
-    onChange: () => { if (state.nav === "session") render(); },
-    onTick: (rem, tot) => updateTimer(rem, tot),
-    onComplete: () => { if (state.nav === "session") render(); },
-  });
-  state.nav = "session";
-  render();
-  state.session.run();
-}
-function clearSession() {
-  if (state.session && !state.session.ended) state.session.endEarly();
-  state.session = null; state.__mood = null; state.pendingSession = null;
-}
-
-/* ---- readiness helpers ---- */
-function readinessFinishFromAnswers() {
-  const a = state.readiness.answers;
-  const need = ["q_pain", "q_sleep", "q_light", "q_ready"];
-  if (need.every(k => a[k] != null) && a.q_pain === "yes") {
-    state.readiness.light = lightFromAnswers(a);
-    state.readiness.done = true;
-    state.readiness.resultSource = "readiness";
+  else if (state.nav === "grownup") {
+    const railVm = buildTodayVM(state);
+    const gvm = buildGrownupVM(state);
+    root.innerHTML = page(state.isWide
+      ? shellWithRail(railVm, grownupScreen(gvm))
+      : `<div style="display:flex;background:var(--surface);border-radius:24px;box-shadow:0 14px 34px rgba(20,59,74,0.16);overflow:hidden;">${grownupScreen(gvm)}</div>` + bottomNav(railVm));
   }
+  else { renderToday(); }
+  const ov = overlaysHtml();
+  if (ov) root.insertAdjacentHTML("beforeend", ov);
 }
 
-/* ---- event delegation: one listener resolves data-action ---- */
-const ACTIONS = {
-  goToday:      () => { clearSession(); state.nav = "today"; state.selectedDay = null; render(); },
-  goProgress:   () => { state.nav = "progress"; render(); },
-  goGrownup:    () => { state.nav = "grownup"; render(); },
-  selectDay:    (el) => { state.selectedDay = el.getAttribute("data-day"); render(); },
-  backToToday:  () => { state.selectedDay = null; render(); },
-  startSession: () => { state.readiness = freshReadiness(); state.nav = "readiness"; render(); },
-  startQuizDeck:() => { state.quiz = freshQuiz(8); state.nav = "quizdeck"; render(); },
-  exitQuizDeck: () => { state.quiz = null; state.nav = "today"; render(); },
-  openPrizeDraw:() => { state.prizeDraw = freshPrizeDraw(); state.nav = "prizedraw"; render(); },
+/* ---- delegated actions ---- */
 
-  // ---- quiz deck ----
-  quizPick: (el) => {
-    const q = state.quiz; if (!q || q.answered) return;
-    q.picked = +el.getAttribute("data-i");
-    q.answered = true;
-    const item = q.items[q.idx];
-    const ok = q.picked === item.correct;
-    if (ok) q.score++;
-    (q.results = q.results || []).push({ move: item.move, ok });
+const actions = {
+  nav(arg) { state.nav = arg; render(); },
+  selectDay(arg) { state.selectedDay = arg; state.expanded = {}; render(); },
+  toggleBlock(arg) { state.expanded[arg] = !state.expanded[arg]; render(); },
+  toggleCoachVoice() { updateSettings({ coachVoiceOn: !settings.coachVoiceOn }); render(); },
+  togglePractice() { state.practiceMode = !state.practiceMode; render(); },
+  goSession(arg) {
+    state.readiness = newReadinessFlow(arg || state.selectedDay || edmontonDayKey(), state.practiceMode);
     render();
   },
-  quizNext: () => {
-    const q = state.quiz; if (!q) return;
-    q.idx++; q.answered = false; q.picked = null;
-    if (q.idx >= q.items.length && !q.logged) { recordQuizResult(q.score, q.items.length, q.results || []); q.logged = true; }
+  goSessionPractice(arg) {
+    state.readiness = newReadinessFlow(arg || state.selectedDay || edmontonDayKey(), true);
     render();
   },
-
-  // ---- prize draw ----
-  prizeReveal: (el) => {
-    const pd = state.prizeDraw; if (!pd || pd.revealed != null) return;
-    pd.revealed = +el.getAttribute("data-i");
-    claimPrize(pd.options[pd.revealed]);
+  startMini(arg) {
+    startPendingSession({ light: "green", dayKey: arg || state.selectedDay, mini: true, practice: state.practiceMode });
+  },
+  startQuizDeck() {
+    state.quizDeck = buildQuizDeck(8);
     render();
   },
-  prizeRedeem: (el) => { redeemPrize(+el.getAttribute("data-i")); render(); },
-
-  // ---- grown-up zone ----
-  guTab:         (el) => { state.grownupTab = el.getAttribute("data-tab"); state.libDetail = null; render(); },
-  guToggle:      (el) => { const k = el.getAttribute("data-key"); const s = loadSettings(); saveSettings({ [k]: !s[k] }); render(); },
-  guVoiceStyle:  (el) => { saveSettings({ voiceStyle: el.getAttribute("data-style") }); render(); },
-  guStep:        (el) => {
-    const k = el.getAttribute("data-key"), delta = +el.getAttribute("data-delta");
-    const [lo, hi] = REST_LIMITS[k] || [0, 120];
-    const cur = loadSettings()[k] || 0;
-    saveSettings({ [k]: Math.max(lo, Math.min(hi, cur + delta)) });
+  answerQuizDeck(arg) {
+    answerQuizDeck(state.quizDeck, Number(arg));
     render();
   },
-  guPrizeRemove: (el) => { const i = +el.getAttribute("data-i"); const pool = [...(loadSettings().prizePool || [])]; pool.splice(i, 1); saveSettings({ prizePool: pool }); render(); },
-  guPrizeAdd:    () => {
-    const inp = document.querySelector("[data-set-prize]");
-    const v = inp && inp.value.trim();
-    if (!v) return;
-    saveSettings({ prizePool: [...(loadSettings().prizePool || []), v] }); render();
-  },
-  guExportCsv:   () => { try { downloadCsv(); } catch (e) { console.warn("csv export failed", e); } },
-  guLibOpen:     (el) => { state.libDetail = el.getAttribute("data-name"); render(); },
-  guLibClose:    (el, e) => { if (e.target.closest("[data-stop]")) return; state.libDetail = null; render(); },
-
-  // ---- readiness ----
-  rdyAnswer: (el) => {
-    const q = el.getAttribute("data-q"), val = el.getAttribute("data-val");
-    state.readiness.answers[q] = val;
-    if (q === "q_pain" && val === "no") { state.readiness.step = "bodyArea"; state.readiness.done = false; }
-    else readinessFinishFromAnswers();
+  nextQuizDeck() {
+    const qd = state.quizDeck;
+    if (!qd) return;
+    if (qd.idx >= qd.qs.length - 1) { qd.done = true; finishQuizDeck(qd); }
+    else qd.idx += 1;
     render();
   },
-  rdySameYesterday: () => {
-    const prev = loadLastCheck();
-    if (!prev) return;
-    if (prev.answers && prev.answers.q_pain === "no") {
-      // soreness must be re-checked today, not silently reused
-      state.readiness = { ...freshReadiness(), answers: { ...prev.answers, q_pain: "no" }, step: "bodyArea" };
-    } else {
-      state.readiness = { ...freshReadiness(), answers: { ...(prev.answers || {}) }, light: prev.light || "green", done: true };
+  exitQuizDeck() { state.quizDeck = null; render(); },
+  pickPrize(arg) {
+    if (state.prizeDraw && state.prizeDraw.picked == null) { state.prizeDraw.picked = Number(arg); render(); }
+  },
+  claimPrize() {
+    claimPrize(state.prizeDraw);
+    state.prizeDraw = null;
+    // One prize per level gained: once every pending draw is claimed, retire
+    // the "Pick your prize" buttons so the draw can't be re-farmed.
+    if (pendingDrawCount() < 1) {
+      engine.sess.leveledUp = false;
+      if (state.quizDeck) state.quizDeck.leveledUp = false;
     }
     render();
   },
-  rdyView:      (el) => { state.readiness.view = el.getAttribute("data-view"); render(); },
-  rdyBack:      () => { state.readiness.step = "questions"; state.readiness.pendingZone = null; render(); },
-  rdyPickZone:  (el) => { state.readiness.pendingZone = el.getAttribute("data-zone"); render(); },
-  rdyClosePopup:(el, e) => { if (e.target.closest("[data-stop]")) return; state.readiness.pendingZone = null; render(); },
-  rdySetSev:    (el) => {
-    const zone = el.getAttribute("data-zone"), sev = +el.getAttribute("data-sev");
-    const zs = state.readiness.zoneSev;
-    if (sev) zs[zone] = sev; else delete zs[zone];
-    const { worst, light } = lightFromZones(zs);
-    state.readiness.light = light;
-    state.readiness.resultSource = worst ? "bodycheck" : "readiness";
-    state.readiness.pendingZone = null;
-    state.readiness.done = Object.keys(zs).length > 0;
+
+  /* ---- readiness flow ---- */
+  rAnswer(arg) {
+    const [id, val] = arg.split("|");
+    answerQuestion(state.readiness, id, val);
     render();
   },
-  rdyAllFine:   () => { state.readiness.light = "green"; state.readiness.done = true; state.readiness.resultSource = "readiness"; render(); },
-  rdyOverride:  (el) => { state.readiness.light = el.getAttribute("data-light"); state.readiness.overridden = true; render(); },
-  rdyStart:     () => {
-    const r = state.readiness, dayKey = sessionDayKey();
-    saveReadiness({ answers: r.answers, zoneSev: r.zoneSev, light: r.light, overridden: r.overridden, resultSource: r.resultSource });
-    state.pendingSession = { dayKey, light: r.light, rounds: LIGHT_ROUNDS[r.light] };
-    startEngine();
+  rSameYesterday() { sameAsYesterday(state.readiness); render(); },
+  rPickZone(arg) { state.readiness.pendingZone = Number(arg); render(); },
+  rSetZoneSev(arg) {
+    const [num, level] = arg.split("|").map(Number);
+    setZoneSev(state.readiness, num, level);
+    render();
+  },
+  rClosePopup() { state.readiness.pendingZone = null; render(); },
+  rGoBack() { state.readiness.step = "questions"; render(); },
+  rGrownupOk() { confirmGrownup(state.readiness); render(); },
+  rPickLight(arg) { state.readiness.light = arg; state.readiness.overridden = true; render(); },
+  rExit() { state.readiness = null; render(); },
+  rResultCta(arg) {
+    const r = state.readiness;
+    if (arg === "back") { state.readiness = null; render(); return; }
+    if (arg === "retry") { resetBodyCheck(r); render(); return; }
+    // continue: persist the check (try-it runs don't overwrite the real day's
+    // check), then hand the resolved light to the session
+    if (!r.practice) saveReadiness({ answers: r.answers, zoneSev: r.zoneSev, light: r.light, overridden: r.overridden });
+    startPendingSession({ light: r.light || "green", dayKey: r.dayKey, practice: r.practice });
+  },
+  rResultSecondary(arg) {
+    if (arg === "retry") { resetBodyCheck(state.readiness); render(); }
+    else { state.readiness = null; render(); }
   },
 
-  // ---- session controls (delegate to the live engine) ----
-  sessPause:      () => { state.session && state.session.togglePause(); },
-  sessSkip:       () => { state.session && state.session.skip(); },
-  sessTapDone:    () => { state.session && state.session.tapDone(); },
-  sessStop:       () => { state.session && state.session.requestStop(); },
-  sessResumeStop: () => { state.session && state.session.resumeFromStop(); },
-  sessEndStop:    () => { state.session && state.session.endFromStop(); },
-  sessLandingClean:  () => { state.session && state.session.gradeLanding("clean"); },
-  sessLandingWobbly: () => { state.session && state.session.gradeLanding("wobbly"); },
-  sessEnd:        () => { state.session && state.session.endEarly(); },
-  sessMood:       (el) => {
-    state.__mood = el.getAttribute("data-mood");
-    patchLastSession({ mood: state.__mood });
+  /* ---- session controls (delegate to the engine) ---- */
+  advance() { engine.advance(); },
+  pauseTimer() { engine.togglePause(); },
+  skipEx() { engine.skipCurrentExercise(); },
+  stopNow() { engine.openStopOverlay(); },
+  resumeFromStop() { engine.resumeFromStop(); },
+  endFromStop() { engine.endFromStop(); },
+  askEnd() { engine.sess.confirmEnd = true; render(); },
+  cancelEnd() { engine.sess.confirmEnd = false; render(); },
+  confirmEndEarly() { engine.endEarly(); },
+  pickIntent(arg) { engine.pickIntentWord(arg); },
+  answerMicro(arg) { engine.answerMicroLoop(arg); },
+  gradeLanding(arg) { engine.gradeLanding(arg); },
+  pickClean() { engine.pickClean(); },
+  pickWobbly() { engine.pickWobbly(); },
+  pickMood(arg) { const [key, emoji] = arg.split("|"); engine.setMood(key, emoji); },
+  reflectWell(arg) { engine.setReflect("wentWell", arg); },
+  reflectNext(arg) { engine.setReflect("nextTime", arg); },
+  quizPick(arg) {
+    const i = Number(arg);
+    const first = engine.sess.quizPick == null;
+    engine.setQuizPick(i);
+    // The feedback copy promises +25/+10 XP — actually grant it (once).
+    if (first && !engine.sess.practice && engine.sess.savedEntry) {
+      const q = sessionQuizFor(engine.sess.dayKey);
+      const xp = q.opts[i] && q.opts[i].ok ? 25 : 10;
+      engine.sess.xpEarned = (engine.sess.xpEarned || 0) + xp;
+      if (addXp(xp).leveledUp) engine.sess.leveledUp = true;
+      patchLastSession({ xpEarned: engine.sess.xpEarned });
+      render();
+    }
+  },
+  openDetailCur() { state.detailEx = engine.sess.currentEx; state.detailOverlay = true; render(); },
+  openDetailAt(arg) {
+    const [ci, ei] = arg.split("|").map(Number);
+    const c = engine.sess.circuits[ci];
+    if (c && c.exercises[ei]) { state.detailEx = c.exercises[ei]; state.detailOverlay = true; render(); }
+  },
+  closeDetail() { state.detailOverlay = false; state.detailEx = null; render(); },
+  openPrizeDraw() {
+    if (pendingDrawCount() < 1) return;
+    state.prizeDraw = newPrizeDraw();
     render();
   },
+  redeemPrize(arg) { toggleRedeem(arg); render(); },
+  logScope(arg) { state.logScope = arg; render(); },
+
+  /* ---- grown-up zone ---- */
+  setGuTab(arg) { state.grownupTab = arg; render(); },
+  setGsScope(arg) { state.gsScope = arg; render(); },
+  setVoiceStyle(arg) { updateSettings({ voiceStyle: arg }); render(); },
+  bumpRest(arg) {
+    const [key, step, min, max] = arg.split("|");
+    const next = Math.min(Number(max), Math.max(Number(min), (settings[key] || 0) + Number(step)));
+    updateSettings({ [key]: next });
+    render();
+  },
+  exportCsv() { exportCsv(); },
+  toggleGate() {
+    const g = loadGate();
+    g.unlocked = !g.unlocked;
+    saveGate(g);
+    render();
+  },
+  setLadderRung(arg) {
+    const [name, lvl] = arg.split("|");
+    const rungs = loadLadderRungs();
+    rungs[name] = Number(lvl);
+    saveLadderRungs(rungs);
+    render();
+  },
+  saveTrackerWeek() {
+    const t = loadTracker();
+    const wk = "week" + getCurrentTrackerWeek();
+    t[wk] = t[wk] || {};
+    root.querySelectorAll('[data-input="pr"]').forEach(inp => {
+      if (inp.value !== "") t[wk][inp.dataset.key] = Number(inp.value);
+      else delete t[wk][inp.dataset.key];
+    });
+    saveTracker(t);
+    render();
+  },
+  pickEngagement(arg) { setEngagementPick(arg); render(); },
+  addPrizePoolItem() {
+    const inp = root.querySelector('[data-input="newPrize"]');
+    const text = (inp && inp.value || "").trim();
+    if (!text) return;
+    const m = text.match(/^(\p{Extended_Pictographic}(?:️)?)\s*(.*)$/u);
+    const item = m && m[2] ? { icon: m[1], label: m[2] } : { icon: "🎁", label: text };
+    const pool = (Array.isArray(settings.prizePool) && settings.prizePool.length)
+      ? settings.prizePool.slice() : buildGrownupVM(state).prizePool.slice();
+    pool.push(item);
+    updateSettings({ prizePool: pool });
+    render();
+  },
+  removePrizePoolItem(arg) {
+    const pool = buildGrownupVM(state).prizePool.slice();
+    pool.splice(Number(arg), 1);
+    updateSettings({ prizePool: pool });
+    render();
+  },
+  resetPrizePool() { updateSettings({ prizePool: null }); render(); },
+  exitSession() {
+    engine.exitSession();
+    state.inSession = false;
+    state.pendingSession = null;
+    state.detailOverlay = false;
+    state.nav = "today";
+    state.selectedDay = edmontonDayKey();
+    render();
+  }
 };
 
-document.addEventListener("click", (e) => {
-  const el = e.target.closest("[data-action]");
-  if (!el) return;
-  const fn = ACTIONS[el.getAttribute("data-action")];
-  if (fn) { e.preventDefault(); fn(el, e); }
-});
-
-/* Text inputs (Settings name, add-prize) commit on change/blur. */
-document.addEventListener("change", (e) => {
-  const el = e.target.closest("[data-set]");
-  if (el) { saveSettings({ [el.getAttribute("data-set")]: el.value }); }
-});
-
-window.addEventListener("resize", () => { const was = state.isWide; computeWide(); if (was !== state.isWide) render(); });
-
-/* ---- boot ---- */
-function boot() {
-  computeWide();
-  try { seedJourneyOnce(); } catch (err) { console.warn("journey seed skipped:", err); }
+function startPendingSession(pending) {
+  state.readiness = null;
+  state.pendingSession = pending;
+  state.inSession = true;
   render();
-  // Best-effort weather; re-render Today when it arrives (offline → stays null).
-  getWeather().then(w => { if (w) { state.weather = w; if (state.nav === "today") render(); } }).catch(() => {});
+  engine.startSession(pending);
 }
+
+root.addEventListener("click", e => {
+  const el = e.target.closest("[data-action]");
+  if (!el || !root.contains(el)) return;
+  // A data-stop-propagation wrapper (e.g. a modal card inside a click-to-close
+  // overlay) swallows clicks that would otherwise trigger its ancestor's action.
+  const stopEl = e.target.closest("[data-stop-propagation]");
+  if (stopEl && el.contains(stopEl) && el !== stopEl) return;
+  const fn = actions[el.dataset.action];
+  if (fn) { e.preventDefault(); fn(el.dataset.arg, el); }
+});
+
+// Settings name edits flow straight back into the greeting. Saved on every
+// keystroke; the greeting picks it up on the next render (no re-render here —
+// replacing the DOM mid-blur would swallow the tap that moved focus away).
+root.addEventListener("input", e => {
+  if (e.target.matches && e.target.matches('[data-input="athleteName"]')) {
+    updateSettings({ athleteName: e.target.value.trim() || "Jenn" });
+  }
+});
+
+window.addEventListener("resize", () => {
+  const wide = computeIsWide();
+  if (wide !== state.isWide) render();
+});
+
+/* Weather chip (Red Deer, same source as the old app) — cosmetic, fails silently. */
+async function fetchWeather() {
+  try {
+    const r = await fetch("https://api.open-meteo.com/v1/forecast?latitude=52.1833&longitude=-113.8&current=temperature_2m,weather_code&timezone=America/Edmonton");
+    const data = await r.json();
+    const code = data.current.weather_code;
+    const icon = code <= 1 ? "☀️" : code <= 3 ? "⛅" : code <= 48 ? "🌤" : code <= 67 ? "🌧" : code <= 86 ? "🌨" : "🌦";
+    state.weather = { icon, temp: Math.round(data.current.temperature_2m), caption: "Rink day!" };
+    if (!state.inSession) render();
+  } catch { /* keep the placeholder chip */ }
+}
+
+function boot() {
+  migrate();
+  if (!state.selectedDay) state.selectedDay = edmontonDayKey();
+  render();
+  fetchWeather();
+}
+
 boot();
