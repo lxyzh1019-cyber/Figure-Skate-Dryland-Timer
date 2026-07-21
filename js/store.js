@@ -1,285 +1,374 @@
-/* ============================================================================
-   store.js — all localStorage access + derived stats + the new journey/XP model.
-   Session/settings keys are byte-for-byte identical to the original app so
-   returning users keep their history; only skate_journey_v1 is added.
-   ============================================================================ */
-import { DAYS, countMoves } from "./data.js";
+/* ============================================================
+   STORE — localStorage persistence, settings, session log,
+   events, journey (XP/levels/prizes) and one-time migration.
+   Local-first; Firestore mirroring happens in the engine.
+   ============================================================ */
 
-/* ---- keys (unchanged from the original single-file app) ---- */
+import { DAY_MS, mondayOfThisWeek, todayISODate, edmontonISO } from "./util.js";
+import { PRIZE_POOL, levelCost } from "./data.js";
+
+/* ---- keys (unchanged from the old app unless noted) ---- */
 export const SETTINGS_KEY     = "skateTrainingSettingsV2";
 export const PROGRESS_KEY     = "skateTrainingProgressV2";
 export const SKIP_HISTORY_KEY = "skateTrainingSkipHistoryV2";
 export const ENGAGE_KEY       = "skateEngagementPickV2";
+export const LS_READINESS     = "skate_readiness";      // v2 schema (4-Q + body map)
+export const LS_DAYPROG       = "skate_day_progress";
+export const LS_LEARNING      = "skate_learning_records";
+export const LS_LADDER        = "skate_ladder_rungs";
+export const LS_QUIZ          = "skate_quiz_v1";
+export const LS_GATE          = "skate_gate_state";
 export const LS_SESSIONS      = "skate_sessions_v2";
 export const LS_TRACKER       = "skate_tracker_v2";
 export const LS_EVENTS        = "skate_events_v1";
-export const LS_READINESS     = "skate_readiness";
-export const LS_JOURNEY       = "skate_journey_v1";   // NEW in V2
+export const LS_PRLOG         = "skate_pr_log";
+export const LS_JOURNEY       = "skate_journey_v1";     // NEW: xp / level / prizes
 
-const DAY_MS = 86400000;
+const SKIP_RETENTION_MS  = 7 * 24 * 60 * 60 * 1000;
+const EVENT_RETENTION_MS = 120 * 24 * 60 * 60 * 1000; // 120 days
+const EVENT_CAP = 1500;
 
-/* ---- generic JSON helpers (never throw) ---- */
 export function readStorage(key, fallback) {
-  try { const v = localStorage.getItem(key); return v == null ? fallback : JSON.parse(v); }
+  try { const v = localStorage.getItem(key); return v !== null ? JSON.parse(v) : fallback; }
   catch { return fallback; }
 }
 export function writeStorage(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
 }
 
-/* ---- sessions (schema: { dayKey, isoDate, durationSecs, session, ...patches }) ---- */
+/* ---- settings ---- */
+export const DEFAULT_SETTINGS = {
+  // Default to effort/process praise (Dweck-aligned) rather than trait hype;
+  // the louder "fun" persona stays available as an opt-in in Grown-up settings.
+  voiceStyle: "encouraging",
+  exerciseRestSeconds: 5,
+  roundRestSeconds: 25,
+  sectionRestSeconds: 30,   // NEW (block break; old app hardcoded 8s)
+  secondsPerRep: 3,
+  coachVoiceOn: true,       // NEW: design's 🎧 toggle gates ALL coach audio
+  athleteName: "Jenn",      // NEW: editable in Grown-up Settings
+  prizePool: null,          // NEW: null = default PRIZE_POOL
+  cloudMirror: true         // NEW: privacy — mirror completed sessions to Firestore
+};
+
+export let settings = loadSettings();
+
+export function loadSettings() {
+  return { ...DEFAULT_SETTINGS, ...readStorage(SETTINGS_KEY, {}) };
+}
+export function saveSettings() {
+  writeStorage(SETTINGS_KEY, settings);
+}
+export function updateSettings(patch) {
+  Object.assign(settings, patch);
+  saveSettings();
+}
+export function activePrizePool() {
+  const pool = settings.prizePool;
+  return Array.isArray(pool) && pool.length ? pool : PRIZE_POOL;
+}
+
+export const MIN_REST = 3;
+export function configuredExerciseRest() {
+  const v = Number(settings.exerciseRestSeconds);
+  return Math.min(120, Math.max(MIN_REST, Number.isFinite(v) ? Math.round(v) : DEFAULT_SETTINGS.exerciseRestSeconds));
+}
+export function configuredRoundRest() {
+  const v = Number(settings.roundRestSeconds);
+  return Math.min(180, Math.max(10, Number.isFinite(v) ? Math.round(v) : DEFAULT_SETTINGS.roundRestSeconds));
+}
+export function configuredSectionRest() {
+  const v = Number(settings.sectionRestSeconds);
+  return Math.min(90, Math.max(5, Number.isFinite(v) ? Math.round(v) : DEFAULT_SETTINGS.sectionRestSeconds));
+}
+
+/* ---- sessions log (source of truth for streaks/progress/analytics) ---- */
 export function loadSessions() { return readStorage(LS_SESSIONS, []); }
 export function saveSession(entry) {
-  const all = loadSessions(); all.push(entry); writeStorage(LS_SESSIONS, all);
+  const all = loadSessions();
+  all.push(entry);
+  writeStorage(LS_SESSIONS, all);
 }
+/* Patch the most recent session record (mood / reflection / pr live
+   alongside lightResult — closes the readiness→outcome gap). */
 export function patchLastSession(patch) {
   const all = loadSessions();
   if (!all.length) return;
   all[all.length - 1] = { ...all[all.length - 1], ...patch };
   writeStorage(LS_SESSIONS, all);
 }
-
-/* Local calendar day (YYYY-MM-DD in the athlete's timezone, not UTC) — the key
-   for streaks/week grouping so evening sessions don't roll into "tomorrow". */
-export function localDateKey(d = new Date()) {
-  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-/* A session's calendar day — prefers the stored localDate, falls back to the
-   UTC isoDate slice for rows written before this change. */
-export function sessionDay(s) { return s.localDate || (s.isoDate || "").slice(0, 10); }
-
-export function mondayOfThisWeek() {
-  const d = new Date(); d.setHours(0, 0, 0, 0);
-  const dow = d.getDay();                 // 0=Sun..6=Sat
-  d.setDate(d.getDate() + (dow === 0 ? -6 : 1 - dow));
-  return d;
-}
 export function thisWeekSessions() {
-  const mondayKey = localDateKey(mondayOfThisWeek());
-  return loadSessions().filter(s => sessionDay(s) >= mondayKey);   // YYYY-MM-DD lexical compare
+  const monday = mondayOfThisWeek();
+  return loadSessions().filter(s => new Date(s.isoDate) >= monday);
 }
 
-/* Longest run of consecutive calendar days with >=1 session. */
-export function longestStreak(sessions = loadSessions()) {
-  const days = [...new Set(sessions.map(sessionDay).filter(Boolean))].sort();
+export function daysAgoCount(sessions, days) {
+  const cutoff = Date.now() - days * DAY_MS;
+  return sessions.filter(s => s.isoDate && new Date(s.isoDate).getTime() >= cutoff);
+}
+export function sumSecs(sessions) { return sessions.reduce((a, s) => a + (s.durationSecs || 0), 0); }
+
+// Longest run of consecutive calendar days with ≥1 completed session.
+export function longestStreak(sessions) {
+  const days = [...new Set(sessions.map(s => edmontonISO(s.isoDate)).filter(Boolean))].sort();
   let best = 0, run = 0, prev = null;
   days.forEach(d => {
-    if (prev && Math.round((new Date(d) - new Date(prev)) / DAY_MS) === 1) run++; else run = 1;
+    if (prev && Math.round((new Date(d) - new Date(prev)) / DAY_MS) === 1) run++;
+    else run = 1;
     prev = d; if (run > best) best = run;
   });
   return best;
 }
-/* Current streak (local), forgiving of Sundays — rest IS training, so a
-   Sunday with no session never breaks the streak. */
-export function currentStreak(sessions = loadSessions()) {
-  const trained = new Set(sessions.map(sessionDay).filter(Boolean));
-  if (!trained.size) return 0;
-  const isRest = d => d.getDay() === 0;            // Sunday
-  let d = new Date(localDateKey());                 // today, local midnight
-  // Streak is "live" if today or yesterday was trained (or today is a rest day).
-  if (!trained.has(localDateKey(d)) && !isRest(d)) {
-    d.setDate(d.getDate() - 1);
-    if (!trained.has(localDateKey(d)) && !isRest(d)) return 0;
-  }
-  let streak = 0;
-  while (true) {
-    if (trained.has(localDateKey(d))) streak++;
-    else if (!isRest(d)) break;                     // a non-rest untrained day ends it
-    d.setDate(d.getDate() - 1);
+// Current streak anchored to today/yesterday (Edmonton). Compares date
+// STRINGS — Date objects here would mix UTC-parsed and local clocks and
+// break the streak every morning.
+export function currentStreak(sessions) {
+  const days = [...new Set(sessions.map(s => edmontonISO(s.isoDate)).filter(Boolean))].sort();
+  if (!days.length) return 0;
+  const today = todayISODate();
+  const y = new Date(today + "T12:00:00Z");
+  y.setUTCDate(y.getUTCDate() - 1);
+  const yesterday = y.toISOString().slice(0, 10);
+  const last = days[days.length - 1];
+  if (last !== today && last !== yesterday) return 0;
+  // Streak "freeze": a single rest/missed day between active days does NOT break
+  // the run (a gap of 1 or 2 calendar days both continue it). This stops the
+  // streak from punishing a recovery day — which would otherwise pressure a kid
+  // to train while sore just to keep the flame, defeating the readiness system.
+  let streak = 1;
+  let cur = new Date(last + "T12:00:00Z");
+  for (let i = days.length - 2; i >= 0; i--) {
+    const prev = new Date(days[i] + "T12:00:00Z");
+    const gap = Math.round((cur - prev) / DAY_MS);
+    if (gap >= 1 && gap <= 2) { streak++; cur = prev; } else break;
   }
   return streak;
 }
-/* Distinct days the athlete has trained (for a "showed up N times" count). */
-export function showedUpCount(sessions = loadSessions()) {
-  return new Set(sessions.map(sessionDay).filter(Boolean)).size;
+
+/* ---- skip history ---- */
+function pruneSkipHistory(items) {
+  const cutoff = Date.now() - SKIP_RETENTION_MS;
+  return (items || []).filter(item => item.createdAt >= cutoff);
+}
+export function loadSkipHistory() {
+  const cleaned = pruneSkipHistory(readStorage(SKIP_HISTORY_KEY, []));
+  writeStorage(SKIP_HISTORY_KEY, cleaned);
+  return cleaned;
+}
+export function addSkipRecord(record) {
+  const all = pruneSkipHistory(readStorage(SKIP_HISTORY_KEY, []));
+  all.push(record);
+  writeStorage(SKIP_HISTORY_KEY, all);
 }
 
-/* ---- settings (V2 defaults merged over any stored value) ---- */
-export const SETTINGS_DEFAULTS = {
-  athleteName: "Jenn",
-  coachVoiceOn: true,
-  voiceStyle: "warm",
-  exerciseRestSeconds: 5,
-  roundRestSeconds: 20,
-  sectionRestSeconds: 30,
-  testMode: false,
-  prizePool: [
-    "Choose the family movie 🎬",
-    "Pick dinner one night 🍝",
-    "30 min extra screen time 📱",
-    "Hot chocolate after practice ☕",
-    "Stay up 20 min later 🌙",
-    "A new sticker sheet ✨"
-  ]
-};
-export function loadSettings() {
-  return { ...SETTINGS_DEFAULTS, ...readStorage(SETTINGS_KEY, {}) };
-}
-export function saveSettings(patch) {
-  const merged = { ...loadSettings(), ...patch };
-  writeStorage(SETTINGS_KEY, merged);
-  return merged;
+/* ---- analytics event stream ---- */
+export function loadEvents() { return readStorage(LS_EVENTS, []); }
+// Lightweight behavioural instrumentation. Never throws, never blocks a session.
+export function logEvent(type, data) {
+  try {
+    const cutoff = Date.now() - EVENT_RETENTION_MS;
+    let all = loadEvents().filter(e => (e.t || 0) >= cutoff);
+    all.push({ t: Date.now(), iso: new Date().toISOString(), type, ...(data || {}) });
+    if (all.length > EVENT_CAP) all = all.slice(all.length - EVENT_CAP);
+    writeStorage(LS_EVENTS, all);
+  } catch {}
 }
 
-/* ---- readiness (versioned V2 schema + "same as yesterday" shortcut) ---- */
-export function loadReadiness() { return readStorage(LS_READINESS, null); }
-export function saveReadiness(record) {
-  const full = { version: 2, when: Date.now(), ...record };
-  writeStorage(LS_READINESS, full);
-  writeStorage("skate_last_check", { answers: record.answers, light: record.light, when: full.when });
-  return full;
+/* ---- readiness (v2: 4-Q + body map) ---- */
+export function loadReadiness() {
+  const r = readStorage(LS_READINESS, null);
+  return r && r.version === 2 ? r : null;   // old 8-Q payloads are ignored
 }
-export function loadLastCheck() { return readStorage("skate_last_check", null); }
-
-/* ============================================================================
-   Journey / XP / rank
-   XP: a completed training session earns 40 + 10·moves; Sunday recovery = 0.
-   Level costs rise gently; ranks are skating-themed bands over levels.
-   ============================================================================ */
-export const RANKS = [
-  { min: 1,  name: "First Glide" },
-  { min: 3,  name: "Snowflake" },
-  { min: 5,  name: "Frost Spinner" },
-  { min: 8,  name: "Edge Dancer" },
-  { min: 12, name: "Axel Rising" },
-  { min: 16, name: "Ice Star" },
-  { min: 21, name: "Rink Royalty" }
-];
-export function rankForLevel(level) {
-  let r = RANKS[0];
-  for (const cand of RANKS) if (level >= cand.min) r = cand;
-  return r;
-}
-export function nextRank(level) {
-  return RANKS.find(r => r.min > level) || null;
-}
-/* XP cost to go from level L to L+1. */
-export function levelCost(level) { return 100 + (level - 1) * 20; }
-
-export function xpForSessionEntry(entry) {
-  const day = DAYS[entry?.dayKey];
-  if (!day || day.spa || day.defaultLight === "recovery") return 0;
-  const base = 40 + 10 * countMoves(day);
-  // Reward finishing: full base when completed; otherwise scale by how far the
-  // athlete got (min 10%). Old rows (no completedFully field) count as complete.
-  const frac = entry && entry.completedFully === false
-    ? Math.max(0.1, (entry.progressPct || 0) / 100) : 1;
-  const cleanBonus = 5 * (entry && entry.cleanLandings || 0);
-  return Math.round(base * frac) + cleanBonus;
+export function saveReadiness(check) {
+  writeStorage(LS_READINESS, { version: 2, when: Date.now(), ...check });
 }
 
-/* Resolve {level, xpIntoLevel, xpToNext, levelPct} from a total XP. */
-export function levelFromXp(totalXp) {
-  let level = 1, remaining = Math.max(0, totalXp | 0);
-  while (remaining >= levelCost(level)) { remaining -= levelCost(level); level++; }
-  const cost = levelCost(level);
-  return { level, xpIntoLevel: remaining, xpToNext: cost - remaining,
-           levelPct: Math.round((remaining / cost) * 100) };
+/* ---- day progress (same-day resume; No-Debt: partials never carry over) ---- */
+function dayProgressKey(dayKey) { return `${dayKey}|${todayISODate()}`; }
+export function loadDayProgress(dayKey) {
+  const all = readStorage(LS_DAYPROG, {});
+  return all[dayProgressKey(dayKey)] || null;
+}
+export function saveDayProgress(dayKey, p) {
+  const all = readStorage(LS_DAYPROG, {});
+  const today = todayISODate();
+  Object.keys(all).forEach(k => { if (!k.endsWith("|" + today)) delete all[k]; });
+  all[dayProgressKey(dayKey)] = p;
+  writeStorage(LS_DAYPROG, all);
+}
+export function clearDayProgress(dayKey) {
+  const all = readStorage(LS_DAYPROG, {});
+  delete all[dayProgressKey(dayKey)];
+  writeStorage(LS_DAYPROG, all);
 }
 
-const JOURNEY_DEFAULT = { xp: 0, prizesWon: [], pendingDraws: 0, seeded: false };
-export function loadJourney() { return { ...JOURNEY_DEFAULT, ...readStorage(LS_JOURNEY, {}) }; }
+/* ---- valgus gate ---- */
+export function loadGate() { return readStorage(LS_GATE, { unlocked: false, cleanCount: 0 }); }
+export function saveGate(g) { writeStorage(LS_GATE, g); }
+export function gateLocked() { return !loadGate().unlocked; }
+
+/* ---- Independence Ladder ---- */
+export function loadLadderRungs() { return readStorage(LS_LADDER, {}); }
+export function saveLadderRungs(r) { writeStorage(LS_LADDER, r); }
+
+/* ---- learning records + quiz ---- */
+export function loadLearning() { return readStorage(LS_LEARNING, []); }
+export function saveLearning(l) { writeStorage(LS_LEARNING, l); }
+export function loadQuiz() { return readStorage(LS_QUIZ, { items: {}, results: [], streak: 0 }); }
+export function saveQuiz(q) { writeStorage(LS_QUIZ, q); }
+
+/* ---- PR log ---- */
+export function loadPrLog() { return readStorage(LS_PRLOG, []); }
+export function addPrLog(entry) {
+  const all = loadPrLog();
+  all.push(entry);
+  writeStorage(LS_PRLOG, all.slice(-60));
+}
+
+/* ---- 4-week tracker (PR board) ---- */
+export function loadTracker() {
+  const raw = readStorage(LS_TRACKER, {});
+  return {
+    _startISO: raw._startISO,
+    week1: raw.week1 || {}, week2: raw.week2 || {},
+    week3: raw.week3 || {}, week4: raw.week4 || {}
+  };
+}
+export function saveTracker(t) { writeStorage(LS_TRACKER, t); }
+export function getCurrentTrackerWeek() {
+  const t = loadTracker();
+  if (!t._startISO) {
+    t._startISO = new Date().toISOString();
+    saveTracker(t);
+  }
+  const start = new Date(t._startISO);
+  const days = Math.floor((new Date() - start) / DAY_MS);
+  return Math.min(4, Math.max(1, Math.floor(days / 7) + 1));
+}
+
+/* ---- weekly engagement pick (Peer Challenge / Role Flip) ---- */
+export function weekKeyFor(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const dow = d.getDay();
+  const diff = dow === 0 ? 1 : 1 - dow;  // upcoming/this Monday
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+export function activeEngagement(date) {
+  const all = readStorage(ENGAGE_KEY, {});
+  return all[weekKeyFor(date || new Date())] || null;
+}
+export function setEngagementPick(systemKey) {
+  const all = readStorage(ENGAGE_KEY, {});
+  const monday = new Date();
+  monday.setDate(monday.getDate() + 1);   // picking on Sunday applies to the coming week
+  all[weekKeyFor(monday)] = systemKey;
+  writeStorage(ENGAGE_KEY, all);
+}
+
+/* ============================================================
+   JOURNEY — XP, level, rank, prizes. XP, prizes, and ranks.
+   XP rules (design spec): session complete = moves×10 + 40
+   (spa = 0); quiz: +25 per correct, +10 per attempted question.
+   ============================================================ */
+
+export function loadJourney() {
+  return readStorage(LS_JOURNEY, null);
+}
 export function saveJourney(j) { writeStorage(LS_JOURNEY, j); }
 
-/* One-time idempotent seeding: if journey has never been seeded, award XP for
-   every session already in history so nothing the athlete earned is lost. */
-export function seedJourneyOnce() {
-  const j = loadJourney();
-  if (j.seeded) return j;
-  const earned = loadSessions().reduce((sum, s) => sum + xpForSessionEntry(s), 0);
-  const seeded = { ...j, xp: (j.xp || 0) + earned, seeded: true };
-  saveJourney(seeded);
-  return seeded;
+export function xpForSession(entry) {
+  if (entry.sessionType === "spa" || entry.session === "spa" || entry.spa) return 0;
+  // Legacy V2 rows mark recovery days via light/lightResult instead of spa.
+  if (entry.light === "recovery" || entry.lightResult === "recovery") return 0;
+  const moves = (entry.perExercise && entry.perExercise.length) ||
+                entry.movesDone || entry.moves || 6;
+  // Skate-specific bonus: +5 XP per clean frozen landing (kept from V2 so
+  // historical seeding and new sessions reward the same thing).
+  const cleanBonus = 5 * (entry.cleanLandings || 0);
+  return moves * 10 + 40 + cleanBonus;
 }
 
-/* Award XP for a just-completed session; returns {journey, leveledUp, from, to}. */
-export function awardSessionXp(entry) {
-  const before = loadJourney();
-  const fromLvl = levelFromXp(before.xp).level;
-  const gained = xpForSessionEntry(entry);
-  const after = { ...before, xp: (before.xp || 0) + gained };
-  const toLvl = levelFromXp(after.xp).level;
-  if (toLvl > fromLvl) after.pendingDraws = (after.pendingDraws || 0) + (toLvl - fromLvl);
-  saveJourney(after);
-  return { journey: after, leveledUp: toLvl > fromLvl, from: fromLvl, to: toLvl, gained };
+/* Level for a cumulative XP total, plus progress into the current level. */
+export function levelFromXp(xp) {
+  let level = 1, rem = xp;
+  while (rem >= levelCost(level)) { rem -= levelCost(level); level++; }
+  return { level, xpIntoLevel: rem, nextCost: levelCost(level) };
 }
 
-/* Claim one prize from a level-up draw: store it and spend a pending draw. */
-export function claimPrize(label) {
+/* Add XP; returns { journey, leveledUp, levelsGained }. */
+export function addXp(amount) {
+  const j = loadJourney() || { xp: 0, prizesWon: [], pendingDraws: 0 };
+  const before = levelFromXp(j.xp).level;
+  j.xp = Math.max(0, (j.xp || 0) + amount);
+  const after = levelFromXp(j.xp).level;
+  const gained = Math.max(0, after - before);
+  if (gained > 0) j.pendingDraws = (j.pendingDraws || 0) + gained;
+  saveJourney(j);
+  return { journey: j, leveledUp: gained > 0, levelsGained: gained };
+}
+
+export function pendingDrawCount() {
   const j = loadJourney();
-  j.prizesWon = j.prizesWon || [];
-  j.prizesWon.push({ label, when: Date.now(), redeemed: false });
+  return j ? Math.max(0, j.pendingDraws || 0) : 0;
+}
+
+export function addPrize(prize) {
+  const j = loadJourney() || { xp: 0, prizesWon: [], pendingDraws: 0 };
+  j.prizesWon = [{ ...prize, date: todayISODate(), redeemed: false, id: Date.now() }, ...(j.prizesWon || [])];
   j.pendingDraws = Math.max(0, (j.pendingDraws || 0) - 1);
   saveJourney(j);
   return j;
 }
-export function redeemPrize(idx) {
+export function redeemPrize(id) {
   const j = loadJourney();
-  if (j.prizesWon && j.prizesWon[idx]) { j.prizesWon[idx].redeemed = true; saveJourney(j); }
+  if (!j) return null;
+  j.prizesWon = (j.prizesWon || []).map(p => p.id === id ? { ...p, redeemed: !p.redeemed } : p);
+  saveJourney(j);
   return j;
 }
 
-/* ---- lightweight event log + quiz results ---- */
-const LS_QUIZ = "skate_quiz_v1";
-export function logEvent(type, data) {
-  try {
-    const all = readStorage(LS_EVENTS, []);
-    all.push({ t: Date.now(), iso: new Date().toISOString(), type, ...(data || {}) });
-    writeStorage(LS_EVENTS, all.slice(-1500));
-  } catch {}
-}
-/* Record a quiz run. `items` (optional) is [{move, ok}] so we can track which
-   moves the athlete misses over time (feeds the parent watch-list). */
-export function recordQuizResult(correct, total, items) {
-  const q = readStorage(LS_QUIZ, { runs: [], bestPct: 0, byMove: {} });
-  const pct = total ? Math.round((correct / total) * 100) : 0;
-  q.runs = (q.runs || []).concat({ when: Date.now(), correct, total, pct }).slice(-50);
-  q.bestPct = Math.max(q.bestPct || 0, pct);
-  q.byMove = q.byMove || {};
-  (items || []).forEach(it => {
-    const rec = q.byMove[it.move] || { seen: 0, missed: 0 };
-    rec.seen++; if (!it.ok) rec.missed++;
-    q.byMove[it.move] = rec;
-  });
-  writeStorage(LS_QUIZ, q);
-  logEvent("quiz_complete", { correct, total, pct });
-  return q;
-}
+/* One-time idempotent seeding + legacy V2 upgrades. If the journey key is
+   absent, walk the existing session history and award XP retroactively —
+   nothing the kid earned ever vanishes. An EXISTING journey is never
+   re-seeded (that would rewrite earned XP); it is only normalized. */
+export function migrate() {
+  // merge any new default settings keys into the saved blob
+  settings = loadSettings();
+  // Legacy prize pools were plain strings; the prize UI needs {icon,label}.
+  if (Array.isArray(settings.prizePool)) {
+    settings.prizePool = settings.prizePool.map(p =>
+      typeof p === "string" ? { icon: "🎁", label: p } : p);
+  }
+  // testMode was a V2 setting; practice mode is now a per-launch choice.
+  delete settings.testMode;
+  saveSettings();
+  try { localStorage.removeItem("skate_last_check"); } catch {}
 
-/* Parent watch-list: moves the athlete tends to land wobbly or miss on the quiz,
-   scored (wobbly counts double) and sorted. */
-export function movesToWatch(limit = 5) {
-  const wobbly = {};
-  loadSessions().forEach(s => Object.entries(s.landings || {}).forEach(([m, g]) => { wobbly[m] = (wobbly[m] || 0) + (g.wobbly || 0); }));
-  const byMove = (readStorage(LS_QUIZ, {}).byMove) || {};
-  const score = {};
-  Object.entries(wobbly).forEach(([m, w]) => { score[m] = (score[m] || 0) + w * 2; });
-  Object.entries(byMove).forEach(([m, v]) => { score[m] = (score[m] || 0) + (v.missed || 0); });
-  return Object.entries(score).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, limit)
-    .map(([move]) => ({ move, wobbly: wobbly[move] || 0, missed: (byMove[move] || {}).missed || 0 }));
-}
-
-/* Count of forced-easy days (red/recovery/pain) in the last 7 calendar days. */
-export function easyDaysLast7() {
-  const cutoff = localDateKey(new Date(Date.now() - 7 * DAY_MS));
-  const days = new Set();
-  loadSessions().forEach(s => { if (sessionDay(s) >= cutoff && (s.pain || s.light === "red" || s.light === "recovery")) days.add(sessionDay(s)); });
-  return days.size;
-}
-
-/* Full journey view-state used by Today + Progress. */
-export function journeyState() {
   const j = loadJourney();
-  const lv = levelFromXp(j.xp);
-  const rank = rankForLevel(lv.level);
-  const nr = nextRank(lv.level);
-  return {
-    xp: j.xp, level: lv.level, levelPct: lv.levelPct,
-    xpIntoLevel: lv.xpIntoLevel, xpToNext: lv.xpToNext,
-    rankName: rank.name,
-    nextRankName: nr ? nr.name : "Max rank",
-    levelsToNextRank: nr ? nr.min - lv.level : 0,
-    prizesWon: j.prizesWon || [], pendingDraws: j.pendingDraws || 0
-  };
+  if (j == null) {
+    const xp = loadSessions().reduce((sum, s) => sum + xpForSession(s), 0);
+    saveJourney({ xp, prizesWon: [], pendingDraws: 0, seededAt: Date.now() });
+  } else if (Array.isArray(j.prizesWon) && j.prizesWon.some(p => p.id == null)) {
+    // Old prize records carried only {label, when}; redeemPrize is id-based.
+    j.prizesWon = j.prizesWon.map((p, i) => ({
+      icon: p.icon || "🎁", label: p.label || String(p),
+      date: p.date || (p.when ? String(p.when).slice(0, 10) : todayISODate()),
+      redeemed: !!p.redeemed, id: p.id != null ? p.id : (p.when || "legacy-" + i)
+    }));
+    saveJourney(j);
+  }
+
+  // Legacy quiz blob {runs, bestPct, byMove} → {items, results, streak}.
+  const q = readStorage(LS_QUIZ, null);
+  if (q && q.runs && !q.results) {
+    const items = {};
+    Object.entries(q.byMove || {}).forEach(([move, rec]) => {
+      const seen = rec.seen || 0, wrong = rec.missed || 0;
+      items[move] = { right: Math.max(0, seen - wrong), wrong, seen };
+    });
+    const results = (q.runs || []).map(r => ({ t: r.when || Date.now(), score: r.correct || 0, total: r.total || 0 })).slice(-40);
+    saveQuiz({ items, results, streak: 0, _legacy: q });
+  }
 }
