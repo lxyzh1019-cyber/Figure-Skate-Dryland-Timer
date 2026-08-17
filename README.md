@@ -59,23 +59,32 @@ word, micro-loop, breath rehearsal, rep voice counting, same-day resume, etc.).
 
 ## XP model
 
-**Training (open-ended).** `moves × 10 + 40` per completed session (half on
-ended-early, 0 on recovery/spa), **plus a +5 bonus per clean frozen landing**.
-This is the only uncapped way up the ladder — roughly 1,180 XP across a full
-six-day week.
+**Training (open-ended).** `(moves × 10 + 40) × rounds factor` per completed
+session (half on ended-early, 0 on recovery/spa), **plus a +5 bonus per clean
+frozen landing** (landings are already counted per round, so the factor never
+scales them twice). Rounds count: **1 round ×0.5, 2 rounds ×0.75, 3 rounds
+×1.0** — an easy day is worth half a full day instead of exactly the same. The
+full-day value is the anchor, so a green week is still roughly 1,180 XP and the
+ladder's December pacing is unchanged; sessions logged before this rule keep the
+flat value they were awarded. This is the only uncapped way up the ladder.
 
-**Quiz (capped, pays for learning not repetition).** Two rules, in `store.js`:
+**Quiz (capped, pays for learning not repetition).** Three rules, in `store.js`:
 
 1. **One paying deck per calendar day.** Later decks the same day are free
    practice worth 0 XP, clearly labelled as such in the UI.
 2. **Each question pays at most once, ever** — `+10` the first time it is
-   attempted, `+25` the first time it is answered correctly.
+   attempted, `+25` the first time it is answered correctly. A question missed
+   on the first look still pays its `+25` when it is finally learned.
+3. **A daily ceiling of 105 XP** (about three brand-new questions) shared by the
+   Quiz Deck and the Coach's Quiz. Questions are paid whole or not at all, so
+   one the cap skipped is still worth full value tomorrow.
 
 The bank holds 87 questions (48 moves × cue / watch-out / fix where content
 exists), so the quiz's **lifetime** yield is a fixed `87 × 35 = 3,045 XP`,
-spendable over at least 11 days. Paying decks deal unlearned questions first, so
+spendable over at least 29 days. Paying decks deal unlearned questions first, so
 the day's XP isn't wasted on questions the kid already owns. Progress shows as
-"moves mastered", and the grown-up Analytics tab reports budget spent vs. total.
+"moves mastered", and the grown-up Analytics tab reports budget spent vs. total
+and XP banked today against the ceiling.
 
 This replaced an unbounded rule (`score × 25 + answered × 10` per deck, no cap,
 no cooldown, no memory). Because the deck reveals each answer after the pick, one
