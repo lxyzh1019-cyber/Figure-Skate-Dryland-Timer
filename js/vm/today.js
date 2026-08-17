@@ -175,8 +175,12 @@ export function buildJourney() {
   const lore = RANK_LORE[currentRank.name];
   const chapter = (lore && lore.chapter ? lore.chapter : "Chapter 1 · The Frozen Pond").toUpperCase();
 
+  // At the summit there is no next rank. Naming the current rank as the "next"
+  // one would tell a kid who already IS Eternal Edge that they're chasing it.
+  const atSummit = !nextRank;
   return {
-    level, rankName: currentRank.name, nextRankName: nextRank ? nextRank.name : LADDER[LADDER.length - 1].name,
+    level, rankName: currentRank.name,
+    nextRankName: nextRank ? nextRank.name : null, atSummit,
     xpToNextRank: fmtXp(xpToNextRank), levelPct, waypoints, levelPips, habitats,
     pathHeight, solidPathD: curvePath(solidPts), dashedPathD: curvePath(dashedPts),
     chapter, xp: j.xp || 0

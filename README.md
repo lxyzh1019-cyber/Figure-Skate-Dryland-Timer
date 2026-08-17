@@ -59,10 +59,36 @@ word, micro-loop, breath rehearsal, rep voice counting, same-day resume, etc.).
 
 ## XP model
 
-`moves × 10 + 40` per completed session (half on ended-early, 0 on recovery/spa),
-**plus a +5 bonus per clean frozen landing**. Level cost is `100 + (level−1)×20`
-(unchanged from the previous version, so the athlete's level never shifts). XP is
-seeded once from past sessions on first boot and never re-seeded.
+**Training (open-ended).** `moves × 10 + 40` per completed session (half on
+ended-early, 0 on recovery/spa), **plus a +5 bonus per clean frozen landing**.
+This is the only uncapped way up the ladder — roughly 1,180 XP across a full
+six-day week.
+
+**Quiz (capped, pays for learning not repetition).** Two rules, in `store.js`:
+
+1. **One paying deck per calendar day.** Later decks the same day are free
+   practice worth 0 XP, clearly labelled as such in the UI.
+2. **Each question pays at most once, ever** — `+10` the first time it is
+   attempted, `+25` the first time it is answered correctly.
+
+The bank holds 87 questions (48 moves × cue / watch-out / fix where content
+exists), so the quiz's **lifetime** yield is a fixed `87 × 35 = 3,045 XP`,
+spendable over at least 11 days. Paying decks deal unlearned questions first, so
+the day's XP isn't wasted on questions the kid already owns. Progress shows as
+"moves mastered", and the grown-up Analytics tab reports budget spent vs. total.
+
+This replaced an unbounded rule (`score × 25 + answered × 10` per deck, no cap,
+no cooldown, no memory). Because the deck reveals each answer after the pick, one
+honest pass taught the answers and every replay was a guaranteed 8/8 = 280 XP —
+about 370 XP/minute of tapping, enough to climb from level 1 to 26 in ~23
+minutes. `answered × 10` also paid out on an all-wrong deck, rewarding tapping
+over knowing. `test/smoke.mjs` guards all of this.
+
+**Levels.** Cost is `100 + (level−1)×20`, unchanged since V2 so an athlete's
+level never shifts. The ladder runs to **level 50 (Eternal Edge)**; every
+historical rung keeps its exact threshold, and a smoke test enforces that so a
+kid's rank can never move backwards. XP is seeded once from past sessions on
+first boot and never re-seeded.
 
 ## Project layout (module split, no build step)
 

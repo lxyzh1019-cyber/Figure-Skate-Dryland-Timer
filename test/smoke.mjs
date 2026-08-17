@@ -31,6 +31,7 @@ const svm    = await import(base + "vm/session.js");
 const tvm    = await import(base + "vm/today.js");
 const sscreen = await import(base + "screens/session.js");
 const rscreen = await import(base + "screens/readiness.js");
+const overlays = await import(base + "screens/overlays.js");
 
 let passed = 0;
 const ok = (cond, msg) => { if (!cond) throw new Error("FAIL: " + msg); passed++; };
@@ -121,6 +122,66 @@ ok(!/rGrownupOk/.test(rscreen.readinessScreen(rvm.buildReadinessVM(r2, true))), 
 /* --- quiz has a correct option and rotates over the expanded bank --- */
 const q = svm.sessionQuizFor("monday");
 ok(q && q.opts.some(o => o.ok), "quiz question has a correct answer");
+
+/* --- the rank ladder only ever grows upward -----------------------------
+   Every historical threshold must keep its exact level, or a kid's rank
+   silently moves backwards on the next release. */
+const REQUIRED_RUNGS = [[1, "First Glide"], [3, "Snowflake"], [5, "Frost Spinner"],
+  [8, "Edge Dancer"], [12, "Axel Rising"], [16, "Ice Star"], [21, "Rink Royalty"],
+  [26, "Crystal Blade"], [31, "Aurora Edge"], [36, "Ice Legend"]];
+REQUIRED_RUNGS.forEach(([lvl, name]) => {
+  ok(data.LADDER.some(r => r.level === lvl && r.name === name),
+     `ladder keeps ${name} at level ${lvl}`);
+});
+ok(data.levelCost(1) === 100 && data.levelCost(26) === 600,
+   "levelCost curve unchanged (100 + (n-1)*20)");
+ok(data.MAX_LEVEL === data.LADDER[data.LADDER.length - 1].level, "MAX_LEVEL is the last rung");
+ok(data.LADDER.every((r, i, a) => i === 0 || r.level > a[i - 1].level), "ladder levels strictly increase");
+data.LADDER.forEach(r => ok(data.RANK_LORE[r.name] && data.RANK_LORE[r.name].story,
+  `${r.name} has lore (no blank story card)`));
+ok(tvm.buildJourney().atSummit === false, "not at summit at level 1");
+
+/* --- quiz XP cannot be farmed -------------------------------------------
+   Regression guard for the old `score*25 + answered*10` rule, which had no
+   cap, no cooldown and no memory: because the deck reveals each answer, a
+   replay was a guaranteed 280 XP and the ladder could be climbed by tapping. */
+const playPerfect = () => {
+  const qd = overlays.buildQuizDeck(8);
+  qd.qs.forEach((q, i) => { qd.idx = i; overlays.answerQuizDeck(qd, q.opts.findIndex(o => o.ok)); });
+  overlays.finishQuizDeck(qd);
+  return qd;
+};
+localStorage.removeItem("skate_quiz_v1");
+localStorage.removeItem("skate_journey_v1");
+const bank0 = store.quizBankStatus();
+ok(bank0.total === 87 && bank0.mastered === 0, "question bank is 87 questions, none mastered");
+ok(bank0.xpTotal === 87 * 35, "lifetime quiz XP budget is bank x 35");
+
+const first = playPerfect();
+ok(first.wasPaidRound === true && first.xpEarned === 8 * 35, "first deck of the day pays full");
+let sameDay = 0;
+for (let i = 0; i < 12; i++) sameDay += playPerfect().xpEarned;
+ok(sameDay === 0, "every later deck the same day pays 0 (one paying deck per day)");
+ok(store.quizPaidToday() === true, "quizPaidToday flips after the paying deck");
+ok(store.quizBankStatus().mastered === 8, "practice replays never advance the mastery ledger");
+
+// New day, but the same questions: already-mastered questions must not re-pay.
+const qz = store.loadQuiz();
+qz.lastPaidISO = null;
+qz.qLedger = Object.fromEntries(store.questionBank()
+  .map(([m, k]) => [store.quizQuestionKey(m.name, k), { attempted: true, mastered: true }]));
+store.saveQuiz(qz);
+ok(playPerfect().xpEarned === 0, "a fully-mastered bank pays nothing, even on a fresh day");
+
+// Wrong answers earn the attempt credit but never the correct credit.
+const qz2 = store.loadQuiz();
+qz2.lastPaidISO = null; qz2.qLedger = {}; store.saveQuiz(qz2);
+const wrong = overlays.buildQuizDeck(8);
+wrong.qs.forEach((q, i) => { wrong.idx = i; overlays.answerQuizDeck(wrong, q.opts.findIndex(o => !o.ok)); });
+overlays.finishQuizDeck(wrong);
+ok(wrong.xpEarned === 8 * 10 && wrong.newlyMastered === 0,
+   "all-wrong deck pays attempt credit only and masters nothing");
+ok(store.quizBankStatus().left === 87, "wrong answers leave every question still claimable");
 
 /* --- view-models + screens render to strings without throwing --- */
 const state = { selectedDay: null, expanded: {}, practiceMode: false, nav: "today", weather: null, isWide: true, detailEx: null, detailOverlay: false };
