@@ -246,7 +246,7 @@ export function saveQuiz(q) { writeStorage(LS_QUIZ, q); }
       seen and missed still pays its +25 later, when it is finally learned.
    3. A daily ceiling (`QXP_DAILY_CAP`) across ALL quiz XP — the deck and the
       Coach's Quiz share it — so even a day full of brand-new questions stays
-      well under one training session. Questions are paid whole or not at all:
+      far under the LIGHTEST training day, not just under a full one. Questions are paid whole or not at all:
       once the day's budget can't cover the next one, its ledger entry is left
       untouched and it is still worth full value tomorrow.
 
@@ -259,13 +259,18 @@ export function saveQuiz(q) { writeStorage(LS_QUIZ, q); }
    tapping rather than knowing.
 
    Because the bank is finite, these rules make the quiz's LIFETIME yield
-   finite and knowable (87 questions × 35 = 3,045 XP), spread over at least 29
+   finite and knowable (87 questions × 35 = 3,045 XP), spread over at least 87
    days by rules 1 and 3. Training stays the only open-ended way up. */
 export const QXP_ATTEMPT = 10;   // once per question, first time attempted
 export const QXP_CORRECT = 25;   // once per question, first time correct
-/* Three brand-new questions a day (3 × 35). A full training day pays 180–275,
-   so the quiz can never out-earn getting on the mat. */
-export const QXP_DAILY_CAP = 105;
+/* One brand-new question a day (10 + 25). The lightest real training day —
+   a 1-round Wednesday with no clean landings — pays 90 XP, so the day's whole
+   quiz budget is well under half of it. The cap is deliberately measured
+   against the EASY day, not the full one (which pays 240–300): those are the
+   days a kid is most tempted to tap through a quiz instead of training, and
+   they must still be worth clearly more than it. At the old 105 the quiz paid
+   MORE than a wobbly red-light session. */
+export const QXP_DAILY_CAP = 35;
 
 export function quizQuestionKey(move, kind) { return move + "|" + kind; }
 

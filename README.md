@@ -75,13 +75,16 @@ flat value they were awarded. This is the only uncapped way up the ladder.
 2. **Each question pays at most once, ever** — `+10` the first time it is
    attempted, `+25` the first time it is answered correctly. A question missed
    on the first look still pays its `+25` when it is finally learned.
-3. **A daily ceiling of 105 XP** (about three brand-new questions) shared by the
-   Quiz Deck and the Coach's Quiz. Questions are paid whole or not at all, so
-   one the cap skipped is still worth full value tomorrow.
+3. **A daily ceiling of 35 XP** — one brand-new question — shared by the Quiz
+   Deck and the Coach's Quiz. Questions are paid whole or not at all, so one the
+   cap skipped is still worth full value tomorrow. The ceiling is measured
+   against the *lightest* training day (a 1-round Wednesday with no clean
+   landings pays 90 XP), not a full one, since easy days are exactly when a kid
+   is most tempted to tap through a quiz instead of training.
 
 The bank holds 87 questions (48 moves × cue / watch-out / fix where content
 exists), so the quiz's **lifetime** yield is a fixed `87 × 35 = 3,045 XP`,
-spendable over at least 29 days. Paying decks deal unlearned questions first, so
+spendable over at least 87 days. Paying decks deal unlearned questions first, so
 the day's XP isn't wasted on questions the kid already owns. Progress shows as
 "moves mastered", and the grown-up Analytics tab reports budget spent vs. total
 and XP banked today against the ceiling.

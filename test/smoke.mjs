@@ -173,21 +173,21 @@ ok(bank0.xpTotal === 87 * 35, "lifetime quiz XP budget is bank x 35");
 const first = playPerfect();
 ok(first.wasPaidRound === true && first.xpEarned === store.QXP_DAILY_CAP,
    "the day's paying deck stops at the daily cap");
-ok(first.hitDailyCap === true && first.newlyMastered === 3,
-   "only the questions the cap paid for are marked mastered");
+ok(first.hitDailyCap === true && first.newlyMastered === 1,
+   "only the question the cap paid for is marked mastered");
 ok(store.quizXpLeftToday() === 0, "the daily quiz budget is spent");
 let sameDay = 0;
 for (let i = 0; i < 12; i++) sameDay += playPerfect().xpEarned;
 ok(sameDay === 0, "every later deck the same day pays 0 (one paying deck per day)");
 ok(store.quizPaidToday() === true, "quizPaidToday flips after the paying deck");
-ok(store.quizBankStatus().mastered === 3, "practice replays never advance the mastery ledger");
+ok(store.quizBankStatus().mastered === 1, "practice replays never advance the mastery ledger");
 
 // A fresh day restores the budget; the questions the cap skipped kept full value.
 const nextDay = store.loadQuiz();
 nextDay.lastPaidISO = null; nextDay.dayISO = "2020-01-01"; store.saveQuiz(nextDay);
 ok(store.quizXpLeftToday() === store.QXP_DAILY_CAP, "the daily budget resets with the date");
 const day2 = playPerfect();
-ok(day2.xpEarned === store.QXP_DAILY_CAP && store.quizBankStatus().mastered === 6,
+ok(day2.xpEarned === store.QXP_DAILY_CAP && store.quizBankStatus().mastered === 2,
    "the next day pays another capped round of brand-new questions");
 
 // New day, but the same questions: already-mastered questions must not re-pay.
@@ -204,8 +204,8 @@ qz2.lastPaidISO = null; qz2.dayISO = null; qz2.dayXp = 0; qz2.qLedger = {}; stor
 const wrong = overlays.buildQuizDeck(8);
 wrong.qs.forEach((q, i) => { wrong.idx = i; overlays.answerQuizDeck(wrong, q.opts.findIndex(o => !o.ok)); });
 overlays.finishQuizDeck(wrong);
-ok(wrong.xpEarned === 8 * 10 && wrong.newlyMastered === 0,
-   "all-wrong deck pays attempt credit only and masters nothing");
+ok(wrong.xpEarned === 30 && wrong.newlyMastered === 0,
+   "all-wrong deck pays attempt credit only (3 x 10, then the cap bites) and masters nothing");
 ok(store.quizBankStatus().left === 87, "wrong answers leave every question still claimable");
 
 // The Coach's Quiz at the end of a session prices off the same ledger and
