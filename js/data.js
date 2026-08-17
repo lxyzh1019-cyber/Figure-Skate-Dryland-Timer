@@ -843,21 +843,35 @@ export const CHEERS = [
   "You stayed steady. Nice! ❄️", "Clean round — power and grace! ⛸️"
 ];
 
-/* Rank ladder — keeps the original 7 skating ranks AND their level
-   thresholds (so no one's rank ever moves backwards), plus 3 new top
-   ranks to discover. levelCost() below is likewise unchanged from V2. */
+/* Rank ladder — keeps every original rank AND its level threshold (so no
+   one's rank ever moves backwards), plus higher ranks to discover.
+   levelCost() below is likewise unchanged from V2.
+
+   The top three (41/46/50) extend the summit past Ice Legend. Reason: at the
+   real 6-day training pace (~1,180 XP/week) level 36 arrived only ~13 weeks
+   into the program, which put the whole ladder out of reach of the intended
+   December horizon. Raising the ceiling — rather than re-pricing levels or
+   clawing XP back — is the only lever that lands the summit in December
+   WITHOUT moving an already-earned level backwards. */
 export const LADDER = [
-  { level: 1,  name: "First Glide",   icon: "❄️", habitat: "#F5C2CE" },
-  { level: 3,  name: "Snowflake",     icon: "❄️", habitat: "#E8EEF7" },
-  { level: 5,  name: "Frost Spinner", icon: "🌀", habitat: "#C9D8F0" },
-  { level: 8,  name: "Edge Dancer",   icon: "⛸️", habitat: "#D9A7B8" },
-  { level: 12, name: "Axel Rising",   icon: "🌟", habitat: "#E8B54D" },
-  { level: 16, name: "Ice Star",      icon: "⭐", habitat: "#C77A93" },
-  { level: 21, name: "Rink Royalty",  icon: "👑", habitat: "#B0486B" },
-  { level: 26, name: "Crystal Blade", icon: "💎", habitat: "#9FD8EA" },
-  { level: 31, name: "Aurora Edge",   icon: "🌌", habitat: "#8E7CC3" },
-  { level: 36, name: "Ice Legend",    icon: "🏆", habitat: "#F2C14E" }
+  { level: 1,  name: "First Glide",    icon: "❄️", habitat: "#F5C2CE" },
+  { level: 3,  name: "Snowflake",      icon: "❄️", habitat: "#E8EEF7" },
+  { level: 5,  name: "Frost Spinner",  icon: "🌀", habitat: "#C9D8F0" },
+  { level: 8,  name: "Edge Dancer",    icon: "⛸️", habitat: "#D9A7B8" },
+  { level: 12, name: "Axel Rising",    icon: "🌟", habitat: "#E8B54D" },
+  { level: 16, name: "Ice Star",       icon: "⭐", habitat: "#C77A93" },
+  { level: 21, name: "Rink Royalty",   icon: "👑", habitat: "#B0486B" },
+  { level: 26, name: "Crystal Blade",  icon: "💎", habitat: "#9FD8EA" },
+  { level: 31, name: "Aurora Edge",    icon: "🌌", habitat: "#8E7CC3" },
+  { level: 36, name: "Ice Legend",     icon: "🏆", habitat: "#F2C14E" },
+  { level: 41, name: "Comet Spiral",   icon: "☄️", habitat: "#5B6ABF" },
+  { level: 46, name: "Solstice Flame", icon: "🔥", habitat: "#E8703A" },
+  { level: 50, name: "Eternal Edge",   icon: "♾️", habitat: "#A8E6DF" }
 ];
+
+/* The final rung — nothing above this level changes rank, so the UI can
+   honestly say "you're at the summit" instead of teasing a next rank. */
+export const MAX_LEVEL = LADDER[LADDER.length - 1].level;
 
 // Each rank gets a rich story chapter + a skating tie-in + a real ice/winter fact.
 // Future ranks stay locked (mystery cards) so there's always something to discover.
@@ -871,14 +885,20 @@ export const RANK_LORE = {
   "Rink Royalty":  { chapter: "Chapter 4 · The Big Ice", story: "The rink is yours now. Royalty isn't about a crown — it's about how you carry yourself when a program gets hard: tall, calm, generous to other skaters, brave on the big ice. Younger skaters watch how you practice. That's the real crown.", skate: "Strength, spins, landings, and grace — the whole week's work, skating as one.", fact: "Olympic rinks are 30×60 metres — big enough that a full program can cover more than a kilometre of skating." },
   "Crystal Blade": { chapter: "Chapter 4 · The Big Ice", story: "A crystal forms under pressure, slowly, layer by layer — and comes out harder and clearer than everything around it. Seasons of practice pressed you into something rare: precision that looks effortless because it isn't.", skate: "Your jump landings freeze crystal-still now — 2 whole seconds, knee over toe, every time.", fact: "Glacier ice looks deep blue because centuries of pressure squeeze out every air bubble — the clearest ice is the oldest." },
   "Aurora Edge":   { chapter: "Chapter 5 · The Midnight Ice", story: "Some nights the sky itself dances. The aurora doesn't perform for anyone — it moves because the energy inside it has to come out. Your skating is like that now: power and artistry in the same breath, impossible to look away from.", skate: "Spirals, laybacks, split lines — flexibility you OWN, held by your own strength.", fact: "The northern lights happen when particles from the sun crash into the sky 100 km up — nature's own light show over the ice." },
-  "Ice Legend":    { chapter: "Chapter 5 · The Midnight Ice", story: "Legends aren't born on competition day. They're built on quiet Tuesday drylands, on landings frozen when nobody was watching, on getting up one more time than falling down. You did the work every single day — and now the ice tells your story.", skate: "Everything you built — axis, edges, spins, jumps, grace — all in one skater.", fact: "The oldest ice skates ever found are over 3,000 years old, carved from horse bones — skating is one of humanity's oldest joys." }
+  "Ice Legend":    { chapter: "Chapter 5 · The Midnight Ice", story: "Legends aren't born on competition day. They're built on quiet Tuesday drylands, on landings frozen when nobody was watching, on getting up one more time than falling down. You did the work every single day — and now the ice tells your story.", skate: "Everything you built — axis, edges, spins, jumps, grace — all in one skater.", fact: "The oldest ice skates ever found are over 3,000 years old, carved from horse bones — skating is one of humanity's oldest joys." },
+  "Comet Spiral":  { chapter: "Chapter 6 · The Long Winter", story: "A comet only gets its tail when it comes close to the fire — the pressure is what makes it visible. You're past the part where anyone is impressed by talent. What people see now is the long, bright trail of every session behind you, and it's the trail that makes the light.", skate: "Spirals held long and calm at full speed, because the engine underneath never runs out.", fact: "Halley's Comet takes about 76 years to come back around — some things are worth waiting years for, and worth the trip." },
+  "Solstice Flame":{ chapter: "Chapter 6 · The Long Winter", story: "The solstice is the longest, darkest night of the whole year — and it's exactly when the light starts coming back. This rank belongs to the skater who kept training through the cold months when it was hard to get up, hard to care, hard to keep going. You carried your own flame through the dark part.", skate: "Full programs with power left in the tank at the end — winter conditioning showing up on the ice.", fact: "The winter solstice around Dec 21 is the shortest day of the year, and every single day after it is brighter than the last." },
+  "Eternal Edge":  { chapter: "Chapter 7 · The Summit", story: "You reached the top of the ladder — and here's the secret it was keeping: the edge never actually ends. There's no level above this one because there's nothing left to unlock. From here it isn't about earning anything. It's just you, the ice, and the skater you decided to become. Go skate for the love of it.", skate: "Nothing left to prove on this ladder. Every session from here is yours to spend how you like.", fact: "Antarctic ice sheets hold ice that has been frozen for over 800,000 years — the deepest ice keeps the longest record." }
 };
 export const RANK_TEASE = {
   "Snowflake": "Something one-of-a-kind is drifting closer…", "Frost Spinner": "A calm centre in a spinning world awaits…",
   "Edge Dancer": "The blade is learning to sing…", "Axel Rising": "A brave forward leap lies ahead…",
   "Ice Star": "A steady glow is starting to shine…", "Rink Royalty": "A crown waits on the big ice…",
   "Crystal Blade": "Something rare is forming under pressure…", "Aurora Edge": "The midnight sky is starting to dance…",
-  "Ice Legend": "The legend of the ice awaits at the very top…"
+  "Ice Legend": "The legend of the ice awaits at the very top…",
+  "Comet Spiral": "Something is burning a long bright trail out past the legend…",
+  "Solstice Flame": "A flame that only lights on the year's darkest night…",
+  "Eternal Edge": "The very summit. No one has told you what's up there yet…"
 };
 
 // Level-up prize pool — a grown-up curates this in Settings.
