@@ -241,9 +241,11 @@ export function saveQuiz(q) { writeStorage(LS_QUIZ, q); }
    1. One paying deck per calendar day (`lastPaidISO`). Every later deck the
       same day is free practice worth 0 XP — still fully playable, and it never
       touches the ledger, so practising can't spend tomorrow's budget.
-   2. Each QUESTION pays at most once, ever: +10 the first time it is
-      attempted, +25 the first time it is answered correctly. A question first
-      seen and missed still pays its +25 later, when it is finally learned.
+   2. Each QUESTION pays at most once, ever: +5 the first time it is attempted,
+      +25 the first time it is answered correctly. A question first seen and
+      missed still pays its +25 later, when it is finally learned. The two
+      together are exactly one day's budget, so a brand-new question answered
+      right pays in full in one go.
    3. A daily ceiling (`QXP_DAILY_CAP`) across ALL quiz XP — the deck and the
       Coach's Quiz share it — so even a day full of brand-new questions stays
       far under the LIGHTEST training day, not just under a full one. Questions are paid whole or not at all:
@@ -261,16 +263,15 @@ export function saveQuiz(q) { writeStorage(LS_QUIZ, q); }
    Because the bank is finite, these rules make the quiz's LIFETIME yield
    finite and knowable (87 questions × 35 = 3,045 XP), spread over at least 87
    days by rules 1 and 3. Training stays the only open-ended way up. */
-export const QXP_ATTEMPT = 10;   // once per question, first time attempted
+export const QXP_ATTEMPT = 5;    // once per question, first time attempted
 export const QXP_CORRECT = 25;   // once per question, first time correct
-/* One brand-new question a day (10 + 25). The lightest real training day —
-   a 1-round Wednesday with no clean landings — pays 90 XP, so the day's whole
-   quiz budget is well under half of it. The cap is deliberately measured
-   against the EASY day, not the full one (which pays 240–300): those are the
-   days a kid is most tempted to tap through a quiz instead of training, and
-   they must still be worth clearly more than it. At the old 105 the quiz paid
-   MORE than a wobbly red-light session. */
-export const QXP_DAILY_CAP = 35;
+/* One brand-new question a day (5 + 25). The lightest real training day — one
+   round, or a mini — pays 180 XP before landings, so the day's whole quiz
+   budget is a sixth of it. The cap is deliberately measured against the EASY
+   day, not the full one: those are the days a kid is most tempted to tap
+   through a quiz instead of training, and they must still be worth far more
+   than it. */
+export const QXP_DAILY_CAP = 30;
 
 export function quizQuestionKey(move, kind) { return move + "|" + kind; }
 
@@ -407,9 +408,9 @@ export function setEngagementPick(systemKey) {
 
 /* ============================================================
    JOURNEY — XP, level, rank, prizes. XP, prizes, and ranks.
-   XP rules: session complete = (moves×10 + 40) × rounds factor
-   (spa = 0); quiz pays for first-time learning only — see the
-   quiz XP economy above.
+   XP rules: a session pays a flat rate for the rounds trained,
+   plus the clean-landing bonus (spa = 0); quiz pays for
+   first-time learning only — see the quiz XP economy above.
    ============================================================ */
 
 export function loadJourney() {
@@ -417,40 +418,47 @@ export function loadJourney() {
 }
 export function saveJourney(j) { writeStorage(LS_JOURNEY, j); }
 
-/* Effort multiplier for the rounds actually trained. A red-light 1-round day
-   and a full green 3-round day used to pay exactly the same — the round count
-   never reached the XP at all — so showing up paid as well as working. A
-   1-round day is now worth half a 3-round day:
+/* A session pays a flat rate for the rounds actually trained. The old rule
+   (moves × 10 + 40, ignoring rounds) meant a red-light 1-round day paid the
+   same as a full green 3-round day — showing up paid as well as working — and
+   made the day's XP wobble with the move count of that weekday for no reason a
+   kid could see. A 1-round day is worth half a 3-round day:
 
-     1 round ×0.5   2 rounds ×0.75   3 rounds ×1.0 (unchanged)
+     1 round 180 XP   2 rounds 270 XP   3 rounds 360 XP
 
-   The full-day value is the anchor here (unlike the swim app, which anchors on
-   the 1-round day and doubles full days): this ladder's climb to Eternal Edge
-   is already paced for a December summit at the current rate, and raising the
-   full-day rate would pull the whole ladder forward by months.
+   Matches the swim app exactly, so the two sisters' apps price a training day
+   the same way.
 
-   Only records written by this version (xpVersion 3) are scaled. Legacy rows
-   keep the flat value they were awarded, so a cloud restore of an old
-   red-light session re-awards what it originally paid instead of halving it. */
-export const XP_VERSION = 3;
-export function roundsFactor(entry) {
-  if (!entry || entry.xpVersion !== XP_VERSION) return 1;
-  const rounds = Math.min(3, Math.max(1, entry.roundsDone || 1));
-  return 0.25 + rounds * 0.25;   // 1 → 0.5, 2 → 0.75, 3 → 1.0
+   A mini session is one shortened round, so it is priced as a 1-round day
+   however the traffic light was set — otherwise "mini on a green day" would be
+   the cheapest full-price session in the app.
+
+   Only records written by this version are priced this way. Legacy rows keep
+   the old formula, so a cloud restore re-awards what a session originally paid
+   instead of re-pricing history. */
+export const XP_VERSION = 4;
+export const SESSION_XP = { 1: 180, 2: 270, 3: 360 };
+
+export function sessionRounds(entry) {
+  if (entry && entry.mini) return 1;
+  return Math.min(3, Math.max(1, (entry && entry.roundsDone) || 1));
 }
 
 export function xpForSession(entry) {
   if (entry.sessionType === "spa" || entry.session === "spa" || entry.spa) return 0;
   // Legacy V2 rows mark recovery days via light/lightResult instead of spa.
   if (entry.light === "recovery" || entry.lightResult === "recovery") return 0;
-  const moves = (entry.perExercise && entry.perExercise.length) ||
-                entry.movesDone || entry.moves || 6;
   // Skate-specific bonus: +5 XP per clean frozen landing (kept from V2 so
-  // historical seeding and new sessions reward the same thing). Landings are
-  // already counted once per round, so the rounds factor must not scale them
-  // a second time.
+  // historical seeding and new sessions reward the same thing). It rides on top
+  // of the flat rate — it is the one part of the score that rewards HOW the
+  // session went, not just that it happened.
   const cleanBonus = 5 * (entry.cleanLandings || 0);
-  return Math.round((moves * 10 + 40) * roundsFactor(entry)) + cleanBonus;
+  if (entry.xpVersion !== XP_VERSION) {
+    const moves = (entry.perExercise && entry.perExercise.length) ||
+                  entry.movesDone || entry.moves || 6;
+    return moves * 10 + 40 + cleanBonus;           // legacy rows, unchanged
+  }
+  return SESSION_XP[sessionRounds(entry)] + cleanBonus;
 }
 
 /* Level for a cumulative XP total, plus progress into the current level. */
