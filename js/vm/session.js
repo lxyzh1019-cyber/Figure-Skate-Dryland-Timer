@@ -25,27 +25,27 @@ const REFLECT_NEXT = ["Slow down", "Breathe out loud", "Point my toes", "Keep co
 
 // Coach's Quiz — connects today's land work to the ice.
 const QUIZ = [
-  { q: "Why do we land and FREEZE for 2 seconds on every jump?", why: "A landing you can hold is a landing you own — the freeze teaches your leg the checkout.", opts: [
+  { id: "freeze", q: "Why do we land and FREEZE for 2 seconds on every jump?", why: "A landing you can hold is a landing you own — the freeze teaches your leg the checkout.", opts: [
     { t: "To pose for a photo", ok: false },
     { t: "A frozen landing means your landing leg is really in control", ok: true },
     { t: "Because the timer says so", ok: false } ] },
-  { q: "Box jumps make your legs stronger. Where does that power show up on the ice?", why: "Every jump takeoff is leg power — land power becomes ice height.", opts: [
+  { id: "boxjump", q: "Box jumps make your legs stronger. Where does that power show up on the ice?", why: "Every jump takeoff is leg power — land power becomes ice height.", opts: [
     { t: "Higher, stronger jump takeoffs", ok: true },
     { t: "Warmer skates", ok: false },
     { t: "Louder toe picks", ok: false } ] },
-  { q: "Why does Coach say “slow and clean beats fast and sloppy”?", why: "Your body learns the shape you practice — so practice the good one.", opts: [
+  { id: "clean", q: "Why does Coach say “slow and clean beats fast and sloppy”?", why: "Your body learns the shape you practice — so practice the good one.", opts: [
     { t: "Because slow is easier", ok: false },
     { t: "Clean shapes on land become clean landings on the ice", ok: true },
     { t: "So the timer lasts longer", ok: false } ] },
-  { q: "Why do we brace our core (like a strong tube) during land work?", why: "A braced core keeps your axis stacked, so spins stay centred and landings stay quiet.", opts: [
+  { id: "core", q: "Why do we brace our core (like a strong tube) during land work?", why: "A braced core keeps your axis stacked, so spins stay centred and landings stay quiet.", opts: [
     { t: "So you can hold your breath longer", ok: false },
     { t: "A stiff middle keeps your axis tall for spins and landings", ok: true },
     { t: "To look tough", ok: false } ] },
-  { q: "Balance moves (like Eccentric Step-Down) — what do they build for skating?", why: "A steady knee over the toe is the landing leg every jump comes home to.", opts: [
+  { id: "balance", q: "Balance moves (like Eccentric Step-Down) — what do they build for skating?", why: "A steady knee over the toe is the landing leg every jump comes home to.", opts: [
     { t: "A landing leg that stays steady, knee over toe", ok: true },
     { t: "Bigger ice sprays", ok: false },
     { t: "Faster blinking", ok: false } ] },
-  { q: "Why do we keep the crown of the head UP in spins and landings?", why: "A tall crown stacks your axis — lean the head and the whole spin drifts.", opts: [
+  { id: "crown", q: "Why do we keep the crown of the head UP in spins and landings?", why: "A tall crown stacks your axis — lean the head and the whole spin drifts.", opts: [
     { t: "It keeps your helmet on", ok: false },
     { t: "A tall crown keeps your axis stacked so spins stay centred", ok: true },
     { t: "To see the ceiling", ok: false } ] }
@@ -160,6 +160,18 @@ export function buildSessionVM(state) {
         : "border-color:var(--hairline);background:var(--surface);color:var(--ink-faint);")
   }));
   const quizCorrect = quizAnswered && !!(QZ.opts[sess.quizPick] && QZ.opts[sess.quizPick].ok);
+  // The XP line quotes what was ACTUALLY banked (main.js prices the answer off
+  // the quiz ledger, so a question already learned pays nothing). Promising
+  // "+25 XP" for a repeat and then not paying it is how a kid learns to
+  // distrust the numbers.
+  const quizXp = sess.quizXp || 0;
+  const quizXpLine = quizXp ? " +" + quizXp + " XP"
+    : sess.quizCapped ? " That’s today’s quiz XP maxed out — this one still counts tomorrow."
+    : quizAnswered ? " You already learned this one — no XP, but it’s still true."
+    : "";
+  const quizFeedback = quizCorrect
+    ? "Nailed it!" + quizXpLine + (quizXp ? " ⭐" : "")
+    : "Good try! The best answer is highlighted — now you know it." + quizXpLine + (quizXp ? " 💭" : "");
 
   return {
     isWide: state.isWide, isNarrow: !state.isWide,
@@ -214,7 +226,7 @@ export function buildSessionVM(state) {
     xpEarned: sess.xpEarned, leveledUp: sess.leveledUp,
     moodOpts, moodAck: sess.mood ? MOOD_ACK[sess.mood] : "", showReflection: sessionDone && !!sess.mood, reflectWellOpts, reflectNextOpts,
     quizQuestion: QZ.q, quizOpts, quizAnswered, quizWhy: QZ.why,
-    quizFeedback: quizCorrect ? "Nailed it! +25 XP ⭐" : "Good try! The best answer is highlighted — now you know it. +10 XP for thinking 💭",
+    quizFeedback,
     quizFeedbackColor: quizCorrect ? "var(--mint-ink)" : "var(--coral)"
   };
 }
