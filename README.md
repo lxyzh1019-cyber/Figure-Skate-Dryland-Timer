@@ -59,32 +59,35 @@ word, micro-loop, breath rehearsal, rep voice counting, same-day resume, etc.).
 
 ## XP model
 
-**Training (open-ended).** `(moves × 10 + 40) × rounds factor` per completed
-session (half on ended-early, 0 on recovery/spa), **plus a +5 bonus per clean
-frozen landing** (landings are already counted per round, so the factor never
-scales them twice). Rounds count: **1 round ×0.5, 2 rounds ×0.75, 3 rounds
-×1.0** — an easy day is worth half a full day instead of exactly the same. The
-full-day value is the anchor, so a green week is still roughly 1,180 XP and the
-ladder's December pacing is unchanged; sessions logged before this rule keep the
-flat value they were awarded. This is the only uncapped way up the ladder.
+**Training (open-ended).** A flat rate for the rounds trained — **1 round 180,
+2 rounds 270, 3 rounds 360** (half on ended-early, 0 on recovery/spa), **plus a
++5 bonus per clean frozen landing**, which rides on top because it is the one
+part of the score that rewards *how* the session went. An easy day is worth half
+a full one, and the number no longer wobbles with the move count of that
+weekday. A mini is priced as a 1-round day however the light was set. Matches
+the swim app. Sessions logged before this rule keep the value they were awarded.
+This is the only uncapped way up the ladder.
 
 **Quiz (capped, pays for learning not repetition).** Three rules, in `store.js`:
 
 1. **One paying deck per calendar day.** Later decks the same day are free
    practice worth 0 XP, clearly labelled as such in the UI.
-2. **Each question pays at most once, ever** — `+10` the first time it is
+2. **Each question pays at most once, ever** — `+5` the first time it is
    attempted, `+25` the first time it is answered correctly. A question missed
    on the first look still pays its `+25` when it is finally learned.
-3. **A daily ceiling of 105 XP** (about three brand-new questions) shared by the
+3. **A daily ceiling of 30 XP** — exactly one brand-new question — shared by the
    Quiz Deck and the Coach's Quiz. Questions are paid whole or not at all, so
-   one the cap skipped is still worth full value tomorrow.
+   one the cap skipped is still worth full value tomorrow. The ceiling is
+   measured against the *lightest* training day (180 XP), not a full one: easy
+   days are exactly when a kid is most tempted to tap through a quiz instead of
+   training.
 
 The bank holds 87 move questions (48 moves × cue / watch-out / fix where
 content exists) **plus two per rank she has unlocked** — what that rank taught
 her, and its one true fact — so the pool grows as she climbs. Locked ranks are
 never asked: that would spoil the mystery card and quiz her on a chapter she
-has not been shown, so the quiz's **lifetime** yield is a fixed `87 × 35 = 3,045 XP`,
-spendable over at least 29 days. Paying decks deal unlearned questions first, so
+has not been shown. The moves alone therefore cap the quiz's **lifetime** yield
+at `87 × 30 = 2,610 XP`, spendable over at least 87 days. Paying decks deal unlearned questions first, so
 the day's XP isn't wasted on questions the kid already owns. Progress shows as
 "moves mastered", and the grown-up Analytics tab reports budget spent vs. total
 and XP banked today against the ceiling.
