@@ -59,6 +59,39 @@ export async function fsUpdateSession(fsId, patch) {
   }
 }
 
+/* ---- journey mirror --------------------------------------------------------
+   Sessions were the only thing ever mirrored, so a second device could rebuild
+   the training log but not the quiz XP, the prize wallet, or the draws — two
+   devices therefore showed two different levels for the same kid. This one doc
+   carries what the session log cannot re-derive. It lives in the same
+   collection so it needs no new Firestore rule, and is tagged kind:"journey"
+   so the session readers can skip it. */
+const JOURNEY_DOC = "journey-state";
+
+export async function fsSaveJourney(snapshot) {
+  const f = await fb();
+  if (!f) return false;
+  try {
+    await f.setDoc(f.doc(f.db, SESSIONS_COL, JOURNEY_DOC), { ...snapshot, savedAt: f.serverTimestamp() });
+    return true;
+  } catch (e) {
+    console.warn("Journey mirror write failed:", e);
+    return false;
+  }
+}
+
+export async function fsGetJourney() {
+  const f = await fb();
+  if (!f) return null;
+  try {
+    const snap = await f.getDoc(f.doc(f.db, SESSIONS_COL, JOURNEY_DOC));
+    return snap.exists() ? snap.data() : null;
+  } catch (e) {
+    console.warn("Journey mirror read failed:", e);
+    return null;
+  }
+}
+
 export async function fsGetRecent(n = 7) {
   const f = await fb();
   if (!f) return [];

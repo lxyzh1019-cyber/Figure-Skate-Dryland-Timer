@@ -566,6 +566,83 @@ export function mergeSessions(incoming) {
   return added;
 }
 
+/* ---- journey convergence across devices ---------------------------------
+   The session log is mirrored, so any device can rebuild the XP that came from
+   training. Everything else in the journey — quiz XP, the prize wallet, the
+   pending draws — existed only on the device that earned it, which is why the
+   same kid could read level 26 on one device and level 18 on another. These
+   three functions carry that remainder through the cloud.
+
+   Everything moves UP and nothing is ever summed twice: XP takes the HIGHER
+   non-session total rather than adding the two, prize wallets union by id, and
+   a question mastered anywhere counts as mastered everywhere (so the same
+   learning can't be paid for a second time on the other device). */
+
+/* XP the session log cannot account for — quiz learning, and any legacy
+   seeding. sessionXp is the part the log explains; the rest came from
+   somewhere no other device can see. */
+export function nonSessionXp(journey) {
+  const j = journey || loadJourney() || {};
+  const total = Number(j.xp) || 0;
+  const fromSessions = Number.isFinite(j.sessionXp) ? j.sessionXp : 0;
+  return Math.max(0, total - fromSessions);
+}
+
+export function journeySnapshot() {
+  const j = loadJourney() || {};
+  const q = loadQuiz();
+  return {
+    kind: "journey",
+    nonSessionXp: nonSessionXp(j),
+    prizesWon: j.prizesWon || [],
+    pendingDraws: j.pendingDraws || 0,
+    qLedger: q.qLedger || {},
+    quizItems: q.items || {},
+    updatedAt: Date.now()
+  };
+}
+
+/* Merge a cloud journey snapshot into this device. Returns the XP added. */
+export function mergeCloudJourney(snap) {
+  if (!snap || snap.kind !== "journey") return 0;
+  const j = loadJourney() || { xp: 0, prizesWon: [], pendingDraws: 0 };
+
+  const localExtra = nonSessionXp(j);
+  const merged = Math.max(localExtra, Number(snap.nonSessionXp) || 0);
+  const added = Math.max(0, merged - localExtra);
+
+  const wallet = new Map();
+  [...(j.prizesWon || []), ...(snap.prizesWon || [])].forEach(p => {
+    if (p && p.id != null && !wallet.has(p.id)) wallet.set(p.id, p);
+  });
+
+  j.xp = (Number(j.xp) || 0) + added;          // sessionXp is untouched, so the
+  j.pendingDraws = Math.max(j.pendingDraws || 0, snap.pendingDraws || 0);
+  j.prizesWon = [...wallet.values()]           // xp - sessionXp invariant holds
+    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+  saveJourney(j);
+
+  // A question mastered on the iPad must not pay again on the desktop.
+  const q = loadQuiz();
+  Object.entries(snap.qLedger || {}).forEach(([k, rec]) => {
+    const cur = q.qLedger[k] || { attempted: false, mastered: false };
+    q.qLedger[k] = {
+      attempted: !!(cur.attempted || (rec && rec.attempted)),
+      mastered: !!(cur.mastered || (rec && rec.mastered))
+    };
+  });
+  Object.entries(snap.quizItems || {}).forEach(([move, rec]) => {
+    const cur = q.items[move] || { right: 0, wrong: 0, seen: 0 };
+    q.items[move] = {
+      right: Math.max(cur.right || 0, (rec && rec.right) || 0),
+      wrong: Math.max(cur.wrong || 0, (rec && rec.wrong) || 0),
+      seen:  Math.max(cur.seen  || 0, (rec && rec.seen)  || 0)
+    };
+  });
+  saveQuiz(q);
+  return added;
+}
+
 /* Keep the XP total consistent with the session log without double-counting
    quiz XP (which has no session record). The journey remembers how much of its
    XP came from sessions; when the log grows behind its back — a cloud restore —

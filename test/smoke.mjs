@@ -121,6 +121,39 @@ ok(store.mergeSessions(cloud) === 0, "re-running the restore adds nothing");
 ok(store.reconcileJourneyWithSessions() === 0, "and awards no XP a second time");
 localStorage.clear();
 
+/* --- two devices converge on one level ------------------------------------
+   Only sessions were mirrored, so a second device could rebuild training XP
+   and nothing else: the same skater read level 26 on the iPad and 18 on the
+   desktop. The journey snapshot carries the remainder. */
+localStorage.clear();
+store.migrate();
+store.saveSession({ isoDate: "2026-04-01T10:00:00.000Z", dayKey: "monday", completedFully: true, xpEarned: 300 });
+store.reconcileJourneyWithSessions();          // 300 XP, all of it from the log
+store.addXp(90);                               // quiz XP — invisible to the log
+store.addPrize({ icon: "🎬", label: "Family movie pick" });
+ok(store.nonSessionXp() === 90, "XP the session log can't explain is identified");
+const snapshot = store.journeySnapshot();
+ok(snapshot.kind === "journey" && snapshot.nonSessionXp === 90, "and travels in the snapshot");
+ok(snapshot.prizesWon.length === 1, "with the prize wallet");
+
+// Second device: same session log, no quiz XP, no prizes.
+localStorage.clear();
+store.migrate();
+store.saveSession({ isoDate: "2026-04-01T10:00:00.000Z", dayKey: "monday", completedFully: true, xpEarned: 300 });
+store.reconcileJourneyWithSessions();
+ok(store.loadJourney().xp === 300, "device 2 rebuilds only the training XP");
+ok(store.mergeCloudJourney(snapshot) === 90, "the snapshot hands over the missing 90");
+ok(store.loadJourney().xp === 390, "and both devices now read the same total");
+ok(store.loadJourney().prizesWon.length === 1, "the prize came across too");
+ok(store.mergeCloudJourney(snapshot) === 0, "merging the same snapshot again adds nothing");
+ok(store.nonSessionXp() === 90, "the non-session share is still exactly 90, never doubled");
+
+// A question mastered on the other device must not pay again on this one.
+const qKey = store.quizQuestionKey("Box Jump", "cue");
+store.mergeCloudJourney({ kind: "journey", nonSessionXp: 90, qLedger: { [qKey]: { attempted: true, mastered: true } } });
+ok(store.payQuizQuestion(qKey, true).xp === 0, "a question mastered elsewhere is already spent here");
+localStorage.clear();
+
 /* --- JSON backup / restore: additive, idempotent, and refuses a foreign file --- */
 store.migrate();
 store.saveSession({ isoDate: "2026-03-01T10:00:00.000Z", dayKey: "monday", perExercise: [1,2,3,4,5,6], completedFully: true, xpEarned: 100 });

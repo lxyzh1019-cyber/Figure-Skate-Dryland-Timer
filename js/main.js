@@ -408,8 +408,8 @@ function boot() {
   // Pull anything this device is missing back out of the cloud mirror (a wiped
   // or brand-new browser starts empty, but the history is still up there), then
   // repaint so the restored streak / XP / log show up straight away.
-  restoreFromCloud().then(({ added }) => {
-    if (added && !state.inSession) render();
+  restoreFromCloud().then(({ added, journeyXp }) => {
+    if ((added || journeyXp) && !state.inSession) render();
   });
 }
 

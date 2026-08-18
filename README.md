@@ -142,10 +142,18 @@ npm test                      # run the smoke tests
   records are migrated in place on first boot.
 - Cloud history mirrors to Firestore collection `jenn_skating_sessions`
   (best-effort; the app runs fully offline on localStorage if the network is blocked).
-- **That mirror is read back on every boot** (`js/sync.js`): any session this
-  browser is missing is merged into the local log and its XP re-awarded, so a
-  cleared or brand-new browser recovers the history instead of starting over.
-  The merge is additive and idempotent — local records are never overwritten.
+- **The mirror syncs both ways on every boot** (`js/sync.js`), all of it
+  additive — nothing is overwritten or deleted on either side:
+  1. *pull* — any session this browser is missing is merged into the local log
+     and its XP re-awarded, so a cleared or brand-new browser recovers the
+     history instead of starting over;
+  2. *push* — any session the cloud is missing (uploaded while offline, or
+     logged before the mirror existed) is backfilled up;
+  3. *journey* — the part the session log cannot re-derive (quiz XP, prize
+     wallet, pending draws, the per-question ledger) rides in one `kind:
+     "journey"` doc in the same collection, merged upward and republished.
+     Without it two devices showed two different levels for the same skater:
+     one rebuilt training XP only, the other still held its quiz XP as well.
   Without this the mirror was write-only: `localStorage` is per-browser and
   per-device, and Safari deletes it after ~7 idle days, so everything earned
   vanished from the app while a full copy sat intact in the cloud.
