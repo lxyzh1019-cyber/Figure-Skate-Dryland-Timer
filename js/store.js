@@ -270,19 +270,27 @@ export function loadQuiz() {
     streak: q.streak || 0,
     qLedger: q.qLedger || {},
     lastPaidISO: q.lastPaidISO || null,
+    dayISO: q.dayISO || null,
+    dayXp: q.dayXp || 0,
     ...(q._legacy ? { _legacy: q._legacy } : {})
   };
 }
 export function saveQuiz(q) { writeStorage(LS_QUIZ, q); }
 
 /* ---- quiz XP economy ----------------------------------------------------
-   XP pays for LEARNING, not for repetition. Two rules together:
+   XP pays for LEARNING, not for repetition. Three rules together:
 
    1. One paying deck per calendar day (`lastPaidISO`). Every later deck the
       same day is free practice worth 0 XP — still fully playable, and it never
       touches the ledger, so practising can't spend tomorrow's budget.
-   2. Inside a paying deck each QUESTION pays at most once, ever: +10 the first
-      time it is attempted, +25 the first time it is answered correctly.
+   2. Each QUESTION pays at most once, ever: +10 the first time it is
+      attempted, +25 the first time it is answered correctly. A question first
+      seen and missed still pays its +25 later, when it is finally learned.
+   3. A daily ceiling (`QXP_DAILY_CAP`) across ALL quiz XP — the deck and the
+      Coach's Quiz share it — so even a day full of brand-new questions stays
+      well under one training session. Questions are paid whole or not at all:
+      once the day's budget can't cover the next one, its ledger entry is left
+      untouched and it is still worth full value tomorrow.
 
    Why: the old rule was `score*25 + answered*10` per deck, with no cap, no
    cooldown and no memory. Because the deck reveals the correct answer after
@@ -293,12 +301,50 @@ export function saveQuiz(q) { writeStorage(LS_QUIZ, q); }
    tapping rather than knowing.
 
    Because the bank is finite, these rules make the quiz's LIFETIME yield
-   finite and knowable (87 questions × 35 = 3,045 XP), spread over at least 11
-   days by rule 1. Training stays the only open-ended way up the ladder. */
+   finite and knowable (87 questions × 35 = 3,045 XP), spread over at least 29
+   days by rules 1 and 3. Training stays the only open-ended way up. */
 export const QXP_ATTEMPT = 10;   // once per question, first time attempted
 export const QXP_CORRECT = 25;   // once per question, first time correct
+/* Three brand-new questions a day (3 × 35). A full training day pays 180–275,
+   so the quiz can never out-earn getting on the mat. */
+export const QXP_DAILY_CAP = 105;
 
 export function quizQuestionKey(move, kind) { return move + "|" + kind; }
+
+/* Quiz XP already banked today, across the deck and the Coach's Quiz. */
+export function quizXpToday(quiz) {
+  const q = quiz || loadQuiz();
+  return q.dayISO === todayISODate() ? (q.dayXp || 0) : 0;
+}
+export function quizXpLeftToday(quiz) {
+  return Math.max(0, QXP_DAILY_CAP - quizXpToday(quiz));
+}
+
+/* Price one answered question against the ledger and bank the XP it earns.
+   Returns what it paid and why, so the caller can say so on screen. Callers
+   are responsible for the once-a-day deck rule; the ledger itself only ever
+   pays for something new, and only while the day's budget covers it whole. */
+export function payQuizQuestion(key, correct, quiz) {
+  const q = quiz || loadQuiz();
+  const rec = q.qLedger[key] || { attempted: false, mastered: false };
+  const wouldPay = (rec.attempted ? 0 : QXP_ATTEMPT) + (!rec.mastered && correct ? QXP_CORRECT : 0);
+  // Nothing new to pay for: the question is spent, not capped.
+  if (!wouldPay) return { xp: 0, firstSeen: false, newlyMastered: false, capped: false };
+  // Over the day's ceiling: leave the ledger alone so the question keeps its
+  // full value for tomorrow.
+  if (wouldPay > quizXpLeftToday(q)) return { xp: 0, firstSeen: false, newlyMastered: false, capped: true };
+
+  const firstSeen = !rec.attempted;
+  const newlyMastered = !rec.mastered && !!correct;
+  const spentToday = quizXpToday(q);   // read BEFORE rolling dayISO to today
+  rec.attempted = true;
+  if (newlyMastered) rec.mastered = true;
+  q.qLedger[key] = rec;
+  q.dayISO = todayISODate();
+  q.dayXp = spentToday + wouldPay;
+  if (!quiz) saveQuiz(q);        // caller-owned blobs are saved by the caller
+  return { xp: wouldPay, firstSeen, newlyMastered, capped: false };
+}
 
 /* Every move the app can ask about, de-duplicated across the week. */
 let _movePoolCache = null;
@@ -398,14 +444,37 @@ export function setEngagementPick(systemKey) {
 
 /* ============================================================
    JOURNEY — XP, level, rank, prizes. XP, prizes, and ranks.
-   XP rules (design spec): session complete = moves×10 + 40
-   (spa = 0); quiz: +25 per correct, +10 per attempted question.
+   XP rules: session complete = (moves×10 + 40) × rounds factor
+   (spa = 0); quiz pays for first-time learning only — see the
+   quiz XP economy above.
    ============================================================ */
 
 export function loadJourney() {
   return readStorage(LS_JOURNEY, null);
 }
 export function saveJourney(j) { writeStorage(LS_JOURNEY, j); }
+
+/* Effort multiplier for the rounds actually trained. A red-light 1-round day
+   and a full green 3-round day used to pay exactly the same — the round count
+   never reached the XP at all — so showing up paid as well as working. A
+   1-round day is now worth half a 3-round day:
+
+     1 round ×0.5   2 rounds ×0.75   3 rounds ×1.0 (unchanged)
+
+   The full-day value is the anchor here (unlike the swim app, which anchors on
+   the 1-round day and doubles full days): this ladder's climb to Eternal Edge
+   is already paced for a December summit at the current rate, and raising the
+   full-day rate would pull the whole ladder forward by months.
+
+   Only records written by this version (xpVersion 3) are scaled. Legacy rows
+   keep the flat value they were awarded, so a cloud restore of an old
+   red-light session re-awards what it originally paid instead of halving it. */
+export const XP_VERSION = 3;
+export function roundsFactor(entry) {
+  if (!entry || entry.xpVersion !== XP_VERSION) return 1;
+  const rounds = Math.min(3, Math.max(1, entry.roundsDone || 1));
+  return 0.25 + rounds * 0.25;   // 1 → 0.5, 2 → 0.75, 3 → 1.0
+}
 
 export function xpForSession(entry) {
   if (entry.sessionType === "spa" || entry.session === "spa" || entry.spa) return 0;
@@ -414,9 +483,11 @@ export function xpForSession(entry) {
   const moves = (entry.perExercise && entry.perExercise.length) ||
                 entry.movesDone || entry.moves || 6;
   // Skate-specific bonus: +5 XP per clean frozen landing (kept from V2 so
-  // historical seeding and new sessions reward the same thing).
+  // historical seeding and new sessions reward the same thing). Landings are
+  // already counted once per round, so the rounds factor must not scale them
+  // a second time.
   const cleanBonus = 5 * (entry.cleanLandings || 0);
-  return moves * 10 + 40 + cleanBonus;
+  return Math.round((moves * 10 + 40) * roundsFactor(entry)) + cleanBonus;
 }
 
 /* XP a stored record is worth. Prefers what was actually awarded at the time;
