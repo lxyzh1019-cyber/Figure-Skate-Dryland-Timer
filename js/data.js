@@ -866,7 +866,12 @@ export const LADDER = [
   { level: 36, name: "Ice Legend",     icon: "🏆", habitat: "#F2C14E" },
   { level: 41, name: "Comet Spiral",   icon: "☄️", habitat: "#5B6ABF" },
   { level: 46, name: "Solstice Flame", icon: "🔥", habitat: "#E8703A" },
-  { level: 50, name: "Eternal Edge",   icon: "♾️", habitat: "#A8E6DF" }
+  { level: 50, name: "Eternal Edge",   icon: "♾️", habitat: "#A8E6DF" },
+  { level: 55, name: "Snow Petrel",    icon: "🕊️", habitat: "#DDE7F2" },
+  { level: 60, name: "Frost Flower",   icon: "🌸", habitat: "#F2D6E4" },
+  { level: 65, name: "Midnight Sun",   icon: "☀️", habitat: "#F4B860" },
+  { level: 70, name: "Glacier Heart",  icon: "🏔️", habitat: "#7FB2D9" },
+  { level: 75, name: "Winter Sovereign", icon: "👑", habitat: "#C9A227" }
 ];
 
 /* The final rung — nothing above this level changes rank, so the UI can
@@ -888,7 +893,12 @@ export const RANK_LORE = {
   "Ice Legend":    { chapter: "Chapter 5 · The Midnight Ice", story: "Legends aren't born on competition day. They're built on quiet Tuesday drylands, on landings frozen when nobody was watching, on getting up one more time than falling down. You did the work every single day — and now the ice tells your story.", skate: "Everything you built — axis, edges, spins, jumps, grace — all in one skater.", fact: "The oldest ice skates ever found are over 3,000 years old, carved from horse bones — skating is one of humanity's oldest joys." },
   "Comet Spiral":  { chapter: "Chapter 6 · The Long Winter", story: "A comet only gets its tail when it comes close to the fire — the pressure is what makes it visible. You're past the part where anyone is impressed by talent. What people see now is the long, bright trail of every session behind you, and it's the trail that makes the light.", skate: "Spirals held long and calm at full speed, because the engine underneath never runs out.", fact: "Halley's Comet takes about 76 years to come back around — some things are worth waiting years for, and worth the trip." },
   "Solstice Flame":{ chapter: "Chapter 6 · The Long Winter", story: "The solstice is the longest, darkest night of the whole year — and it's exactly when the light starts coming back. This rank belongs to the skater who kept training through the cold months when it was hard to get up, hard to care, hard to keep going. You carried your own flame through the dark part.", skate: "Full programs with power left in the tank at the end — winter conditioning showing up on the ice.", fact: "The winter solstice around Dec 21 is the shortest day of the year, and every single day after it is brighter than the last." },
-  "Eternal Edge":  { chapter: "Chapter 7 · The Summit", story: "You reached the top of the ladder — and here's the secret it was keeping: the edge never actually ends. There's no level above this one because there's nothing left to unlock. From here it isn't about earning anything. It's just you, the ice, and the skater you decided to become. Go skate for the love of it.", skate: "Nothing left to prove on this ladder. Every session from here is yours to spend how you like.", fact: "Antarctic ice sheets hold ice that has been frozen for over 800,000 years — the deepest ice keeps the longest record." }
+  "Eternal Edge":  { chapter: "Chapter 7 · The Far Ice", story: "Here is the secret the edge was keeping: it doesn't end. Skaters who get this far stop asking how much further there is to go, because the answer stopped mattering — they'd skate anyway. You're past the part where a ladder is what keeps you going, and the ice ahead is wide open.", skate: "Everything is yours now: axis, edges, spins, jumps, grace. From here you're refining a skater, not building one.", fact: "Antarctic ice sheets hold ice that has been frozen for over 800,000 years — the deepest ice keeps the longest record." },
+  "Snow Petrel":   { chapter: "Chapter 8 · Beyond the Rink", story: "A snow petrel is a small white bird that flies straight into blizzards on purpose. It doesn't wait for the weather to be kind — it has learned to read the wind so well that rough air carries it instead of knocking it down. That's you on the days that used to stop you.", skate: "Bad ice, cold rinks, early mornings, tired legs — none of them change how you skate any more.", fact: "Snow petrels nest up to 300 km inland in Antarctica, farther from open water than almost any other bird on Earth." },
+  "Frost Flower":  { chapter: "Chapter 8 · Beyond the Rink", story: "Frost flowers grow on brand-new sea ice when the air is far colder than the water — tiny crystal blooms built out of nothing but vapour, in the harshest place there is. They only appear because the conditions are brutal. Your best skating is made of the same stuff: it exists because the hard days happened.", skate: "The delicate parts — carriage, hands, the finish of a spiral — held together by everything underneath.", fact: "Frost flowers bloom on young sea ice in still, bitter cold, each one grown from vapour in a few hours — and gone just as fast." },
+  "Midnight Sun":  { chapter: "Chapter 9 · The Endless Season", story: "Far enough north, the sun stops setting. For weeks the light just keeps going, and the day has no edge to it at all. That's what your practice has become — not a thing you start and stop, but something always running quietly underneath everything else.", skate: "Training stopped being an event on the calendar. It's just how you live now.", fact: "North of the Arctic Circle the sun stays above the horizon for weeks — and at the North Pole itself, for six straight months." },
+  "Glacier Heart": { chapter: "Chapter 9 · The Endless Season", story: "A glacier looks like it's standing still. It isn't — it is moving, every hour, with more force than anything else on land, carving valleys out of mountains because it simply never stops. Nobody watching sees it happen. Everybody sees what it made.", skate: "Years of quiet work showing up as something people can see from across the rink.", fact: "Glaciers really do flow — some surge more than 20 metres in a single day — and the ice at the bottom can be thousands of years old." },
+  "Winter Sovereign": { chapter: "Chapter 9 · The Endless Season", story: "The very top. Not because you beat anyone — because you kept going long after the ladder stopped being the reason. Winter belongs to the skater who was still showing up when it was dark at four in the afternoon and nobody would have noticed if she hadn't. There is nothing above this one. Go skate for the love of it.", skate: "Nothing left to prove on this ladder. Every session from here is yours to spend how you like.", fact: "Figure skating was the FIRST winter sport in the Olympics — it appeared at the 1908 Summer Games in London, sixteen years before the first Winter Olympics existed." }
 };
 export const RANK_TEASE = {
   "Snowflake": "Something one-of-a-kind is drifting closer…", "Frost Spinner": "A calm centre in a spinning world awaits…",
@@ -898,7 +908,12 @@ export const RANK_TEASE = {
   "Ice Legend": "The legend of the ice awaits at the very top…",
   "Comet Spiral": "Something is burning a long bright trail out past the legend…",
   "Solstice Flame": "A flame that only lights on the year's darkest night…",
-  "Eternal Edge": "The very summit. No one has told you what's up there yet…"
+  "Eternal Edge": "Past the legend the ice keeps going — nobody has said how far…",
+  "Snow Petrel": "Something small and white flies straight into the storm…",
+  "Frost Flower": "Something delicate grows where it has no right to…",
+  "Midnight Sun": "Somewhere ahead, the light stops going out…",
+  "Glacier Heart": "Something enormous is moving, too slowly to see…",
+  "Winter Sovereign": "The very summit. No one has told you what's up there yet…"
 };
 
 // Level-up prize pool — a grown-up curates this in Settings.

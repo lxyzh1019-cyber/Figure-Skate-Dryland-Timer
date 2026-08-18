@@ -164,8 +164,10 @@ localStorage.clear();
 /* --- the rank stories are quiz material too, once unlocked --- */
 const bank1 = store.questionBank(1), bank26 = store.questionBank(26);
 ok(bank26.length > bank1.length, "the question pool grows as ranks unlock");
-ok(store.rankPool(1).length === 1 && store.rankPool(50).length === data.LADDER.length,
+ok(store.rankPool(1).length === 1 && store.rankPool(data.MAX_LEVEL).length === data.LADDER.length,
    "only ranks she has reached are askable — locked chapters stay a mystery");
+ok(store.rankPool(50).length === data.LADDER.filter(r => r.level <= 50).length,
+   "and the pool tracks the ladder as it grows");
 ok(store.rankPool(26).every(r => r.name.startsWith("Rank: ")),
    "rank topics have their own ledger key space, never colliding with a move");
 const rankQs = bank26.filter(([, k]) => k === "story" || k === "fact");
@@ -255,6 +257,13 @@ REQUIRED_RUNGS.forEach(([lvl, name]) => {
 ok(data.levelCost(1) === 100 && data.levelCost(26) === 600,
    "levelCost curve unchanged (100 + (n-1)*20)");
 ok(data.MAX_LEVEL === data.LADDER[data.LADDER.length - 1].level, "MAX_LEVEL is the last rung");
+/* The summit has to stay out of reach until January 2027. From level 18 and a
+   perfect 6-day week at the flat rates (2,560 XP incl. landings), plus the
+   whole quiz bank, she can hold about 55k XP on Jan 1 — so the top rung has to
+   cost more than that. */
+const cumTo = L => { let t = 0; for (let n = 1; n < L; n++) t += data.levelCost(n); return t; };
+ok(cumTo(data.MAX_LEVEL) > 55000, "the summit costs more than a perfect run to Jan 1 can earn");
+ok(data.LADDER.filter(r => r.level > 50).length === 5, "five rungs above the old level-50 ceiling");
 ok(data.LADDER.every((r, i, a) => i === 0 || r.level > a[i - 1].level), "ladder levels strictly increase");
 data.LADDER.forEach(r => ok(data.RANK_LORE[r.name] && data.RANK_LORE[r.name].story,
   `${r.name} has lore (no blank story card)`));

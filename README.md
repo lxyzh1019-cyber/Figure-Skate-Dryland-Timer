@@ -100,7 +100,10 @@ minutes. `answered × 10` also paid out on an all-wrong deck, rewarding tapping
 over knowing. `test/smoke.mjs` guards all of this.
 
 **Levels.** Cost is `100 + (level−1)×20`, unchanged since V2 so an athlete's
-level never shifts. The ladder runs to **level 50 (Eternal Edge)**; every
+level never shifts. The ladder runs to **level 75 (Winter Sovereign)** — sized
+so that from level 18, a perfect six-day week at the flat rates (2,560 XP with
+landings) plus the entire quiz bank still cannot reach the summit before
+January 2027; every
 historical rung keeps its exact threshold, and a smoke test enforces that so a
 kid's rank can never move backwards. XP is seeded once from past sessions on
 first boot and never re-seeded.
