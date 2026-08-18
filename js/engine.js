@@ -9,7 +9,7 @@
    ============================================================ */
 
 import { DAYS, BLOCK_ORDER, BLOCK_LABEL, LIGHT_ROUNDS, SIDE_SWITCH_BUFFER, INTENT_WORDS, MICRO_LOOP, BREATH_REHEARSAL, MANTRA, exWork, exRepsDetail } from "./data.js";
-import { settings, configuredExerciseRest, configuredRoundRest, configuredSectionRest, saveSession, patchLastSession, logEvent, loadDayProgress, saveDayProgress, clearDayProgress, loadGate, saveGate, addSkipRecord, addXp, xpForSession, XP_VERSION } from "./store.js";
+import { settings, configuredExerciseRest, configuredRoundRest, configuredSectionRest, saveSession, patchLastSession, logEvent, loadDayProgress, saveDayProgress, clearDayProgress, loadGate, saveGate, addSkipRecord, addXp, xpForSession, noteSessionXpAwarded, XP_VERSION } from "./store.js";
 import { speak, speakIfIdle, speakAndWait, interruptSpeech, cancelSpeech, nextEncouragement, beep, endBeep, playCue, ensureAudio, voiceOn } from "./audio.js";
 import { fsAddSession } from "./firebase.js";
 import { recoveryDoseSecs, refTime } from "./util.js";
@@ -745,6 +745,7 @@ export function finalize(completed) {
   if (sess.xpEarned > 0) {
     const { leveledUp } = addXp(sess.xpEarned);
     sess.leveledUp = leveledUp;
+    noteSessionXpAwarded(sess.xpEarned);   // so a later cloud restore can't re-award it
     patchLastSession({ xpEarned: sess.xpEarned });
   }
 

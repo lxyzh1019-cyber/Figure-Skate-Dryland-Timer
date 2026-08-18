@@ -32,8 +32,50 @@ export function readStorage(key, fallback) {
   try { const v = localStorage.getItem(key); return v !== null ? JSON.parse(v) : fallback; }
   catch { return fallback; }
 }
+
+/* A full localStorage is silent by default: setItem throws, the old empty
+   catch dropped it, and the app happily said "Training complete" over a
+   session that was never recorded. Now a failed write frees the expendable
+   analytics blobs, retries once, and — if it still fails — tells the app so a
+   grown-up sees a banner instead of losing work invisibly. */
+const EXPENDABLE_KEYS = [LS_EVENTS, SKIP_HISTORY_KEY, LS_PRLOG];
+let _storageErrorHandler = null;
+let _lastStorageError = null;
+export function onStorageError(fn) { _storageErrorHandler = fn; }
+export function lastStorageError() { return _lastStorageError; }
+
+function reportStorageError(key, error) {
+  _lastStorageError = { key, message: String(error && error.message || error), at: Date.now() };
+  console.error("Storage write failed:", key, error);
+  try { if (_storageErrorHandler) _storageErrorHandler(_lastStorageError); } catch {}
+}
+
+/* Drop analytics-only keys to make room. Never touches sessions, XP or prizes.
+   Returns true only if something was actually removed. */
+function freeSpace(protectKey) {
+  let freed = false;
+  EXPENDABLE_KEYS.forEach(k => {
+    if (k === protectKey) return;
+    try {
+      if (localStorage.getItem(k) !== null) { localStorage.removeItem(k); freed = true; }
+    } catch {}
+  });
+  return freed;
+}
+
+/* Returns whether the value actually reached storage. */
 export function writeStorage(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  let str;
+  try { str = JSON.stringify(value); }
+  catch (e) { reportStorageError(key, e); return false; }
+  try { localStorage.setItem(key, str); return true; }
+  catch (e) {
+    if (freeSpace(key)) {
+      try { localStorage.setItem(key, str); return true; } catch { /* still full */ }
+    }
+    reportStorageError(key, e);
+    return false;
+  }
 }
 
 /* ---- settings ---- */
@@ -448,6 +490,16 @@ export function xpForSession(entry) {
   return Math.round((moves * 10 + 40) * roundsFactor(entry)) + cleanBonus;
 }
 
+/* XP a stored record is worth. Prefers what was actually awarded at the time;
+   falls back to the formula (halved for an ended-early session, matching
+   finalize()) for records restored from the cloud or written before xpEarned
+   existed. */
+export function sessionXp(entry) {
+  if (Number.isFinite(entry && entry.xpEarned)) return Math.max(0, entry.xpEarned);
+  const full = xpForSession(entry || {});
+  return entry && entry.completedFully === false ? Math.round(full / 2) : full;
+}
+
 /* Level for a cumulative XP total, plus progress into the current level. */
 export function levelFromXp(xp) {
   let level = 1, rem = xp;
@@ -465,6 +517,164 @@ export function addXp(amount) {
   if (gained > 0) j.pendingDraws = (j.pendingDraws || 0) + gained;
   saveJourney(j);
   return { journey: j, leveledUp: gained > 0, levelsGained: gained };
+}
+
+/* Record that XP already granted through addXp() came from a session record.
+   Keeps the reconcile baseline honest — without this, the next cloud restore
+   would see the session log grow and award the same XP a second time. */
+export function noteSessionXpAwarded(amount) {
+  if (!amount) return;
+  const j = loadJourney() || { xp: 0, prizesWon: [], pendingDraws: 0 };
+  j.sessionXp = (Number.isFinite(j.sessionXp) ? j.sessionXp : 0) + amount;
+  saveJourney(j);
+}
+
+/* ---- cloud restore ------------------------------------------------------
+   The Firestore mirror was write-only: sessions went up and nothing ever read
+   them back, so a cleared localStorage wiped everything the kid had earned
+   while a full copy sat intact in the cloud. These two functions close that
+   loop; js/sync.js calls them once per boot. */
+
+export function sessionKey(s) {
+  return String(s && s.isoDate || "") + "|" + String(s && s.dayKey || "");
+}
+function stripCloudFields(doc) {
+  const { id, createdAt, ...entry } = doc || {};
+  return entry;
+}
+
+/* Additive and idempotent: the cloud can only ADD sessions this device is
+   missing. Nothing local is ever overwritten or deleted. Returns how many
+   were added. */
+export function mergeSessions(incoming) {
+  const local = loadSessions();
+  const seen = new Set(local.map(sessionKey));
+  let added = 0;
+  (incoming || []).forEach(doc => {
+    const entry = stripCloudFields(doc);
+    if (!entry.isoDate) return;
+    const key = sessionKey(entry);
+    if (seen.has(key)) return;
+    seen.add(key);
+    local.push(entry);
+    added++;
+  });
+  if (added) {
+    local.sort((a, b) => String(a.isoDate).localeCompare(String(b.isoDate)));
+    writeStorage(LS_SESSIONS, local);
+  }
+  return added;
+}
+
+/* Keep the XP total consistent with the session log without double-counting
+   quiz XP (which has no session record). The journey remembers how much of its
+   XP came from sessions; when the log grows behind its back — a cloud restore —
+   only the difference is awarded, and level-ups grant their prize draws as
+   usual. The first call just establishes the baseline and awards nothing.
+   Returns the XP added. */
+export function reconcileJourneyWithSessions() {
+  const total = loadSessions().reduce((sum, s) => sum + sessionXp(s), 0);
+  const j = loadJourney() || { xp: 0, prizesWon: [], pendingDraws: 0 };
+  if (!Number.isFinite(j.sessionXp)) {
+    j.sessionXp = total;
+    saveJourney(j);
+    return 0;
+  }
+  const delta = total - j.sessionXp;
+  if (delta <= 0) return 0;
+  j.sessionXp = total;
+  saveJourney(j);          // record the new baseline before awarding
+  addXp(delta);            // re-reads the journey, so it keeps sessionXp
+  return delta;
+}
+
+/* ============================================================
+   BACKUP — one JSON file holding everything this skater owns
+   (XP, prizes, quiz mastery, trackers, settings), so there is a
+   recovery path that doesn't depend on the cloud mirror.
+   ============================================================ */
+export const BACKUP_APP = "skate-with-grace-dryland";
+export const BACKUP_SCHEMA = 1;
+
+/* Every key that belongs to the skater. */
+export const PROFILE_KEYS = [
+  SETTINGS_KEY, PROGRESS_KEY, SKIP_HISTORY_KEY, ENGAGE_KEY, LS_READINESS, LS_DAYPROG,
+  LS_LEARNING, LS_LADDER, LS_QUIZ, LS_GATE, LS_SESSIONS, LS_TRACKER, LS_EVENTS,
+  LS_PRLOG, LS_JOURNEY
+];
+
+/* True when nothing in the saved settings differs from the shipped defaults. */
+function isDefaultSettings(saved) {
+  if (!saved || typeof saved !== "object") return true;
+  return Object.keys(DEFAULT_SETTINGS).every(k =>
+    saved[k] === undefined || JSON.stringify(saved[k]) === JSON.stringify(DEFAULT_SETTINGS[k]));
+}
+
+export function exportProfileData() {
+  const data = {};
+  PROFILE_KEYS.forEach(k => {
+    const v = readStorage(k, undefined);
+    if (v !== undefined) data[k] = v;
+  });
+  return {
+    app: BACKUP_APP, schema: BACKUP_SCHEMA,
+    exportedAt: new Date().toISOString(),
+    profile: { name: settings.athleteName || "Jenn" },
+    data
+  };
+}
+
+/* Restoring only ADDS: sessions are merged and deduped, the higher XP total
+   wins, prize wallets are unioned by id, and every other record fills in only
+   where this device has nothing.
+   Returns { sessionsAdded, xpAdded, filled: [keys] }. Throws on a file that
+   isn't one of ours. */
+export function importProfileData(payload) {
+  if (!payload || payload.app !== BACKUP_APP || !payload.data || typeof payload.data !== "object") {
+    throw new Error("That file isn't a Skate with Grace backup.");
+  }
+  if (Number(payload.schema) > BACKUP_SCHEMA) {
+    throw new Error("That backup was made by a newer version of the app.");
+  }
+  const d = payload.data;
+  const result = { sessionsAdded: 0, xpAdded: 0, filled: [] };
+
+  if (Array.isArray(d[LS_SESSIONS])) result.sessionsAdded = mergeSessions(d[LS_SESSIONS]);
+
+  const inc = d[LS_JOURNEY];
+  if (inc && typeof inc === "object") {
+    const local = loadJourney() || { xp: 0, prizesWon: [], pendingDraws: 0 };
+    const wallet = new Map();
+    [...(local.prizesWon || []), ...(inc.prizesWon || [])].forEach(p => {
+      if (p && !wallet.has(p.id)) wallet.set(p.id, p);
+    });
+    saveJourney({
+      ...inc, ...local,
+      xp: Math.max(local.xp || 0, inc.xp || 0),
+      pendingDraws: Math.max(local.pendingDraws || 0, inc.pendingDraws || 0),
+      sessionXp: Math.max(
+        Number.isFinite(local.sessionXp) ? local.sessionXp : 0,
+        Number.isFinite(inc.sessionXp) ? inc.sessionXp : 0
+      ),
+      prizesWon: [...wallet.values()].sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))
+    });
+  }
+
+  PROFILE_KEYS.forEach(k => {
+    if (k === LS_SESSIONS || k === LS_JOURNEY || d[k] === undefined) return;
+    // Settings are the exception to "fill only what's missing": migrate() always
+    // writes them, so they'd never look missing. Untouched defaults count as
+    // empty — a fresh device gets her name, rest times and prize pool back, and
+    // anything a grown-up has actually changed here still wins.
+    if (k === SETTINGS_KEY) {
+      if (isDefaultSettings(readStorage(k, null))) { writeStorage(k, d[k]); result.filled.push(k); }
+      return;
+    }
+    if (readStorage(k, null) === null) { writeStorage(k, d[k]); result.filled.push(k); }
+  });
+
+  result.xpAdded = reconcileJourneyWithSessions();
+  return result;
 }
 
 export function pendingDrawCount() {
@@ -506,7 +716,7 @@ export function migrate() {
 
   const j = loadJourney();
   if (j == null) {
-    const xp = loadSessions().reduce((sum, s) => sum + xpForSession(s), 0);
+    const xp = loadSessions().reduce((sum, s) => sum + sessionXp(s), 0);
     saveJourney({ xp, prizesWon: [], pendingDraws: 0, seededAt: Date.now() });
   } else if (Array.isArray(j.prizesWon) && j.prizesWon.some(p => p.id == null)) {
     // Old prize records carried only {label, when}; redeemPrize is id-based.
@@ -529,4 +739,8 @@ export function migrate() {
     const results = (q.runs || []).map(r => ({ t: r.when || Date.now(), score: r.correct || 0, total: r.total || 0 })).slice(-40);
     saveQuiz({ items, results, streak: 0, _legacy: q });
   }
+
+  // Establish the session-XP baseline BEFORE any cloud restore runs, so a
+  // restore awards exactly the XP of the records it actually brings back.
+  reconcileJourneyWithSessions();
 }

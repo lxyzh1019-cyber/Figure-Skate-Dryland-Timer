@@ -104,6 +104,62 @@ ok(Array.isArray(migQuiz.results) && migQuiz.results.length === 1, "legacy quiz 
 ok(migQuiz.items["Box Jump → Stick"] && migQuiz.items["Box Jump → Stick"].wrong === 1, "legacy per-move misses preserved");
 localStorage.clear();
 
+/* --- cloud restore: merge is additive and idempotent, XP is awarded once ----
+   The mirror used to be write-only, so a cleared localStorage was permanent
+   loss while a full copy sat in Firestore. These guard the way back. */
+localStorage.clear();
+const rec = (iso, day) => ({ isoDate: iso, dayKey: day, perExercise: [1,2,3,4,5,6], completedFully: true, xpEarned: 100 });
+const cloud = [{ id: "abc", createdAt: { seconds: 1 }, ...rec(new Date(Date.now() - 2 * 86400000).toISOString(), "monday") },
+               rec(new Date().toISOString(), "tuesday")];
+store.migrate();                                   // fresh device: baseline 0
+ok(store.loadJourney().xp === 0, "wiped device starts at 0 XP");
+ok(store.mergeSessions(cloud) === 2, "restore adds both cloud sessions");
+ok(store.loadSessions()[0].id === undefined, "cloud-only fields are stripped");
+ok(store.reconcileJourneyWithSessions() === 200, "restored sessions re-award their XP");
+ok(store.loadJourney().xp === 200, "XP is back after the restore");
+ok(store.mergeSessions(cloud) === 0, "re-running the restore adds nothing");
+ok(store.reconcileJourneyWithSessions() === 0, "and awards no XP a second time");
+localStorage.clear();
+
+/* --- JSON backup / restore: additive, idempotent, and refuses a foreign file --- */
+store.migrate();
+store.saveSession({ isoDate: "2026-03-01T10:00:00.000Z", dayKey: "monday", perExercise: [1,2,3,4,5,6], completedFully: true, xpEarned: 100 });
+store.addXp(100);
+store.saveQuiz({ items: { a: 1 }, results: [1], streak: 3, qLedger: {}, lastPaidISO: null });
+const backupFile = store.exportProfileData();
+ok(backupFile.app === "skate-with-grace-dryland", "backup is stamped with this app");
+ok(backupFile.data[store.LS_SESSIONS].length === 1, "backup carries the session log");
+ok(backupFile.data[store.LS_QUIZ].streak === 3, "and quiz mastery");
+localStorage.clear();
+store.migrate();
+ok(store.loadSessions().length === 0, "device is empty");
+const restored = store.importProfileData(backupFile);
+ok(restored.sessionsAdded === 1 && store.loadSessions().length === 1, "restore brings the session log back");
+// 200 = the wallet total carried in the file (100) plus the 100 the restored
+// session log is worth against this device's fresh zero baseline.
+ok(store.loadJourney().xp === 200, "and the XP with it");
+const again = store.importProfileData(backupFile);
+ok(again.sessionsAdded === 0 && again.xpAdded === 0, "restoring the same file twice changes nothing");
+let refused = false;
+try { store.importProfileData({ app: "splash-swim-dryland", data: {} }); } catch { refused = true; }
+ok(refused, "a backup from the swim app is refused");
+localStorage.clear();
+
+/* --- a failed write is reported, never swallowed --- */
+let sawError = null;
+store.onStorageError(e => { sawError = e; });
+const realSetItem = localStorage.setItem;
+const realConsoleError = console.error;
+localStorage.setItem = () => { throw new Error("QuotaExceededError"); };
+console.error = () => {};                    // the failure is the point; don't print it
+const wrote = store.writeStorage(store.LS_JOURNEY, { xp: 1 });
+localStorage.setItem = realSetItem;
+console.error = realConsoleError;
+ok(wrote === false, "writeStorage reports the failure instead of returning silently");
+ok(sawError && /Quota/.test(sawError.message), "and the app is told, so it can warn a grown-up");
+store.onStorageError(null);
+localStorage.clear();
+
 /* --- prize pool defaults avoid food / screen-time --- */
 const prizeText = data.PRIZE_POOL.map(p => p.label.toLowerCase()).join("|");
 ok(!/dinner|dessert|ice ?cream|ipad|screen/.test(prizeText), "no food/screen default prizes");

@@ -421,6 +421,7 @@ export function buildGrownupVM(state) {
     standingRules: STANDING_RULES,
     libraryList,
     settingsName: settings.athleteName || "Jenn",
+    backupNote: state.backupNote || "", backupNoteOk: !!state.backupNoteOk,
     settingsExRest: settings.exerciseRestSeconds, settingsRndRest: settings.roundRestSeconds, settingsSecRest: settings.sectionRestSeconds,
     stepperBtn: "width:44px;height:44px;border-radius:50%;background:var(--surface-2);border:2px solid var(--hairline);font-size:22px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:inherit;",
     voiceStyleOpts,
