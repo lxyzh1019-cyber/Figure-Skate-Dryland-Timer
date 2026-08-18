@@ -133,3 +133,19 @@ npm test                      # run the smoke tests
   records are migrated in place on first boot.
 - Cloud history mirrors to Firestore collection `jenn_skating_sessions`
   (best-effort; the app runs fully offline on localStorage if the network is blocked).
+- **That mirror is read back on every boot** (`js/sync.js`): any session this
+  browser is missing is merged into the local log and its XP re-awarded, so a
+  cleared or brand-new browser recovers the history instead of starting over.
+  The merge is additive and idempotent — local records are never overwritten.
+  Without this the mirror was write-only: `localStorage` is per-browser and
+  per-device, and Safari deletes it after ~7 idle days, so everything earned
+  vanished from the app while a full copy sat intact in the cloud.
+- **Backup & restore** (Grown-up Zone → Settings): downloads the whole
+  namespace as JSON — sessions, XP, prizes, quiz mastery, trackers, settings —
+  and restores it. Restoring is additive: sessions are merged and deduped, the
+  higher XP total wins, prize wallets are unioned, and other records fill in
+  only where the device has nothing. This is the recovery path that doesn't
+  depend on the network.
+- Writes that localStorage rejects (full device) are retried after dropping the
+  expendable analytics keys, and if they still fail the app says so in a banner
+  — a session that wasn't recorded never reads as saved.
