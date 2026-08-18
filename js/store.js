@@ -5,7 +5,7 @@
    ============================================================ */
 
 import { DAY_MS, mondayOfThisWeek, todayISODate, edmontonISO } from "./util.js";
-import { DAYS, PRIZE_POOL, levelCost } from "./data.js";
+import { DAYS, PRIZE_POOL, levelCost, LADDER, RANK_LORE } from "./data.js";
 
 /* ---- keys (unchanged from the old app unless noted) ---- */
 export const SETTINGS_KEY     = "skateTrainingSettingsV2";
@@ -361,13 +361,36 @@ export function movePool() {
   _movePoolCache = pool; return pool;
 }
 
-/* Every askable question: one per (move, kind) that actually has content. */
-export function questionBank() {
+/* Ranks the skater has actually reached, as quiz topics. Her rank stories are
+   the best-read text in the app and nothing ever asked her about them; now the
+   ladder itself teaches. Locked ranks are excluded on purpose — asking about a
+   chapter she hasn't unlocked would spoil the mystery card AND quiz her on
+   something she has never been shown. The pool therefore GROWS as she climbs,
+   which is the point. */
+export function rankPool(level) {
+  const lvl = Number.isFinite(level) ? level : levelFromXp((loadJourney() || {}).xp || 0).level;
+  return LADDER.filter(r => r.level <= lvl).map(r => {
+    const lore = RANK_LORE[r.name] || {};
+    return {
+      name: "Rank: " + r.name,      // ledger key space of its own, never a move
+      rank: r.name, icon: r.icon, block: "story",
+      skill: lore.skate || "", fact: lore.fact || "", chapter: lore.chapter || ""
+    };
+  });
+}
+
+/* Every askable question: one per (topic, kind) that actually has content —
+   the moves asked three ways, plus the unlocked rank stories asked two. */
+export function questionBank(level) {
   const bank = [];
   movePool().forEach(m => {
     if (m.cue) bank.push([m, "cue"]);
     if (m.watch) bank.push([m, "watch"]);
     if (m.fix) bank.push([m, "fix"]);
+  });
+  rankPool(level).forEach(r => {
+    if (r.skill) bank.push([r, "story"]);
+    if (r.fact) bank.push([r, "fact"]);
   });
   return bank;
 }
@@ -381,7 +404,7 @@ export function quizPaidToday(quiz) {
    "moves mastered" goal and the grown-up's quiz card. */
 export function quizBankStatus(quiz) {
   const led = (quiz || loadQuiz()).qLedger || {};
-  const bank = questionBank();
+  const bank = questionBank();   // unlocked ranks only, so this grows with her
   let mastered = 0, xpLeft = 0;
   bank.forEach(([m, k]) => {
     const rec = led[quizQuestionKey(m.name, k)] || {};
@@ -567,33 +590,58 @@ export function mergeSessions(incoming) {
 }
 
 /* ---- journey convergence across devices ---------------------------------
-   The session log is mirrored, so any device can rebuild the XP that came from
-   training. Everything else in the journey — quiz XP, the prize wallet, the
-   pending draws — existed only on the device that earned it, which is why the
-   same kid could read level 26 on one device and level 18 on another. These
-   three functions carry that remainder through the cloud.
+   The same skater read level 26 on the iPad and 18 on the desktop. Both were
+   honest: only SESSIONS were mirrored, so the wiped desktop rebuilt the
+   training XP and nothing else, while the iPad still held years of quiz XP
+   earned under the old uncapped rules on top of it.
 
-   Everything moves UP and nothing is ever summed twice: XP takes the HIGHER
-   non-session total rather than adding the two, prize wallets union by id, and
-   a question mastered anywhere counts as mastered everywhere (so the same
-   learning can't be paid for a second time on the other device). */
+   The fix is to stop treating XP as a running total that each device
+   accumulates privately, and treat it as DERIVED state:
 
-/* XP the session log cannot account for — quiz learning, and any legacy
-   seeding. sessionXp is the part the log explains; the rest came from
-   somewhere no other device can see. */
-export function nonSessionXp(journey) {
-  const j = journey || loadJourney() || {};
-  const total = Number(j.xp) || 0;
-  const fromSessions = Number.isFinite(j.sessionXp) ? j.sessionXp : 0;
-  return Math.max(0, total - fromSessions);
+       xp  =  what the training log is worth  +  what the quiz ledger is worth
+
+   Both halves are mirrored, so every device computes the same number without
+   anyone having to win an argument about whose total is right. It is also
+   idempotent — rebuilding twice changes nothing — and un-farmable, because the
+   ledger already pays each question exactly once.
+
+   The level lands on the training number (18 here), which is the one the
+   grown-up asked for: XP you can point at a session for. */
+
+/* What the quiz ledger is worth, priced at the current rates. */
+export function quizXpFromLedger(quiz) {
+  const q = quiz || loadQuiz();
+  let xp = 0;
+  Object.values(q.qLedger || {}).forEach(rec => {
+    if (!rec) return;
+    if (rec.attempted) xp += QXP_ATTEMPT;
+    if (rec.mastered) xp += QXP_CORRECT;
+  });
+  return xp;
 }
 
+/* Recompute the journey total from its two sources. Prizes already won are
+   never touched, and a level gained still grants its draw. Returns the total. */
+export function rebuildJourneyXp() {
+  const j = loadJourney() || { xp: 0, prizesWon: [], pendingDraws: 0 };
+  const fromSessions = loadSessions().reduce((sum, s) => sum + sessionXp(s), 0);
+  const fromQuiz = quizXpFromLedger();
+  const before = levelFromXp(j.xp || 0).level;
+  j.sessionXp = fromSessions;
+  j.xp = fromSessions + fromQuiz;
+  const after = levelFromXp(j.xp).level;
+  if (after > before) j.pendingDraws = (j.pendingDraws || 0) + (after - before);
+  saveJourney(j);
+  return j.xp;
+}
+
+/* The half of the journey the session log cannot re-derive: the quiz ledger
+   (which prices itself), the prize wallet and the pending draws. */
 export function journeySnapshot() {
   const j = loadJourney() || {};
   const q = loadQuiz();
   return {
     kind: "journey",
-    nonSessionXp: nonSessionXp(j),
     prizesWon: j.prizesWon || [],
     pendingDraws: j.pendingDraws || 0,
     qLedger: q.qLedger || {},
@@ -602,23 +650,24 @@ export function journeySnapshot() {
   };
 }
 
-/* Merge a cloud journey snapshot into this device. Returns the XP added. */
+/* Merge a cloud journey snapshot into this device. Everything moves UP: prize
+   wallets union by id, and a question mastered anywhere counts as mastered
+   everywhere, so the same learning can never be paid for twice. Returns true
+   when something changed. */
 export function mergeCloudJourney(snap) {
-  if (!snap || snap.kind !== "journey") return 0;
+  if (!snap || snap.kind !== "journey") return false;
+  let changed = false;
+
   const j = loadJourney() || { xp: 0, prizesWon: [], pendingDraws: 0 };
-
-  const localExtra = nonSessionXp(j);
-  const merged = Math.max(localExtra, Number(snap.nonSessionXp) || 0);
-  const added = Math.max(0, merged - localExtra);
-
   const wallet = new Map();
   [...(j.prizesWon || []), ...(snap.prizesWon || [])].forEach(p => {
     if (p && p.id != null && !wallet.has(p.id)) wallet.set(p.id, p);
   });
-
-  j.xp = (Number(j.xp) || 0) + added;          // sessionXp is untouched, so the
-  j.pendingDraws = Math.max(j.pendingDraws || 0, snap.pendingDraws || 0);
-  j.prizesWon = [...wallet.values()]           // xp - sessionXp invariant holds
+  if (wallet.size !== (j.prizesWon || []).length) changed = true;
+  const draws = Math.max(j.pendingDraws || 0, snap.pendingDraws || 0);
+  if (draws !== (j.pendingDraws || 0)) changed = true;
+  j.pendingDraws = draws;
+  j.prizesWon = [...wallet.values()]
     .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
   saveJourney(j);
 
@@ -626,10 +675,12 @@ export function mergeCloudJourney(snap) {
   const q = loadQuiz();
   Object.entries(snap.qLedger || {}).forEach(([k, rec]) => {
     const cur = q.qLedger[k] || { attempted: false, mastered: false };
-    q.qLedger[k] = {
+    const next = {
       attempted: !!(cur.attempted || (rec && rec.attempted)),
       mastered: !!(cur.mastered || (rec && rec.mastered))
     };
+    if (next.attempted !== cur.attempted || next.mastered !== cur.mastered) changed = true;
+    q.qLedger[k] = next;
   });
   Object.entries(snap.quizItems || {}).forEach(([move, rec]) => {
     const cur = q.items[move] || { right: 0, wrong: 0, seen: 0 };
@@ -640,7 +691,7 @@ export function mergeCloudJourney(snap) {
     };
   });
   saveQuiz(q);
-  return added;
+  return changed;
 }
 
 /* Keep the XP total consistent with the session log without double-counting

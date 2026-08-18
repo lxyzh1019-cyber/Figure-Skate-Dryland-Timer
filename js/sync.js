@@ -19,15 +19,16 @@
 
      1. pull    — merge in sessions this device is missing
      2. push    — upload sessions the cloud is missing
-     3. journey — merge the part of the journey the session log
-                  cannot re-derive, then publish the merged result
+     3. journey — merge the quiz ledger and prize wallet, then
+                  publish the merged result and rebuild the XP total
+                  from those two shared sources
 
    Local-first still holds. Nothing is overwritten or deleted on
    either side; every step can only ADD.
    ============================================================ */
 
-import { settings, mergeSessions, reconcileJourneyWithSessions, loadSessions,
-         sessionKey, journeySnapshot, mergeCloudJourney, logEvent } from "./store.js";
+import { settings, mergeSessions, loadSessions, sessionKey,
+         journeySnapshot, mergeCloudJourney, rebuildJourneyXp, logEvent } from "./store.js";
 
 let _done = false;
 
@@ -38,9 +39,9 @@ const BACKFILL_LIMIT = 40;
 /* Runs once per app load, after the first paint. Never throws: an offline
    device, blocked Firestore rules or a mirror opt-out all just mean "nothing
    synced", and the app carries on with whatever is on the device.
-   Returns { added, xpAdded, uploaded, journeyXp }. */
+   Returns { added, uploaded, xp }. */
 export async function restoreFromCloud() {
-  const idle = { added: 0, xpAdded: 0, uploaded: 0, journeyXp: 0 };
+  const idle = { added: 0, uploaded: 0, xp: 0 };
   if (_done) return idle;
   _done = true;
   // Mirroring off (privacy opt-out) means there is nothing of ours up there,
@@ -56,7 +57,6 @@ export async function restoreFromCloud() {
 
     // 1. pull
     const added = mergeSessions(remoteSessions);
-    const xpAdded = added ? reconcileJourneyWithSessions() : 0;
 
     // 2. push — anything this device has that the cloud doesn't
     const remoteKeys = new Set(remoteSessions.map(sessionKey));
@@ -66,15 +66,17 @@ export async function restoreFromCloud() {
       if (await fsAddSession(s)) uploaded++;
     }
 
-    // 3. journey — merge what the session log can't rebuild, then publish the
-    // merged result so the other device picks it up on its next boot.
-    const journeyXp = mergeCloudJourney(await fsGetJourney());
+    // 3. journey — merge the ledger and wallet, publish the merged result for
+    // the other device, then recompute the total from the two shared sources.
+    // Every device that gets here lands on the same number.
+    const journeyChanged = mergeCloudJourney(await fsGetJourney());
     await fsSaveJourney(journeySnapshot());
+    const xp = rebuildJourneyXp();
 
-    if (added || uploaded || journeyXp) {
-      logEvent("cloud_sync", { added, xpAdded, uploaded, journeyXp });
+    if (added || uploaded || journeyChanged) {
+      logEvent("cloud_sync", { added, uploaded, xp });
     }
-    return { added, xpAdded, uploaded, journeyXp };
+    return { added, uploaded, xp };
   } catch (e) {
     console.warn("Cloud sync skipped:", e);
     return idle;

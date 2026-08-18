@@ -122,39 +122,52 @@ ok(store.reconcileJourneyWithSessions() === 0, "and awards no XP a second time")
 localStorage.clear();
 
 /* --- two devices converge on one level ------------------------------------
-   Only sessions were mirrored, so a second device could rebuild training XP
-   and nothing else: the same skater read level 26 on the iPad and 18 on the
-   desktop. The journey snapshot carries the remainder. */
+   The same skater read level 26 on the iPad and 18 on the desktop, because
+   only sessions were mirrored: the wiped desktop rebuilt the training XP while
+   the iPad still held years of old uncapped quiz XP on top. XP is now DERIVED
+   from the two mirrored sources — training log + quiz ledger — so every device
+   computes the same number. */
 localStorage.clear();
 store.migrate();
 store.saveSession({ isoDate: "2026-04-01T10:00:00.000Z", dayKey: "monday", completedFully: true, xpEarned: 300 });
-store.reconcileJourneyWithSessions();          // 300 XP, all of it from the log
-store.addXp(90);                               // quiz XP — invisible to the log
-store.addPrize({ icon: "🎬", label: "Family movie pick" });
-ok(store.nonSessionXp() === 90, "XP the session log can't explain is identified");
-const snapshot = store.journeySnapshot();
-ok(snapshot.kind === "journey" && snapshot.nonSessionXp === 90, "and travels in the snapshot");
-ok(snapshot.prizesWon.length === 1, "with the prize wallet");
+store.addXp(4000);                                  // years of old, uncapped quiz XP
+ok(store.loadJourney().xp === 4000, "the device starts with an inflated private total");
+ok(store.rebuildJourneyXp() === 300, "rebuilding lands on the training log, not the old total");
+ok(store.loadJourney().sessionXp === 300, "and records what the log accounts for");
 
-// Second device: same session log, no quiz XP, no prizes.
-localStorage.clear();
-store.migrate();
-store.saveSession({ isoDate: "2026-04-01T10:00:00.000Z", dayKey: "monday", completedFully: true, xpEarned: 300 });
-store.reconcileJourneyWithSessions();
-ok(store.loadJourney().xp === 300, "device 2 rebuilds only the training XP");
-ok(store.mergeCloudJourney(snapshot) === 90, "the snapshot hands over the missing 90");
-ok(store.loadJourney().xp === 390, "and both devices now read the same total");
-ok(store.loadJourney().prizesWon.length === 1, "the prize came across too");
-ok(store.mergeCloudJourney(snapshot) === 0, "merging the same snapshot again adds nothing");
-ok(store.nonSessionXp() === 90, "the non-session share is still exactly 90, never doubled");
-
-// A question mastered on the other device must not pay again on this one.
 const qKey = store.quizQuestionKey("Box Jump", "cue");
-store.mergeCloudJourney({ kind: "journey", nonSessionXp: 90, qLedger: { [qKey]: { attempted: true, mastered: true } } });
+const oneQuestion = store.QXP_ATTEMPT + store.QXP_CORRECT;   // attempt + correct, once, ever
+store.payQuizQuestion(qKey, true);
+ok(store.quizXpFromLedger() === oneQuestion, "the ledger prices itself at the current rates");
+ok(store.rebuildJourneyXp() === 300 + oneQuestion, "so quiz learning still counts, at its capped value");
+ok(store.rebuildJourneyXp() === 300 + oneQuestion, "and rebuilding twice changes nothing");
+
+const snapshot = store.journeySnapshot();
+ok(snapshot.kind === "journey" && snapshot.qLedger[qKey], "the snapshot carries the ledger");
+ok(snapshot.nonSessionXp === undefined, "no private XP total travels — XP is derived, not shipped");
+
+// Second device: same session log, empty ledger.
+localStorage.clear();
+store.migrate();
+store.saveSession({ isoDate: "2026-04-01T10:00:00.000Z", dayKey: "monday", completedFully: true, xpEarned: 300 });
+ok(store.rebuildJourneyXp() === 300, "device 2 starts from the training log alone");
+store.mergeCloudJourney(snapshot);
+ok(store.rebuildJourneyXp() === 300 + oneQuestion, "after the merge both devices read the same total");
 ok(store.payQuizQuestion(qKey, true).xp === 0, "a question mastered elsewhere is already spent here");
+ok(store.mergeCloudJourney(snapshot) === false, "merging the same snapshot again changes nothing");
 localStorage.clear();
 
-/* --- JSON backup / restore: additive, idempotent, and refuses a foreign file --- */
+/* --- the rank stories are quiz material too, once unlocked --- */
+const bank1 = store.questionBank(1), bank26 = store.questionBank(26);
+ok(bank26.length > bank1.length, "the question pool grows as ranks unlock");
+ok(store.rankPool(1).length === 1 && store.rankPool(50).length === data.LADDER.length,
+   "only ranks she has reached are askable — locked chapters stay a mystery");
+ok(store.rankPool(26).every(r => r.name.startsWith("Rank: ")),
+   "rank topics have their own ledger key space, never colliding with a move");
+const rankQs = bank26.filter(([, k]) => k === "story" || k === "fact");
+ok(rankQs.length === store.rankPool(26).length * 2, "each unlocked rank is asked two ways");
+
+/* --- JSON backup / restore: additive, idempotent, and refuses a foreign file --- *//* --- JSON backup / restore: additive, idempotent, and refuses a foreign file --- */
 store.migrate();
 store.saveSession({ isoDate: "2026-03-01T10:00:00.000Z", dayKey: "monday", perExercise: [1,2,3,4,5,6], completedFully: true, xpEarned: 100 });
 store.addXp(100);
@@ -256,8 +269,10 @@ const playPerfect = () => {
 localStorage.removeItem("skate_quiz_v1");
 localStorage.removeItem("skate_journey_v1");
 const bank0 = store.quizBankStatus();
-ok(bank0.total === 87 && bank0.mastered === 0, "question bank is 87 questions, none mastered");
-ok(bank0.xpTotal === 87 * 35, "lifetime quiz XP budget is bank x 35");
+const BANK = store.questionBank().length;      // 87 moves-questions + the unlocked ranks
+ok(BANK === 87 + store.rankPool().length * 2, "the bank is the moves plus the unlocked rank stories");
+ok(bank0.total === BANK && bank0.mastered === 0, "nothing is mastered on a fresh device");
+ok(bank0.xpTotal === BANK * (store.QXP_ATTEMPT + store.QXP_CORRECT), "lifetime quiz XP budget is bank x question value");
 
 const first = playPerfect();
 ok(first.wasPaidRound === true && first.xpEarned === store.QXP_DAILY_CAP,
@@ -295,7 +310,10 @@ wrong.qs.forEach((q, i) => { wrong.idx = i; overlays.answerQuizDeck(wrong, q.opt
 overlays.finishQuizDeck(wrong);
 ok(wrong.xpEarned === 8 * 10 && wrong.newlyMastered === 0,
    "all-wrong deck pays attempt credit only and masters nothing");
-ok(store.quizBankStatus().left === 87, "wrong answers leave every question still claimable");
+// left vs total, not a captured number: the bank grows as ranks unlock, and
+// earlier tests move the level around.
+const afterWrong = store.quizBankStatus();
+ok(afterWrong.left === afterWrong.total, "wrong answers leave every question still claimable");
 
 // The Coach's Quiz at the end of a session prices off the same ledger and
 // shares the same daily ceiling.

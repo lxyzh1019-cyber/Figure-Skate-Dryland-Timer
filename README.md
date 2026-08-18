@@ -79,8 +79,11 @@ flat value they were awarded. This is the only uncapped way up the ladder.
    Quiz Deck and the Coach's Quiz. Questions are paid whole or not at all, so
    one the cap skipped is still worth full value tomorrow.
 
-The bank holds 87 questions (48 moves × cue / watch-out / fix where content
-exists), so the quiz's **lifetime** yield is a fixed `87 × 35 = 3,045 XP`,
+The bank holds 87 move questions (48 moves × cue / watch-out / fix where
+content exists) **plus two per rank she has unlocked** — what that rank taught
+her, and its one true fact — so the pool grows as she climbs. Locked ranks are
+never asked: that would spoil the mystery card and quiz her on a chapter she
+has not been shown, so the quiz's **lifetime** yield is a fixed `87 × 35 = 3,045 XP`,
 spendable over at least 29 days. Paying decks deal unlearned questions first, so
 the day's XP isn't wasted on questions the kid already owns. Progress shows as
 "moves mastered", and the grown-up Analytics tab reports budget spent vs. total
