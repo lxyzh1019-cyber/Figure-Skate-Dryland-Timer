@@ -245,25 +245,33 @@ const q = svm.sessionQuizFor("monday");
 ok(q && q.opts.some(o => o.ok), "quiz question has a correct answer");
 
 /* --- the rank ladder only ever grows upward -----------------------------
-   Every historical threshold must keep its exact level, or a kid's rank
-   silently moves backwards on the next release. */
-const REQUIRED_RUNGS = [[1, "First Glide"], [3, "Snowflake"], [5, "Frost Spinner"],
-  [8, "Edge Dancer"], [12, "Axel Rising"], [16, "Ice Star"], [21, "Rink Royalty"],
-  [26, "Crystal Blade"], [31, "Aurora Edge"], [36, "Ice Legend"]];
+   The rungs are now pinned to the SWIM app's levels, not to this app's old
+   ones. Both moved together, deliberately and once, when the level curve became
+   shared; from here they must not drift apart again, because the whole point is
+   that "level 12" means the same work in both sisters' timers. */
+const REQUIRED_RUNGS = [[1, "First Glide"], [3, "Snowflake"], [6, "Frost Spinner"],
+  [9, "Edge Dancer"], [12, "Axel Rising"], [15, "Ice Star"], [18, "Rink Royalty"],
+  [21, "Crystal Blade"], [24, "Aurora Edge"], [26, "Ice Legend"], [29, "Comet Spiral"],
+  [32, "Solstice Flame"], [35, "Eternal Edge"], [38, "Snow Petrel"], [41, "Frost Flower"],
+  [44, "Midnight Sun"], [47, "Glacier Heart"], [50, "Winter Sovereign"]];
 REQUIRED_RUNGS.forEach(([lvl, name]) => {
   ok(data.LADDER.some(r => r.level === lvl && r.name === name),
      `ladder keeps ${name} at level ${lvl}`);
 });
-ok(data.levelCost(1) === 100 && data.levelCost(26) === 600,
-   "levelCost curve unchanged (100 + (n-1)*20)");
+ok(data.LADDER.length === REQUIRED_RUNGS.length, "no rung has been added or dropped");
+/* The shared curve, verbatim from the swim app. A level has to cost the same in
+   both timers or their numbers stop being comparable. */
+ok(data.levelCost(1) === 500 && data.levelCost(9) === 1000 && data.levelCost(18) === 1500,
+   "level costs are the shared curve (500/30, 1000/45, 1500/50)");
+ok(data.levelCost(26) === 1900 && data.levelCost(50) === 3100, "and match at the top end too");
 ok(data.MAX_LEVEL === data.LADDER[data.LADDER.length - 1].level, "MAX_LEVEL is the last rung");
-/* The summit has to stay out of reach until January 2027. From level 18 and a
-   perfect 6-day week at the flat rates (2,560 XP incl. landings), plus the
-   whole quiz bank, she can hold about 55k XP on Jan 1 — so the top rung has to
-   cost more than that. */
+/* The summit has to stay out of reach until January 2027. On the shared curve
+   it costs 88,260 XP; a perfect 6-day week at the flat rates is 2,560 including
+   landings, so from where she stands (~4,600 XP) plus the whole quiz bank she
+   can hold about 55k on Jan 1. */
 const cumTo = L => { let t = 0; for (let n = 1; n < L; n++) t += data.levelCost(n); return t; };
-ok(cumTo(data.MAX_LEVEL) > 55000, "the summit costs more than a perfect run to Jan 1 can earn");
-ok(data.LADDER.filter(r => r.level > 50).length === 5, "five rungs above the old level-50 ceiling");
+ok(cumTo(data.MAX_LEVEL) === 88260, "the summit costs the same as the swim app's");
+ok(cumTo(data.MAX_LEVEL) > 55000, "and more than a perfect run to Jan 1 can earn");
 ok(data.LADDER.every((r, i, a) => i === 0 || r.level > a[i - 1].level), "ladder levels strictly increase");
 data.LADDER.forEach(r => ok(data.RANK_LORE[r.name] && data.RANK_LORE[r.name].story,
   `${r.name} has lore (no blank story card)`));
