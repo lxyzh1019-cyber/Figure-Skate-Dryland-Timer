@@ -356,6 +356,19 @@ ok(!store.loadQuiz().qLedger[store.quizQuestionKey("coach", "another")],
    "a capped question is left unspent, worth full value tomorrow");
 localStorage.removeItem("skate_quiz_v1");
 
+/* --- the day card quotes what the session actually earned ------------------
+   It used to carry its own copy of the XP formula, so the card and the ladder
+   disagreed about the same session the moment the rates changed. */
+localStorage.clear();
+store.migrate();
+const todayKeyForCard = new Date().toLocaleString("en-US", { timeZone: "America/Edmonton", weekday: "long" }).toLowerCase();
+store.saveSession({ isoDate: new Date().toISOString(), dayKey: todayKeyForCard, completedFully: true,
+                    roundsDone: 3, xpVersion: store.XP_VERSION, cleanLandings: 4, perExercise: Array(19).fill(1) });
+const cardVM = tvm.buildTodayVM({ selectedDay: todayKeyForCard, expanded: {}, practiceMode: false, isWide: true });
+ok(/\+380 XP earned/.test(cardVM.dayView.earnedXpLabel || ""),
+   "a finished 3-round day says +380 — the flat 360 plus its 4 clean landings");
+localStorage.clear();
+
 /* --- view-models + screens render to strings without throwing --- */
 const state = { selectedDay: null, expanded: {}, practiceMode: false, nav: "today", weather: null, isWide: true, detailEx: null, detailOverlay: false };
 ok(typeof tvm.buildTodayVM(state).dayView === "object", "today VM builds");

@@ -5,7 +5,7 @@
    ============================================================ */
 
 import { DAYS, WEEK_ORDER, RANK_LORE, DAY_SHORT, DAY_LONG, LADDER, levelCost, fmtXp, overloadWeek } from "../data.js";
-import { settings, loadSessions, loadJourney, levelFromXp, currentStreak, loadDayProgress } from "../store.js";
+import { settings, loadSessions, loadJourney, levelFromXp, currentStreak, loadDayProgress, sessionXp } from "../store.js";
 import { edmontonDayKey, edmontonWeekDates, edmontonWeekISODates, edmontonISO, plural, refTime } from "../util.js";
 
 /* Whole-plan stats (design's _planStats). */
@@ -302,9 +302,21 @@ export function buildTodayVM(state) {
     const remaining = blocks.filter(b => !b.isBlockDone).map(b => b.name);
     const allDone = remaining.length === 0 || !doneBlocks.length;  // no per-block record ⇒ treat as fully done
     const remainingLabel = remaining.join(" & ");
+    // Read what the session ACTUALLY earned instead of recomputing it here.
+    // This line used to carry its own copy of the XP formula (moves × 10 + 40),
+    // so once a session started paying a flat rate for its rounds, the day card
+    // and the ladder disagreed about the same session — the card said +230
+    // while the journey banked 360 plus landings.
+    // Scoped to THIS week, like the week strip: `sessions` here is the whole
+    // history, and an old session for the same weekday must not be quoted on
+    // today's card.
+    const thisWeekIso = new Set(Object.values(edmontonWeekISODates()));
+    const dayRecord = sessions
+      .filter(x => x.dayKey === selectedKey && thisWeekIso.has(edmontonISO(x.isoDate))).pop();
+    const earnedXp = dayRecord ? sessionXp(dayRecord) : 0;
     dayView = {
       badgeLabel: shortU + " · COMPLETED ✓", title: fullDay.title, mins: stats.mins, movesLabel: plural(stats.moves, "move"),
-      earnedXpLabel: isSpaDay ? "" : "+" + (stats.moves * 10 + 40) + " XP earned",
+      earnedXpLabel: isSpaDay || !earnedXp ? "" : "+" + earnedXp + " XP earned",
       showChips: true, isDone: true,
       doneHeadline: isSpaDay ? "Nice reset — recovery complete!" : (allDone ? "Nice work — you crushed this one!" : "You got through most of it!"),
       doneSub: isSpaDay ? "No XP today — rest is part of the plan." : (allDone ? "Every block is checked off. Want extra reps?" : ("You skipped " + remainingLabel + " — finish up for XP.")),
