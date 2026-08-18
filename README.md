@@ -99,11 +99,16 @@ about 370 XP/minute of tapping, enough to climb from level 1 to 26 in ~23
 minutes. `answered × 10` also paid out on an all-wrong deck, rewarding tapping
 over knowing. `test/smoke.mjs` guards all of this.
 
-**Levels.** Cost is `100 + (level−1)×20`, unchanged since V2 so an athlete's
-level never shifts. The ladder runs to **level 75 (Winter Sovereign)** — sized
-so that from level 18, a perfect six-day week at the flat rates (2,560 XP with
-landings) plus the entire quiz bank still cannot reach the summit before
-January 2027; every
+**Levels.** Cost is the **shared curve**, identical to the swim app's:
+`500 + (n−1)×30` to level 8, `1000 + (n−9)×45` to 17, `1500 + (n−18)×50` after
+that. A level therefore means the same amount of work in both sisters' timers.
+This replaced the old V2 curve (`100 + (level−1)×20`), which was about a third
+the price — the one and only time a level has been re-priced here, and it moved
+this skater from level 18 to level 8 on the day it shipped. Her XP did not
+change; only what a level costs did. The ladder's 18 rungs sit at the same
+levels as the swim app's 18, running to **level 50 (Winter Sovereign)** at
+88,260 XP — from ~4,600 XP that is roughly March 2027, comfortably past the
+January bar; every
 historical rung keeps its exact threshold, and a smoke test enforces that so a
 kid's rank can never move backwards. XP is seeded once from past sessions on
 first boot and never re-seeded.

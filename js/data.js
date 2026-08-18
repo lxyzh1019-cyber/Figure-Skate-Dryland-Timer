@@ -843,9 +843,13 @@ export const CHEERS = [
   "You stayed steady. Nice! ❄️", "Clean round — power and grace! ⛸️"
 ];
 
-/* Rank ladder — keeps every original rank AND its level threshold (so no
-   one's rank ever moves backwards), plus higher ranks to discover.
-   levelCost() below is likewise unchanged from V2.
+/* Rank ladder — the same 18 rungs at the same levels as the swim app, so that
+   "level 12" and "the seventh rank" mean the same amount of work in both
+   sisters' timers. The rung LEVELS moved when the level curve became shared:
+   the old spacing (1,3,5,8,12,16,21,26,31,36,41,46,50,55,60,65,70,75) was
+   drawn for a curve that cost a third as much, and on that curve the top rung
+   would now cost 180,760 XP — somewhere in 2029. The names, order and stories
+   are untouched.
 
    The top three (41/46/50) extend the summit past Ice Legend. Reason: at the
    real 6-day training pace (~1,180 XP/week) level 36 arrived only ~13 weeks
@@ -856,22 +860,22 @@ export const CHEERS = [
 export const LADDER = [
   { level: 1,  name: "First Glide",    icon: "❄️", habitat: "#F5C2CE" },
   { level: 3,  name: "Snowflake",      icon: "❄️", habitat: "#E8EEF7" },
-  { level: 5,  name: "Frost Spinner",  icon: "🌀", habitat: "#C9D8F0" },
-  { level: 8,  name: "Edge Dancer",    icon: "⛸️", habitat: "#D9A7B8" },
+  { level: 6,  name: "Frost Spinner",  icon: "🌀", habitat: "#C9D8F0" },
+  { level: 9,  name: "Edge Dancer",    icon: "⛸️", habitat: "#D9A7B8" },
   { level: 12, name: "Axel Rising",    icon: "🌟", habitat: "#E8B54D" },
-  { level: 16, name: "Ice Star",       icon: "⭐", habitat: "#C77A93" },
-  { level: 21, name: "Rink Royalty",   icon: "👑", habitat: "#B0486B" },
-  { level: 26, name: "Crystal Blade",  icon: "💎", habitat: "#9FD8EA" },
-  { level: 31, name: "Aurora Edge",    icon: "🌌", habitat: "#8E7CC3" },
-  { level: 36, name: "Ice Legend",     icon: "🏆", habitat: "#F2C14E" },
-  { level: 41, name: "Comet Spiral",   icon: "☄️", habitat: "#5B6ABF" },
-  { level: 46, name: "Solstice Flame", icon: "🔥", habitat: "#E8703A" },
-  { level: 50, name: "Eternal Edge",   icon: "♾️", habitat: "#A8E6DF" },
-  { level: 55, name: "Snow Petrel",    icon: "🕊️", habitat: "#DDE7F2" },
-  { level: 60, name: "Frost Flower",   icon: "🌸", habitat: "#F2D6E4" },
-  { level: 65, name: "Midnight Sun",   icon: "☀️", habitat: "#F4B860" },
-  { level: 70, name: "Glacier Heart",  icon: "🏔️", habitat: "#7FB2D9" },
-  { level: 75, name: "Winter Sovereign", icon: "👑", habitat: "#C9A227" }
+  { level: 15, name: "Ice Star",       icon: "⭐", habitat: "#C77A93" },
+  { level: 18, name: "Rink Royalty",   icon: "👑", habitat: "#B0486B" },
+  { level: 21, name: "Crystal Blade",  icon: "💎", habitat: "#9FD8EA" },
+  { level: 24, name: "Aurora Edge",    icon: "🌌", habitat: "#8E7CC3" },
+  { level: 26, name: "Ice Legend",     icon: "🏆", habitat: "#F2C14E" },
+  { level: 29, name: "Comet Spiral",   icon: "☄️", habitat: "#5B6ABF" },
+  { level: 32, name: "Solstice Flame", icon: "🔥", habitat: "#E8703A" },
+  { level: 35, name: "Eternal Edge",   icon: "♾️", habitat: "#A8E6DF" },
+  { level: 38, name: "Snow Petrel",    icon: "🕊️", habitat: "#DDE7F2" },
+  { level: 41, name: "Frost Flower",   icon: "🌸", habitat: "#F2D6E4" },
+  { level: 44, name: "Midnight Sun",   icon: "☀️", habitat: "#F4B860" },
+  { level: 47, name: "Glacier Heart",  icon: "🏔️", habitat: "#7FB2D9" },
+  { level: 50, name: "Winter Sovereign", icon: "👑", habitat: "#C9A227" }
 ];
 
 /* The final rung — nothing above this level changes rank, so the UI can
@@ -932,10 +936,23 @@ export const PRIZE_POOL = [
   { icon: "🎨", label: "One-on-one time with a grown-up" }
 ];
 
-/* XP cost of going from level n to n+1.
-   UNCHANGED from the V2 curve — changing it would silently move the
-   athlete's existing level, so it must stay 100 + (n-1)*20 forever. */
-export function levelCost(n) { return 100 + (n - 1) * 20; }
+/* XP cost of going from level n to n+1 — SHARED with the swim app, so that a
+   level means the same amount of work in both sisters' timers.
+
+   This replaced the old V2 curve, 100 + (n-1)*20, which was roughly a third of
+   the swim app's price per level. That made the two apps' numbers meaningless
+   next to each other: level 18 here was less XP than level 12 there. Re-pricing
+   moves an already-earned level — the one thing this file otherwise never does
+   — and it moved this skater from level 18 to level 8 on the day it shipped.
+   Her XP did not change; only what a level costs did.
+
+   Being shared, it is frozen for the same reason it always was: change it in
+   one app and the two drift apart again, and somebody's level moves. */
+export function levelCost(n) {
+  if (n <= 8) return 500 + (n - 1) * 30;
+  if (n <= 17) return 1000 + (n - 9) * 45;
+  return 1500 + (n - 18) * 50;
+}
 export function fmtXp(n) { return Math.round(n).toLocaleString("en-US"); }
 /* Rank for a given level — highest ladder entry at or below the level. */
 export function rankForLevel(level) {
