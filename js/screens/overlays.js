@@ -246,8 +246,11 @@ export function newPrizeDraw() {
 export function claimPrize(pd) {
   if (!pd || pd.picked == null) return null;
   const won = pd.cards[pd.picked];
-  logEvent("prize_won", { label: won.label });
-  return addPrize(won);
+  // addPrize refuses when there is no draw left to spend, so the win is only
+  // logged once the envelope has actually been paid for.
+  const j = addPrize(won);
+  if (j) logEvent("prize_won", { label: won.label });
+  return j;
 }
 
 export function prizeDrawHtml(pd) {
