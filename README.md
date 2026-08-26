@@ -192,6 +192,19 @@ npm test                      # run the smoke tests
   a prize claimed anywhere counts as claimed everywhere. Restores, imports and
   syncs advance the high-water mark without granting anything: that XP was
   earned on a device that already paid out its envelopes.
+- **The draw cap.** The over-granting above ran for a while before it was
+  caught, so a wallet can hold more envelopes than its level ever earned.
+  `drawsEarned` is therefore held to `level + PRIZE_BONUS` (2) — the skater who
+  found the hole keeps two on top of what she earned rather than being trimmed
+  flat to it. Only the *unclaimed* backlog shrinks: prizes already picked stay
+  in the wallet, because she chose them and may have spent them in the real
+  world. Honest play never reaches the cap (a level earns one envelope, so a
+  straight run sits three below it), and the cap rises as she levels, so the
+  bounty rides along instead of being clawed back. It is a **standing** cap,
+  re-applied on every read and write rather than a one-time migration — the
+  journey merges by `max(local, cloud)`, so a one-shot trim would be undone by
+  the first sync with a device still holding the old count, or by re-importing
+  an old backup.
 - Writes that localStorage rejects (full device) are retried after dropping the
   expendable analytics keys, and if they still fail the app says so in a banner
   — a session that wasn't recorded never reads as saved.
