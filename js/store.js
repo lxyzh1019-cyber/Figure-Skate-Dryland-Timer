@@ -577,21 +577,49 @@ export function levelFromXp(xp) {
    backfill, and only ever one draw is granted. */
 export const MAX_DRAWS_PER_AWARD = 1;
 
+/* The bug bounty. The over-granting above ran for a while before it was
+   caught, and the skater who caught it was the one holding the inflated
+   wallet — so she keeps two envelopes on top of what her level earns rather
+   than being trimmed flat to it. Finding the hole is worth something. */
+export const PRIZE_BONUS = 2;
+
+/* The most envelopes a skater may have been given by a given level.
+
+   Honest play never comes near it: a level earns one envelope, so a straight
+   run sits at level-1, three below the cap. It binds only on a wallet the old
+   bug inflated — and it is a STANDING cap, re-applied on every read and every
+   write, not a one-time trim. That matters because the journey merges by
+   max(local, cloud): a one-time trim would be undone by the first sync with a
+   device still holding the inflated count, or by re-importing an old backup.
+   As an invariant it simply re-applies, wherever the number came from. */
+export function drawCap(level) { return level + PRIZE_BONUS; }
+
+/* Hold drawsEarned to the cap. Only the UNCLAIMED backlog can shrink: prizes
+   already in the wallet stay there, because she picked them and may well have
+   spent them in the real world. If the wallet alone already exceeds the cap,
+   pendingFor() floors at 0 and she simply draws nothing more until her level
+   catches up. */
+function capDraws(j) {
+  const cap = drawCap(levelFromXp(j.xp || 0).level);
+  if ((j.drawsEarned || 0) > cap) j.drawsEarned = cap;
+  return j;
+}
+
 function blankJourney() {
   return { xp: 0, prizesWon: [], drawsEarned: 0, drawLevel: 1 };
 }
 
 /* Fill in the derived fields a legacy blob predates, without granting
-   anything: whatever was pending at the time is preserved, and the level
-   already reached becomes the high-water mark so its history can't pay
-   twice. */
+   anything: whatever was pending at the time is preserved (up to the cap),
+   and the level already reached becomes the high-water mark so its history
+   can't pay twice. */
 function normalizeDraws(j) {
   if (!Array.isArray(j.prizesWon)) j.prizesWon = [];
   if (!Number.isFinite(j.drawsEarned)) {
     j.drawsEarned = j.prizesWon.length + Math.max(0, j.pendingDraws || 0);
   }
   if (!Number.isFinite(j.drawLevel)) j.drawLevel = levelFromXp(j.xp || 0).level;
-  return j;
+  return capDraws(j);
 }
 
 /* The journey, always present and always normalized. */
@@ -604,8 +632,11 @@ function pendingFor(j) {
 }
 
 /* Save, keeping the legacy `pendingDraws` field as a read-only mirror so an
-   older build cached on the same device still reads the right number. */
+   older build cached on the same device still reads the right number. Every
+   write goes through here, which is what makes the cap an invariant rather
+   than a migration: there is no path that can store more than it. */
 function persistJourney(j) {
+  capDraws(j);
   j.pendingDraws = pendingFor(j);
   saveJourney(j);
   return j;
@@ -946,10 +977,25 @@ export function addPrize(prize) {
   j.prizesWon = [{ ...prize, date: todayISODate(), redeemed: false, id }, ...j.prizesWon];
   return persistJourney(j);
 }
+/* Toggle a prize between won and used.
+
+   Ids are compared as text on purpose. A prize claimed by this version has a
+   numeric id, but migrate() gives the oldest records `p.when || "legacy-" + i`
+   — and a record with no timestamp lands on a STRING. The click path can only
+   hand an id back as a string (it rides through a data-arg attribute), so a
+   strict === against a numeric id needed a Number() coercion, and that
+   coercion turned "legacy-1" into NaN: the button rendered, the tap did
+   nothing, and a prize she actually won could never be marked used.
+
+   Comparing as text takes both shapes without rewriting a single stored id —
+   which matters, because the wallet merges by id across devices. Minting new
+   ids for those records would have to invent a timestamp they never had, and
+   two devices inventing different ones would show the same prize twice. */
 export function redeemPrize(id) {
   const j = loadJourney();
   if (!j) return null;
-  j.prizesWon = (j.prizesWon || []).map(p => p.id === id ? { ...p, redeemed: !p.redeemed } : p);
+  j.prizesWon = (j.prizesWon || []).map(p =>
+    String(p.id) === String(id) ? { ...p, redeemed: !p.redeemed } : p);
   saveJourney(j);
   return j;
 }

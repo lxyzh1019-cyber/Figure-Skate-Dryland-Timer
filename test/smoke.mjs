@@ -29,6 +29,7 @@ const engine = await import(base + "engine.js");
 const rvm    = await import(base + "vm/readiness.js");
 const svm    = await import(base + "vm/session.js");
 const tvm    = await import(base + "vm/today.js");
+const pvm    = await import(base + "vm/progress.js");
 const sscreen = await import(base + "screens/session.js");
 const rscreen = await import(base + "screens/readiness.js");
 const overlays = await import(base + "screens/overlays.js");
@@ -271,6 +272,78 @@ localStorage.clear();
 store.migrate();
 store.mergeCloudJourney({ kind: "journey", prizesWon: [], pendingDraws: 1 });
 ok(store.pendingDrawCount() === 1, "an old-format snapshot still delivers a draw it really owed");
+localStorage.clear();
+
+/* --- the draw allowance is capped at level + the bug bounty ---------------
+   The over-granting bug ran a while before it was caught, leaving a wallet
+   holding more envelopes than the level earns. The skater who found the hole
+   keeps two on top of what she earned; the rest of the unclaimed backlog is
+   trimmed. It is a STANDING cap, not a one-time migration, because the
+   journey merges by max(local, cloud) — a trim that only ran once would be
+   undone by the first sync with a device still holding the old count. */
+localStorage.clear();
+const inflatedWallet = () => {
+  localStorage.clear();
+  localStorage.setItem("skate_journey_v1", JSON.stringify({ xp: 21600, pendingDraws: 14,
+    prizesWon: Array.from({ length: 11 }, (_, i) => ({ id: i + 1, label: "p" + i, date: "2026-01-01", redeemed: i < 6 })) }));
+};
+inflatedWallet();                                   // level 21, 25 given, 11 claimed
+store.migrate();
+const capped = store.loadJourney();
+ok(store.levelFromXp(capped.xp).level === 21 && store.drawCap(21) === 21 + store.PRIZE_BONUS,
+   "the cap is the level plus the bounty");
+ok(capped.drawsEarned === 23, "an inflated wallet is trimmed to the cap (25 -> 23)");
+ok(capped.prizesWon.length === 11, "every prize she already picked is kept");
+ok(capped.prizesWon.filter(p => p.redeemed).length === 6, "including which ones were marked used");
+ok(store.pendingDrawCount() === 12, "only the unclaimed backlog shrinks");
+
+// The trim has to survive everything that merges by max().
+store.mergeCloudJourney({ kind: "journey", prizesWon: [], pendingDraws: 14, drawsEarned: 25 });
+ok(store.loadJourney().drawsEarned === 23, "a stale cloud snapshot cannot re-inflate it");
+store.importProfileData({ app: "skate-with-grace-dryland", schema: 1,
+                          data: { skate_journey_v1: { xp: 21600, drawsEarned: 25, prizesWon: [] } } });
+ok(store.loadJourney().drawsEarned === 23, "nor can re-importing an old backup");
+store.migrate();
+ok(store.loadJourney().drawsEarned === 23, "and it holds across boots");
+
+// The bounty rides along as she keeps training, rather than being clawed back.
+inflatedWallet(); store.migrate();
+while (store.pendingDrawCount() > 0) store.addPrize({ icon: "🎁", label: "opened" });
+ok(store.loadJourney().prizesWon.length === 23, "she can open the whole trimmed backlog");
+store.addXp(1600);
+ok(store.pendingDrawCount() === 1 && store.loadJourney().drawsEarned === store.drawCap(22),
+   "and the next level still pays, because the cap rises with her");
+
+// Honest play never comes near it: a level earns one envelope, the cap is +2.
+localStorage.clear();
+store.migrate();
+for (let i = 0; i < 40; i++) { if (store.addXp(360).leveledUp) store.addPrize({ icon: "🎁", label: "p" }); }
+const honest = store.loadJourney();
+ok(honest.drawsEarned < store.drawCap(store.levelFromXp(honest.xp).level),
+   "a straight run sits below the cap, so it never binds on honest play");
+localStorage.clear();
+
+/* --- Redeem works on every id shape a prize can carry --------------------
+   migrate() gives the oldest records `p.when || "legacy-" + i`, so one with no
+   timestamp gets a STRING id. The click path hands ids back as strings, and
+   the Number() coercion that used to undo that turned "legacy-1" into NaN:
+   the button rendered and the tap did nothing. Ids compare as text now. */
+localStorage.clear();
+localStorage.setItem("skate_journey_v1", JSON.stringify({ xp: 5000, pendingDraws: 0, prizesWon: [
+  { label: "Movie night", when: 1700000000000 },   // timestamped -> numeric id
+  { label: "Skip a chore" }                        // no timestamp -> "legacy-1"
+]}));
+store.migrate();
+const walletIdShapes = store.loadJourney().prizesWon.map(p => typeof p.id);
+ok(walletIdShapes.includes("number") && walletIdShapes.includes("string"),
+   "a legacy wallet really does hold both id shapes");
+store.loadJourney().prizesWon.forEach(p => {
+  pvm.toggleRedeem(String(p.id));                  // exactly what data-arg hands back
+  const after = store.loadJourney().prizesWon.find(x => String(x.id) === String(p.id));
+  ok(after.redeemed === true, `redeem marks the prize used (id ${JSON.stringify(p.id)})`);
+});
+pvm.toggleRedeem(String(store.loadJourney().prizesWon[1].id));
+ok(store.loadJourney().prizesWon[1].redeemed === false, "and tapping again puts it back");
 localStorage.clear();
 
 /* --- prize pool defaults avoid food / screen-time --- */
