@@ -50,7 +50,8 @@ word, micro-loop, breath rehearsal, rep voice counting, same-day resume, etc.).
   caring acknowledgments, reflection chips, rotating Coach's Quiz.
 - **Progress** — streak hero + week chart, **Ice Story** rank cards (lore +
   locked mystery cards), milestones, training log (Recent / All tabs), prize wallet.
-- **Prize Draw** — pick a sealed card on level-up. **Quiz Deck** — questions
+- **Prize Draw** — pick a sealed card on level-up, one envelope per level
+  reached, once, for good (see *Prize draws* under Persistence). **Quiz Deck** — questions
   generated from the plan's moves.
 - **Grown-up Zone** — Overview · Analytics (Week/Month/All: adherence, ACWR,
   heatmap, load trend, pace, pauses/skips by block, form quality, mood, quiz
@@ -164,7 +165,7 @@ npm test                      # run the smoke tests
   2. *push* — any session the cloud is missing (uploaded while offline, or
      logged before the mirror existed) is backfilled up;
   3. *journey* — the part the session log cannot re-derive (quiz XP, prize
-     wallet, pending draws, the per-question ledger) rides in one `kind:
+     wallet, the draw ledger, the per-question ledger) rides in one `kind:
      "journey"` doc in the same collection, merged upward and republished.
      Without it two devices showed two different levels for the same skater:
      one rebuilt training XP only, the other still held its quiz XP as well.
@@ -177,6 +178,20 @@ npm test                      # run the smoke tests
   higher XP total wins, prize wallets are unioned, and other records fill in
   only where the device has nothing. This is the recovery path that doesn't
   depend on the network.
+- **Prize draws.** A level-up grants one envelope, once. Because XP is derived
+  and replayed on every restore, a mutable "draws pending" counter handed out
+  prizes nobody trained for — a wiped phone rebuilding a long history opened
+  twenty envelopes on its first boot, a stale sync gave back draws already
+  spent, and re-importing your own backup did the same on demand. Draws are
+  derived instead, from two facts that only ever move up:
+
+      pending = drawsEarned − prizes already in the wallet
+
+  `drawsEarned` grows only when the skater crosses a level boundary she has
+  never crossed before, and the wallet already unions by id across devices, so
+  a prize claimed anywhere counts as claimed everywhere. Restores, imports and
+  syncs advance the high-water mark without granting anything: that XP was
+  earned on a device that already paid out its envelopes.
 - Writes that localStorage rejects (full device) are retried after dropping the
   expendable analytics keys, and if they still fail the app says so in a banner
   — a session that wasn't recorded never reads as saved.

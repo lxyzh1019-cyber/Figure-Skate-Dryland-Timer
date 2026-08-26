@@ -543,16 +543,101 @@ export function levelFromXp(xp) {
   return { level, xpIntoLevel: rem, nextCost: levelCost(level) };
 }
 
-/* Add XP; returns { journey, leveledUp, levelsGained }. */
-export function addXp(amount) {
-  const j = loadJourney() || { xp: 0, prizesWon: [], pendingDraws: 0 };
+/* ---- prize draws --------------------------------------------------------
+   A level-up grants ONE envelope draw, once, for good. The old rule kept a
+   mutable `pendingDraws` counter that every path was free to add to, and four
+   of them handed out prizes the skater had not trained for:
+
+     1. a cloud restore or backup import replayed years of XP through addXp(),
+        and the level jump from 1 to 21 minted TWENTY draws in one boot;
+     2. rebuildJourneyXp() did the same on the second device;
+     3. merges took max(local, cloud) of the counter, so claiming three draws
+        and then syncing with a device that still read three handed them back;
+     4. re-importing your own backup file after claiming did the same, on
+        demand, as many times as you liked.
+
+   Draws are now DERIVED from two facts that can only ever move up, so no
+   replay of history can invent one:
+
+       pending  =  drawsEarned  -  prizes already in the wallet
+
+   `drawsEarned` only grows when the skater crosses a level boundary she has
+   never crossed before (`drawLevel` is the high-water mark), and the wallet
+   already unions by id across devices — so a prize claimed anywhere counts
+   as claimed everywhere. Both halves merge by max, which makes every restore,
+   import and sync idempotent.
+
+   Backfills — a restore, an import, a rebuild — advance the high-water mark
+   without granting anything: that XP was earned on another device, which
+   already gave its draws and mirrors the prizes it won. */
+
+/* A single earning action can never cross two level boundaries: the biggest
+   session pays 360 + landings and a whole day of quiz is capped at 30, while
+   the cheapest level costs 500. So more than one level at a time is always a
+   backfill, and only ever one draw is granted. */
+export const MAX_DRAWS_PER_AWARD = 1;
+
+function blankJourney() {
+  return { xp: 0, prizesWon: [], drawsEarned: 0, drawLevel: 1 };
+}
+
+/* Fill in the derived fields a legacy blob predates, without granting
+   anything: whatever was pending at the time is preserved, and the level
+   already reached becomes the high-water mark so its history can't pay
+   twice. */
+function normalizeDraws(j) {
+  if (!Array.isArray(j.prizesWon)) j.prizesWon = [];
+  if (!Number.isFinite(j.drawsEarned)) {
+    j.drawsEarned = j.prizesWon.length + Math.max(0, j.pendingDraws || 0);
+  }
+  if (!Number.isFinite(j.drawLevel)) j.drawLevel = levelFromXp(j.xp || 0).level;
+  return j;
+}
+
+/* The journey, always present and always normalized. */
+function readJourney() {
+  return normalizeDraws(loadJourney() || blankJourney());
+}
+
+function pendingFor(j) {
+  return Math.max(0, (j.drawsEarned || 0) - (j.prizesWon || []).length);
+}
+
+/* Save, keeping the legacy `pendingDraws` field as a read-only mirror so an
+   older build cached on the same device still reads the right number. */
+function persistJourney(j) {
+  j.pendingDraws = pendingFor(j);
+  saveJourney(j);
+  return j;
+}
+
+/* Move the high-water mark to the level the XP total now buys. Grants a draw
+   for a boundary newly crossed unless this is a backfill. Returns how many
+   draws were granted. */
+function claimLevelDraws(j, { grant = true } = {}) {
+  const level = levelFromXp(j.xp || 0).level;
+  if (level <= j.drawLevel) return 0;
+  const granted = grant ? Math.min(level - j.drawLevel, MAX_DRAWS_PER_AWARD) : 0;
+  j.drawsEarned = (j.drawsEarned || 0) + granted;
+  j.drawLevel = level;
+  return granted;
+}
+
+/* Add XP; returns { journey, leveledUp, levelsGained }. `leveledUp` is what
+   puts the "Pick your prize" button on screen, so it means "there is a draw
+   to spend", not merely "the number went up" — a backfill moves the level
+   without earning an envelope.
+
+   Pass { grantDraws: false } for XP that is being re-derived rather than
+   earned (a cloud restore, a backup import). */
+export function addXp(amount, { grantDraws = true } = {}) {
+  const j = readJourney();
   const before = levelFromXp(j.xp).level;
   j.xp = Math.max(0, (j.xp || 0) + amount);
   const after = levelFromXp(j.xp).level;
-  const gained = Math.max(0, after - before);
-  if (gained > 0) j.pendingDraws = (j.pendingDraws || 0) + gained;
-  saveJourney(j);
-  return { journey: j, leveledUp: gained > 0, levelsGained: gained };
+  const granted = claimLevelDraws(j, { grant: grantDraws });
+  persistJourney(j);
+  return { journey: j, leveledUp: granted > 0, levelsGained: Math.max(0, after - before) };
 }
 
 /* Record that XP already granted through addXp() came from a session record.
@@ -560,9 +645,9 @@ export function addXp(amount) {
    would see the session log grow and award the same XP a second time. */
 export function noteSessionXpAwarded(amount) {
   if (!amount) return;
-  const j = loadJourney() || { xp: 0, prizesWon: [], pendingDraws: 0 };
+  const j = readJourney();
   j.sessionXp = (Number.isFinite(j.sessionXp) ? j.sessionXp : 0) + amount;
-  saveJourney(j);
+  persistJourney(j);
 }
 
 /* ---- cloud restore ------------------------------------------------------
@@ -634,33 +719,43 @@ export function quizXpFromLedger(quiz) {
 }
 
 /* Recompute the journey total from its two sources. Prizes already won are
-   never touched, and a level gained still grants its draw. Returns the total. */
+   never touched, and no draw is granted: this is a re-derivation of XP that
+   was earned elsewhere, and the device that earned it already paid out its
+   envelopes — mergeCloudJourney carries them over. Returns the total. */
 export function rebuildJourneyXp() {
-  const j = loadJourney() || { xp: 0, prizesWon: [], pendingDraws: 0 };
+  const j = readJourney();
   const fromSessions = loadSessions().reduce((sum, s) => sum + sessionXp(s), 0);
   const fromQuiz = quizXpFromLedger();
-  const before = levelFromXp(j.xp || 0).level;
   j.sessionXp = fromSessions;
   j.xp = fromSessions + fromQuiz;
-  const after = levelFromXp(j.xp).level;
-  if (after > before) j.pendingDraws = (j.pendingDraws || 0) + (after - before);
-  saveJourney(j);
+  claimLevelDraws(j, { grant: false });
+  persistJourney(j);
   return j.xp;
 }
 
 /* The half of the journey the session log cannot re-derive: the quiz ledger
-   (which prices itself), the prize wallet and the pending draws. */
+   (which prices itself), the prize wallet and the draw ledger. */
 export function journeySnapshot() {
-  const j = loadJourney() || {};
+  const j = readJourney();
   const q = loadQuiz();
   return {
     kind: "journey",
     prizesWon: j.prizesWon || [],
-    pendingDraws: j.pendingDraws || 0,
+    drawsEarned: j.drawsEarned || 0,
+    drawLevel: j.drawLevel || 1,
+    // Derived mirror, for an older build reading this snapshot.
+    pendingDraws: pendingFor(j),
     qLedger: q.qLedger || {},
     quizItems: q.items || {},
     updatedAt: Date.now()
   };
+}
+
+/* How many draws a snapshot represents. Snapshots written by an older build
+   carry only the mutable counter, so reconstruct the total from it. */
+function incomingDrawsEarned(snap) {
+  if (Number.isFinite(snap && snap.drawsEarned)) return snap.drawsEarned;
+  return ((snap && snap.prizesWon) || []).length + Math.max(0, (snap && snap.pendingDraws) || 0);
 }
 
 /* Merge a cloud journey snapshot into this device. Everything moves UP: prize
@@ -671,18 +766,22 @@ export function mergeCloudJourney(snap) {
   if (!snap || snap.kind !== "journey") return false;
   let changed = false;
 
-  const j = loadJourney() || { xp: 0, prizesWon: [], pendingDraws: 0 };
+  const j = readJourney();
   const wallet = new Map();
   [...(j.prizesWon || []), ...(snap.prizesWon || [])].forEach(p => {
     if (p && p.id != null && !wallet.has(p.id)) wallet.set(p.id, p);
   });
   if (wallet.size !== (j.prizesWon || []).length) changed = true;
-  const draws = Math.max(j.pendingDraws || 0, snap.pendingDraws || 0);
-  if (draws !== (j.pendingDraws || 0)) changed = true;
-  j.pendingDraws = draws;
+  // Both halves of the draw ledger move UP only, which is what makes a sync
+  // idempotent: a stale snapshot can no longer resurrect draws this device has
+  // already spent, because the prizes it bought are in the wallet above.
+  const earned = Math.max(j.drawsEarned || 0, incomingDrawsEarned(snap));
+  if (earned !== (j.drawsEarned || 0)) changed = true;
+  j.drawsEarned = earned;
+  j.drawLevel = Math.max(j.drawLevel || 1, snap.drawLevel || 1);
   j.prizesWon = [...wallet.values()]
     .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
-  saveJourney(j);
+  persistJourney(j);
 
   // A question mastered on the iPad must not pay again on the desktop.
   const q = loadQuiz();
@@ -710,22 +809,27 @@ export function mergeCloudJourney(snap) {
 /* Keep the XP total consistent with the session log without double-counting
    quiz XP (which has no session record). The journey remembers how much of its
    XP came from sessions; when the log grows behind its back — a cloud restore —
-   only the difference is awarded, and level-ups grant their prize draws as
-   usual. The first call just establishes the baseline and awards nothing.
+   only the difference is awarded. The first call just establishes the baseline
+   and awards nothing.
+
+   The XP is restored; the prize draws are NOT. A log that grows behind the
+   app's back is a backfill of training another device already paid for, and
+   awarding its level-ups here is what let a wiped phone hand a kid twenty
+   envelopes on its first boot. Prizes come back through the wallet merge.
    Returns the XP added. */
 export function reconcileJourneyWithSessions() {
   const total = loadSessions().reduce((sum, s) => sum + sessionXp(s), 0);
-  const j = loadJourney() || { xp: 0, prizesWon: [], pendingDraws: 0 };
+  const j = readJourney();
   if (!Number.isFinite(j.sessionXp)) {
     j.sessionXp = total;
-    saveJourney(j);
+    persistJourney(j);
     return 0;
   }
   const delta = total - j.sessionXp;
   if (delta <= 0) return 0;
   j.sessionXp = total;
-  saveJourney(j);          // record the new baseline before awarding
-  addXp(delta);            // re-reads the journey, so it keeps sessionXp
+  persistJourney(j);                       // record the new baseline before awarding
+  addXp(delta, { grantDraws: false });     // re-reads the journey, so it keeps sessionXp
   return delta;
 }
 
@@ -784,15 +888,18 @@ export function importProfileData(payload) {
 
   const inc = d[LS_JOURNEY];
   if (inc && typeof inc === "object") {
-    const local = loadJourney() || { xp: 0, prizesWon: [], pendingDraws: 0 };
+    const local = readJourney();
     const wallet = new Map();
     [...(local.prizesWon || []), ...(inc.prizesWon || [])].forEach(p => {
       if (p && !wallet.has(p.id)) wallet.set(p.id, p);
     });
-    saveJourney({
+    persistJourney({
       ...inc, ...local,
       xp: Math.max(local.xp || 0, inc.xp || 0),
-      pendingDraws: Math.max(local.pendingDraws || 0, inc.pendingDraws || 0),
+      // Draws move up only, and the wallet counts the ones already spent — so
+      // re-importing the same file after claiming can't hand them out again.
+      drawsEarned: Math.max(local.drawsEarned || 0, incomingDrawsEarned(inc)),
+      drawLevel: Math.max(local.drawLevel || 1, inc.drawLevel || 1),
       sessionXp: Math.max(
         Number.isFinite(local.sessionXp) ? local.sessionXp : 0,
         Number.isFinite(inc.sessionXp) ? inc.sessionXp : 0
@@ -820,15 +927,24 @@ export function importProfileData(payload) {
 
 export function pendingDrawCount() {
   const j = loadJourney();
-  return j ? Math.max(0, j.pendingDraws || 0) : 0;
+  return j ? pendingFor(normalizeDraws(j)) : 0;
 }
 
+/* Spend one draw on the envelope the skater picked. Returns null — and adds
+   nothing — when there is no draw to spend, so a draw overlay left open while
+   a sync lands behind it can't mint a prize on its own.
+
+   The id has to be unique: the wallet merges by id across devices, so two
+   prizes claimed in the same millisecond used to collapse into one and the
+   kid silently LOST one on the next sync. */
 export function addPrize(prize) {
-  const j = loadJourney() || { xp: 0, prizesWon: [], pendingDraws: 0 };
-  j.prizesWon = [{ ...prize, date: todayISODate(), redeemed: false, id: Date.now() }, ...(j.prizesWon || [])];
-  j.pendingDraws = Math.max(0, (j.pendingDraws || 0) - 1);
-  saveJourney(j);
-  return j;
+  const j = readJourney();
+  if (pendingFor(j) < 1) return null;
+  const used = new Set(j.prizesWon.map(p => p.id));
+  let id = Date.now();
+  while (used.has(id)) id++;
+  j.prizesWon = [{ ...prize, date: todayISODate(), redeemed: false, id }, ...j.prizesWon];
+  return persistJourney(j);
 }
 export function redeemPrize(id) {
   const j = loadJourney();
@@ -857,16 +973,24 @@ export function migrate() {
 
   const j = loadJourney();
   if (j == null) {
+    // Seeding from existing history awards the XP but no envelopes: the
+    // sessions were trained before this journey existed, so their level-ups
+    // are not new. drawLevel starts at the level that XP already buys.
     const xp = loadSessions().reduce((sum, s) => sum + sessionXp(s), 0);
-    saveJourney({ xp, prizesWon: [], pendingDraws: 0, seededAt: Date.now() });
-  } else if (Array.isArray(j.prizesWon) && j.prizesWon.some(p => p.id == null)) {
-    // Old prize records carried only {label, when}; redeemPrize is id-based.
-    j.prizesWon = j.prizesWon.map((p, i) => ({
-      icon: p.icon || "🎁", label: p.label || String(p),
-      date: p.date || (p.when ? String(p.when).slice(0, 10) : todayISODate()),
-      redeemed: !!p.redeemed, id: p.id != null ? p.id : (p.when || "legacy-" + i)
-    }));
-    saveJourney(j);
+    saveJourney({ xp, prizesWon: [], drawsEarned: 0, drawLevel: levelFromXp(xp).level,
+                  pendingDraws: 0, seededAt: Date.now() });
+  } else {
+    if (Array.isArray(j.prizesWon) && j.prizesWon.some(p => p.id == null)) {
+      // Old prize records carried only {label, when}; redeemPrize is id-based.
+      j.prizesWon = j.prizesWon.map((p, i) => ({
+        icon: p.icon || "🎁", label: p.label || String(p),
+        date: p.date || (p.when ? String(p.when).slice(0, 10) : todayISODate()),
+        redeemed: !!p.redeemed, id: p.id != null ? p.id : (p.when || "legacy-" + i)
+      }));
+    }
+    // Give a pre-draw-ledger journey its high-water mark. Anything pending
+    // right now stays pending; nothing already earned mints a second time.
+    persistJourney(normalizeDraws(j));
   }
 
   // Legacy quiz blob {runs, bestPct, byMove} → {items, results, streak}.

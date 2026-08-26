@@ -212,6 +212,67 @@ ok(sawError && /Quota/.test(sawError.message), "and the app is told, so it can w
 store.onStorageError(null);
 localStorage.clear();
 
+/* --- one envelope per level reached, ever --------------------------------
+   Draws used to be a mutable counter that any path could add to, and four of
+   them handed out prizes nobody trained for: a cloud restore replaying years
+   of XP, a rebuild on the second device, a sync that took max(local, cloud)
+   after the draws were spent, and re-importing your own backup on demand.
+   Draws are derived now — earned minus the wallet — so all four are replays
+   that grant nothing. */
+localStorage.clear();
+store.migrate();
+ok(store.addXp(360).leveledUp === false, "one session is not a level yet");
+ok(store.addXp(360).leveledUp === true, "the session that crosses the boundary earns the draw");
+ok(store.pendingDrawCount() === 1, "and exactly one — a level is one envelope");
+ok(store.addPrize({ icon: "🎁", label: "Movie pick" }) !== null, "the draw buys a prize");
+ok(store.pendingDrawCount() === 0, "which spends it");
+ok(store.addPrize({ icon: "🎁", label: "Again" }) === null &&
+   store.loadJourney().prizesWon.length === 1, "a second claim with no draw left is refused");
+
+// A wiped phone rebuilding a long history must not open twenty envelopes.
+localStorage.clear();
+store.migrate();
+for (let i = 0; i < 40; i++) {
+  store.saveSession({ isoDate: new Date(Date.now() - i * 86400000).toISOString(),
+                      dayKey: "monday", roundsDone: 3, xpVersion: 4, completedFully: true, xpEarned: 360 });
+}
+store.reconcileJourneyWithSessions();
+ok(store.levelFromXp(store.loadJourney().xp).level > 10, "the restored history is worth many levels");
+ok(store.pendingDrawCount() === 0, "but a backfill grants no draws — that XP was earned elsewhere");
+ok(store.rebuildJourneyXp() > 0 && store.pendingDrawCount() === 0, "and a rebuild grants none either");
+
+// Spent draws stay spent, however the cloud or a backup file argues otherwise.
+localStorage.clear();
+store.migrate();
+store.addXp(2000);
+const earnedDraws = store.pendingDrawCount();
+const staleSnap = store.journeySnapshot();          // the other device, before the claims
+const staleFile = store.exportProfileData();
+for (let i = 0; i < earnedDraws; i++) store.addPrize({ icon: "🎁", label: "P" + i });
+ok(earnedDraws > 0 && store.loadJourney().prizesWon.length === earnedDraws, "every earned draw is claimed");
+const walletIds = store.loadJourney().prizesWon.map(p => p.id);
+ok(new Set(walletIds).size === walletIds.length,
+   "prizes claimed in the same millisecond keep distinct ids, so the wallet merge can't eat one");
+store.mergeCloudJourney(staleSnap);
+ok(store.pendingDrawCount() === 0, "a stale cloud snapshot does not resurrect spent draws");
+store.importProfileData(staleFile);
+ok(store.pendingDrawCount() === 0, "and neither does re-importing your own backup");
+ok(store.loadJourney().prizesWon.length === earnedDraws, "the prizes themselves survive both");
+
+// A device that has never seen the journey still inherits the wallet.
+const sharedSnap = store.journeySnapshot();
+localStorage.clear();
+store.migrate();
+store.mergeCloudJourney(sharedSnap);
+ok(store.loadJourney().prizesWon.length === earnedDraws && store.pendingDrawCount() === 0,
+   "the second device gets the prizes, not a fresh set of draws");
+// Snapshots written by an older build carry only the counter.
+localStorage.clear();
+store.migrate();
+store.mergeCloudJourney({ kind: "journey", prizesWon: [], pendingDraws: 1 });
+ok(store.pendingDrawCount() === 1, "an old-format snapshot still delivers a draw it really owed");
+localStorage.clear();
+
 /* --- prize pool defaults avoid food / screen-time --- */
 const prizeText = data.PRIZE_POOL.map(p => p.label.toLowerCase()).join("|");
 ok(!/dinner|dessert|ice ?cream|ipad|screen/.test(prizeText), "no food/screen default prizes");
