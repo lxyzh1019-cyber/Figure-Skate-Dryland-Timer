@@ -138,4 +138,8 @@ export function buildProgressVM(state) {
   };
 }
 
-export function toggleRedeem(id) { redeemPrize(Number(id)); }
+/* The id arrives as a string from the button's data-arg. Pass it through as
+   it is: redeemPrize compares ids as text, so it matches both a numeric id
+   and the string one a legacy prize carries. Coercing with Number() here is
+   what made the Redeem button inert for legacy prizes — NaN matches nothing. */
+export function toggleRedeem(id) { redeemPrize(id); }

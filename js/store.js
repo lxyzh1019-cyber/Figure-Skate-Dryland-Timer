@@ -946,10 +946,25 @@ export function addPrize(prize) {
   j.prizesWon = [{ ...prize, date: todayISODate(), redeemed: false, id }, ...j.prizesWon];
   return persistJourney(j);
 }
+/* Toggle a prize between won and used.
+
+   Ids are compared as text on purpose. A prize claimed by this version has a
+   numeric id, but migrate() gives the oldest records `p.when || "legacy-" + i`
+   — and a record with no timestamp lands on a STRING. The click path can only
+   hand an id back as a string (it rides through a data-arg attribute), so a
+   strict === against a numeric id needed a Number() coercion, and that
+   coercion turned "legacy-1" into NaN: the button rendered, the tap did
+   nothing, and a prize she actually won could never be marked used.
+
+   Comparing as text takes both shapes without rewriting a single stored id —
+   which matters, because the wallet merges by id across devices. Minting new
+   ids for those records would have to invent a timestamp they never had, and
+   two devices inventing different ones would show the same prize twice. */
 export function redeemPrize(id) {
   const j = loadJourney();
   if (!j) return null;
-  j.prizesWon = (j.prizesWon || []).map(p => p.id === id ? { ...p, redeemed: !p.redeemed } : p);
+  j.prizesWon = (j.prizesWon || []).map(p =>
+    String(p.id) === String(id) ? { ...p, redeemed: !p.redeemed } : p);
   saveJourney(j);
   return j;
 }

@@ -29,6 +29,7 @@ const engine = await import(base + "engine.js");
 const rvm    = await import(base + "vm/readiness.js");
 const svm    = await import(base + "vm/session.js");
 const tvm    = await import(base + "vm/today.js");
+const pvm    = await import(base + "vm/progress.js");
 const sscreen = await import(base + "screens/session.js");
 const rscreen = await import(base + "screens/readiness.js");
 const overlays = await import(base + "screens/overlays.js");
@@ -271,6 +272,29 @@ localStorage.clear();
 store.migrate();
 store.mergeCloudJourney({ kind: "journey", prizesWon: [], pendingDraws: 1 });
 ok(store.pendingDrawCount() === 1, "an old-format snapshot still delivers a draw it really owed");
+localStorage.clear();
+
+/* --- Redeem works on every id shape a prize can carry --------------------
+   migrate() gives the oldest records `p.when || "legacy-" + i`, so one with no
+   timestamp gets a STRING id. The click path hands ids back as strings, and
+   the Number() coercion that used to undo that turned "legacy-1" into NaN:
+   the button rendered and the tap did nothing. Ids compare as text now. */
+localStorage.clear();
+localStorage.setItem("skate_journey_v1", JSON.stringify({ xp: 5000, pendingDraws: 0, prizesWon: [
+  { label: "Movie night", when: 1700000000000 },   // timestamped -> numeric id
+  { label: "Skip a chore" }                        // no timestamp -> "legacy-1"
+]}));
+store.migrate();
+const walletIdShapes = store.loadJourney().prizesWon.map(p => typeof p.id);
+ok(walletIdShapes.includes("number") && walletIdShapes.includes("string"),
+   "a legacy wallet really does hold both id shapes");
+store.loadJourney().prizesWon.forEach(p => {
+  pvm.toggleRedeem(String(p.id));                  // exactly what data-arg hands back
+  const after = store.loadJourney().prizesWon.find(x => String(x.id) === String(p.id));
+  ok(after.redeemed === true, `redeem marks the prize used (id ${JSON.stringify(p.id)})`);
+});
+pvm.toggleRedeem(String(store.loadJourney().prizesWon[1].id));
+ok(store.loadJourney().prizesWon[1].redeemed === false, "and tapping again puts it back");
 localStorage.clear();
 
 /* --- prize pool defaults avoid food / screen-time --- */
