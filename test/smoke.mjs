@@ -77,6 +77,33 @@ ok(fallback({ byReps: true, repsDetail: "8/dir/leg" }) === 8 * 3 * 4, "fallback 
 ok(fallback({ byReps: true, repsDetail: "8/side" }) === 8 * 3 * 2, "fallback counts /side (×2)");
 ok(fallback({ byReps: true, repsDetail: "12 · full range" }) === 12 * 3, "fallback leaves a plain rep count alone");
 
+/* --- a suggested time must cover the tempo its own dose prescribes ---------
+   The failure this guards against, from an older version of this plan:
+   "Clamshell Band · 15 reps each side · 2s open / 1s hold / 2s close" is
+   15 × 2 sides × 5s = 2:30 of prescribed work, but a flat 3s/rep priced it at
+   45s — one exercise swallowing most of a round's real length. Any dose that
+   names its seconds is checked against them. The floor counts prescribed work
+   only (no setup, no side switch, no reset), so a sound estSecs clears it. */
+function tempoFloor(ex) {
+  const d = ex.repsDetail || ex.dose || "";
+  const secs = [...d.matchAll(/(\d+)\s*s\b/gi)].map(m => +m[1]);
+  if (!secs.length) return null;
+  const perRep = secs.reduce((a, b) => a + b, 0);
+  const rm = d.match(/(\d+)/);
+  const sides = /each side|per side|\/side|\/leg/i.test(d) ? 2 : 1;
+  return (rm ? +rm[1] : 0) * sides * perRep;
+}
+const shortOfTempo = repMoves.filter(([, ex]) => {
+  const floor = tempoFloor(ex);
+  return floor !== null && ex.estSecs < floor;
+});
+ok(shortOfTempo.length === 0,
+   "no rep move is suggested less time than its own dose prescribes — short: "
+   + shortOfTempo.map(([d, ex]) => d + "/" + ex.name + " (" + ex.estSecs + "s < " + tempoFloor(ex) + "s)").join(", "));
+ok(tempoFloor({ repsDetail: "15 reps each side · 2s open / 1s hold / 2s close" }) === 150,
+   "the tempo floor reads a multi-phase tempo across both sides");
+ok(tempoFloor({ repsDetail: "8/side" }) === null, "a dose naming no seconds has no tempo floor");
+
 /* The suggested time is shown to the athlete, not just used in the estimate. */
 ok(data.exSuggestedTime({ driver: "reps", estSecs: 45 }) === "45s", "suggested time under a minute reads as seconds");
 ok(data.exSuggestedTime({ driver: "reps", estSecs: 150 }) === "2:30", "suggested time over a minute reads as m:ss");
