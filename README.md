@@ -22,6 +22,16 @@ Quality gates baked into the engine: valgus gate (left knee), spin-dizziness
 stop, never-to-failure pull series, bilateral ankle gate (right deeper),
 progressive overload (currently paused).
 
+**Timed vs rep moves.** A timed move carries `work` seconds and runs a
+countdown. A rep move is *self-paced* — the athlete taps Done, there is no
+countdown — so it carries `estSecs`, a **suggested** time to work to. That
+time paces the athlete (the rep ring counts up against it, and nudges gently
+past it) and is what the session-length estimate uses. `estSecs` is authored
+per move rather than inferred, because dose strings can't be parsed reliably:
+`"3 × 4s ecc + max clean"` is 3 *sets*, and the old heuristic read it as 3 reps
+and priced the move at 9 seconds. A smoke test requires `estSecs` on every rep
+move, so a newly added one can't silently fall back to guessing.
+
 ## Skating-specific session features (kept from the original skate app)
 
 - **Landing check** — after every valgus-gated jump the athlete grades the

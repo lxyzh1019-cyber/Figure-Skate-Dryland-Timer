@@ -5,7 +5,7 @@
    thin history gets honest empty/partial states, never mock data.
    ============================================================ */
 
-import { DAYS, WEEK_ORDER, DAY_SHORT, STANDING_RULES, ENGAGEMENT_SYSTEMS, TOP7, PRIZE_POOL, BLOCK_LABEL, videoSearchUrl, fmtXp } from "../data.js";
+import { DAYS, WEEK_ORDER, DAY_SHORT, STANDING_RULES, ENGAGEMENT_SYSTEMS, TOP7, PRIZE_POOL, BLOCK_LABEL, videoSearchUrl, fmtXp, exDoseWithTime } from "../data.js";
 import { settings, loadSessions, loadEvents, loadQuiz, loadGate, loadLadderRungs, loadTracker, getCurrentTrackerWeek, activeEngagement, activePrizePool, quizBankStatus, quizPaidToday, quizXpToday, QXP_DAILY_CAP } from "../store.js";
 import { edmontonWeekISODates, edmontonDayKey, edmontonISO, fmtHHMM, exercisePhotoUrl, DAY_MS } from "../util.js";
 
@@ -350,7 +350,7 @@ export function buildGrownupVM(state) {
     Object.values(day.blocks || {}).flat().concat(day.prepMenu || [], day.recovery || []).forEach(ex => {
       if (!ex || !ex.name || seen[ex.name]) return; seen[ex.name] = true;
       libraryList.push({
-        name: ex.name, dose: ex.dose || "", cue: ex.cue || "",
+        name: ex.name, dose: exDoseWithTime(ex) || "", cue: ex.cue || "",
         parentWatch: ex.parentWatch || "", fix: ex.redFlag || "", skate: ex.skateTransfer || "",
         photoUrl: exercisePhotoUrl(ex.name, "Demo"),
         videoUrl: videoSearchUrl(ex)

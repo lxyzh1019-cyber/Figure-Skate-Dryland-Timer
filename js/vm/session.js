@@ -4,7 +4,7 @@
    ============================================================ */
 
 import { sess, refTime, screenRepsDetail } from "../engine.js";
-import { DAYS, CHEERS, INTENT_WORDS, MICRO_LOOP, BREATH_REHEARSAL, exWork, videoSearchUrl } from "../data.js";
+import { DAYS, CHEERS, INTENT_WORDS, MICRO_LOOP, BREATH_REHEARSAL, exWork, videoSearchUrl, exDoseWithTime } from "../data.js";
 import { fmtMMSS, exercisePhotoUrl } from "../util.js";
 import { loadSessions } from "../store.js";
 
@@ -178,7 +178,7 @@ export function buildSessionVM(state) {
     sessionDone, sessionInProgress: !sessionDone,
     stopOverlay: sess.stopOverlay, confirmEnd: sess.confirmEnd, notConfirmingEnd: !sess.confirmEnd,
     detailOverlay: state.detailOverlay,
-    detailName: de.name || "", detailDose: de.dose || "", detailCue: de.cue || "",
+    detailName: de.name || "", detailDose: exDoseWithTime(de) || "", detailCue: de.cue || "",
     detailWatchFor: de.parentWatch || "", detailFix: de.redFlag || de.fix || "",
     detailSkate: de.skateTransfer || "",
     detailPhotoUrl: exercisePhotoUrl(de.name, "Demo"),

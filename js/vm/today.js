@@ -4,7 +4,7 @@
    history, skate_journey_v1 XP, and live Edmonton dates.
    ============================================================ */
 
-import { DAYS, WEEK_ORDER, RANK_LORE, DAY_SHORT, DAY_LONG, LADDER, levelCost, fmtXp, overloadWeek } from "../data.js";
+import { DAYS, WEEK_ORDER, RANK_LORE, DAY_SHORT, DAY_LONG, LADDER, levelCost, fmtXp, overloadWeek, exDoseWithTime } from "../data.js";
 import { settings, loadSessions, loadJourney, levelFromXp, currentStreak, loadDayProgress, sessionXp } from "../store.js";
 import { edmontonDayKey, edmontonWeekDates, edmontonWeekISODates, edmontonISO, plural, refTime } from "../util.js";
 
@@ -232,7 +232,7 @@ export function buildTodayVM(state) {
       countLabel: plural(exs.length, "move"), mins: blockMins,
       isBlockDone: doneBlocks.includes(bd.key),
       moves: exs.map(e => ({
-        text: e.name + " · " + e.dose, cue: e.cue,
+        text: e.name + " · " + exDoseWithTime(e), cue: e.cue,
         skateTransfer: e.skateTransfer || ""
       })),
       rot: open ? 180 : 0,

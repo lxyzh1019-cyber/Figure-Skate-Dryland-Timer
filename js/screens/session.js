@@ -36,8 +36,8 @@ function repRing(vm, size) {
   <div data-action="advance" title="Tap the ring when you're done" style="cursor:pointer;width:${size}px;height:${size}px;border-radius:50%;background:var(--grape-wash);border:${border}px solid var(--grape);display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;box-sizing:border-box;padding:${size >= 300 ? 26 : 14}px;">
     <div style="font-weight:900;font-size:${size >= 300 ? 15 : 11}px;letter-spacing:0.1em;color:var(--grape-deep);">${size >= 300 ? "DO YOUR REPS" : "REPS"}</div>
     <div style="font-family:var(--font-display);font-size:${size >= 300 ? 50 : 32}px;font-weight:600;color:var(--grape);text-align:center;line-height:1.05;margin:${size >= 300 ? 8 : 4}px 0;">${vm.curExDose}</div>
-    <div style="font-weight:900;font-size:${size >= 300 ? 20 : 14}px;color:${vm.paceColor};">⏱ <span id="s-timer-text">${vm.exActualDisplay}</span>${size >= 300 ? ` <span style="font-weight:700;opacity:0.65;">/ ${vm.exPlannedDisplay}</span>` : ""}</div>
-    <div style="font-size:12px;font-weight:800;color:var(--grape-deep);opacity:0.8;margin-top:6px;">Tap the ring when you're done</div>
+    <div style="font-weight:900;font-size:${size >= 300 ? 20 : 14}px;color:${vm.paceColor};">⏱ <span id="s-timer-text">${vm.exActualDisplay}</span> <span style="font-weight:700;opacity:0.65;">/ ${vm.exPlannedDisplay}</span></div>
+    <div style="font-size:12px;font-weight:800;color:var(--grape-deep);opacity:0.8;margin-top:6px;">Aim for ${vm.exPlannedDisplay} — tap the ring when you're done</div>
   </div>`;
 }
 
@@ -256,7 +256,7 @@ function centerStack(vm, wide) {
       <div style="font-family:var(--font-display);font-size:${wide ? 22 : 19}px;font-weight:600;color:var(--ink);line-height:1.15;">${vm.stageTitle}</div>
       ${vm.notResting ? `<button type="button" data-action="openDetailCur" title="See detail photo &amp; video" style="flex-shrink:0;width:28px;height:28px;border-radius:50%;border:none;background:var(--surface-2);color:var(--ink-soft);font-size:16px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">ⓘ</button>` : ""}
     </div>
-    ${vm.overNudge ? `<div style="font-family:var(--font-hand);font-size:17px;font-weight:700;color:var(--sun-ink);line-height:1.2;">Past the planned time — that's okay. Finish clean, then rest 💛</div>` : ""}
+    ${vm.overNudge ? `<div style="font-family:var(--font-hand);font-size:17px;font-weight:700;color:var(--sun-ink);line-height:1.2;">Past the suggested time — that's okay. Finish clean, then rest 💛</div>` : ""}
     ${vm.notResting ? `<div style="font-family:var(--font-hand);font-size:${wide ? 16 : 14}px;color:var(--aqua-ink);font-style:italic;line-height:1.2;">${vm.curExDose}</div>` : ""}
     ${vm.upNextName ? `
     <div style="font-size:15px;color:var(--ink-soft);line-height:1.3;">

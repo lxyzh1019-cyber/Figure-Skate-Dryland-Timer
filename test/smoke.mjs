@@ -42,6 +42,49 @@ ok(engine.refTime === util.refTime, "engine.refTime === util.refTime");
 ok(util.refTime({ driver: "time", work: 22 }) === 22, "refTime time-driver");
 ok(util.refTime({ dose: "10 reps/side" }) === 40, "refTime /side heuristic");
 
+/* --- rep moves carry an authored suggested time ---------------------------
+   Rep moves are self-paced (the athlete taps Done), so without an authored
+   estSecs the app had to guess from the dose string — and guessed badly:
+   "3 × 4s ecc + max clean" is 3 SETS, priced at 3 reps × 3s = 9 seconds, and
+   "8/dir/leg" is 32 swings, priced at 8. That is what made a 3-round Saturday
+   estimate under 20 minutes against an authored 30–35. estSecs is now
+   required on every rep move; this guards new ones. */
+const everyEx = [];
+Object.entries(data.DAYS).forEach(([dayKey, day]) => {
+  Object.values(day.blocks || {}).flat()
+    .concat(day.prepMenu || [], day.recoveryHolds || [])
+    .forEach(ex => ex && ex.name && everyEx.push([dayKey, ex]));
+});
+const repMoves = everyEx.filter(([, ex]) => ex.driver === "reps");
+ok(repMoves.length > 0, "the plan has rep-driven moves to check");
+const missingEst = repMoves.filter(([, ex]) => !(ex.estSecs > 0));
+ok(missingEst.length === 0,
+   "every rep move has a suggested time — missing: " + missingEst.map(([d, ex]) => d + "/" + ex.name).join(", "));
+ok(everyEx.filter(([, ex]) => ex.driver === "time").every(([, ex]) => !ex.estSecs),
+   "timed moves carry no estSecs — they run their own countdown");
+
+/* refTime and the session estimate both read the authored value. */
+ok(util.refTime({ driver: "reps", estSecs: 150, dose: "3 × 4s ecc + max" }) === 150,
+   "refTime prefers the authored estSecs over the dose heuristic");
+ok(engine.estimateSessionSecs([{ name: "t", block: "main", rounds: 1,
+     exercises: [{ byReps: true, driver: "reps", repsDetail: "3 × 4s ecc + max clean", estSecs: 150 }] }]) === 150,
+   "the session estimate uses estSecs, not 3 reps × 3s");
+
+/* The dose-string fallback still runs for anything unauthored, and no longer
+   drops the /dir and /leg multipliers ("8/dir/leg" = 8 × 2 dirs × 2 legs). */
+const fallback = ex => engine.estimateSessionSecs([{ name: "t", block: "warmup", rounds: 1, exercises: [ex] }]);
+ok(fallback({ byReps: true, repsDetail: "8/dir/leg" }) === 8 * 3 * 4, "fallback counts /dir and /leg (×4)");
+ok(fallback({ byReps: true, repsDetail: "8/side" }) === 8 * 3 * 2, "fallback counts /side (×2)");
+ok(fallback({ byReps: true, repsDetail: "12 · full range" }) === 12 * 3, "fallback leaves a plain rep count alone");
+
+/* The suggested time is shown to the athlete, not just used in the estimate. */
+ok(data.exSuggestedTime({ driver: "reps", estSecs: 45 }) === "45s", "suggested time under a minute reads as seconds");
+ok(data.exSuggestedTime({ driver: "reps", estSecs: 150 }) === "2:30", "suggested time over a minute reads as m:ss");
+ok(data.exSuggestedTime({ driver: "time", work: 30, dose: "30s" }) === "",
+   "a timed move has no suggested time — its countdown IS the time");
+ok(data.exDoseWithTime({ driver: "reps", estSecs: 60, byReps: true, repsDetail: "8/side", dose: "8/side" }) === "8/side · ~1:00",
+   "the plan list shows dose plus its suggested time");
+
 /* --- streak math with the recovery-friendly grace --- */
 ok(store.currentStreak([]) === 0, "empty streak is 0");
 const s = iso => ({ isoDate: iso, completedFully: true });
