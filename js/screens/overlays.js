@@ -4,7 +4,8 @@
    (cue / parentWatch / fix asked three ways per move).
    ============================================================ */
 
-import { loadQuiz, saveQuiz, logEvent, addXp, addPrize, drawablePool,
+import { PRIZE_POOL } from "../data.js";
+import { settings, loadQuiz, saveQuiz, logEvent, addXp, addPrize,
          movePool, rankPool, questionBank, quizPaidToday, quizBankStatus,
          quizQuestionKey, payQuizQuestion } from "../store.js";
 import { todayISODate } from "../util.js";
@@ -238,9 +239,8 @@ export function quizDeckHtml(qd) {
 
 /* ---- prize draw ---- */
 export function newPrizeDraw() {
-  // drawablePool() drops limited prizes that are used up, so a spent chore
-  // skip stops showing in envelopes.
-  return { cards: shuffle(drawablePool()).slice(0, 3), picked: null };
+  const pool = (Array.isArray(settings.prizePool) && settings.prizePool.length) ? settings.prizePool : PRIZE_POOL;
+  return { cards: shuffle(pool).slice(0, 3), picked: null };
 }
 
 export function claimPrize(pd) {

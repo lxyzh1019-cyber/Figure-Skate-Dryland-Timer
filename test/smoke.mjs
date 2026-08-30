@@ -158,55 +158,6 @@ store.updateSettings({ practiceMode: false });
 localStorage.clear();
 store.migrate();
 
-/* --- limited-quantity prizes ----------------------------------------------
-   "Skip one chore" is a finite supply of six: each one won burns one, and at
-   zero it stops being dealt. Prizes with no qty stay unlimited. */
-localStorage.clear();
-store.migrate();
-const chore = data.PRIZE_POOL.find(p => /skip one chore/i.test(p.label));
-ok(chore && chore.qty === 6, "the chore skip is stocked at 6");
-ok(data.PRIZE_POOL.filter(p => p.qty != null).length === 1,
-   "it is one prize entry with a quantity, not six duplicate entries");
-ok(store.prizeRemaining(chore, { prizesWon: [] }) === 6, "an untouched chore skip has all 6 left");
-ok(store.prizeRemaining(chore, { prizesWon: [{ label: chore.label }, { label: chore.label }] }) === 4,
-   "two won leaves four");
-ok(store.prizeRemaining(chore, { prizesWon: Array(9).fill({ label: chore.label }) }) === 0,
-   "the count floors at 0, never goes negative");
-ok(store.prizeRemaining({ label: "Family movie pick" }, { prizesWon: [] }) === Infinity,
-   "a prize with no qty is unlimited");
-
-/* A used-up prize drops out of the draw; the rest stay dealable. */
-ok(store.drawablePool().some(p => p.label === chore.label), "a fresh chore skip is dealable");
-const jr = store.loadJourney() || {};
-jr.prizesWon = Array(6).fill(0).map((_, i) => ({ label: chore.label, id: i, redeemed: false }));
-store.saveJourney(jr);
-ok(!store.drawablePool().some(p => p.label === chore.label), "a spent chore skip stops being dealt");
-ok(store.drawablePool().length === data.PRIZE_POOL.length - 1, "the other prizes are untouched");
-localStorage.clear();
-store.migrate();
-
-/* Trimming the pool must not drop a prize's quantity — the Settings list
-   carries a derived "n of 6 left" label, and writing that list back would
-   both persist a stale count and risk losing the qty. */
-const trimmed = store.activePrizePool().filter(p => p.label !== "Family movie pick");
-store.updateSettings({ prizePool: trimmed });
-const keptChore = store.activePrizePool().find(p => p.label === chore.label);
-ok(keptChore && keptChore.qty === 6, "a trimmed pool keeps the chore skip's quantity of 6");
-ok(!store.activePrizePool().some(p => "leftLabel" in p), "no derived display field is persisted");
-
-/* A pool customized before quantities existed gets the cap backfilled. */
-store.updateSettings({ prizePool: [{ icon: "✨", label: "Skip one chore" }, { icon: "🎁", label: "Ice cream" }] });
-store.migrate();
-const backfilled = store.activePrizePool().find(p => p.label === "Skip one chore");
-ok(backfilled && backfilled.qty === 6, "an older custom pool gets the chore-skip cap backfilled");
-ok(store.activePrizePool().find(p => p.label === "Ice cream").qty === undefined,
-   "a grown-up's own prize stays unlimited");
-store.updateSettings({ prizePool: [{ icon: "✨", label: "Skip one chore", qty: 2 }] });
-store.migrate();
-ok(store.activePrizePool()[0].qty === 2, "an explicit quantity is never overwritten by the default");
-localStorage.clear();
-store.migrate();
-
 /* --- streak math with the recovery-friendly grace --- */
 ok(store.currentStreak([]) === 0, "empty streak is 0");
 const s = iso => ({ isoDate: iso, completedFully: true });

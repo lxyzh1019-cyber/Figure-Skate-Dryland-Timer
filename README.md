@@ -61,11 +61,7 @@ word, micro-loop, breath rehearsal, rep voice counting, same-day resume, etc.).
 - **Progress** — streak hero + week chart, **Ice Story** rank cards (lore +
   locked mystery cards), milestones, training log (Recent / All tabs), prize wallet.
 - **Prize Draw** — pick a sealed card on level-up, one envelope per level
-  reached, once, for good (see *Prize draws* under Persistence). A prize may
-  carry a `qty` (Skip one chore is stocked at 6): each one won burns one, and
-  at zero it stops being dealt. Remaining stock is counted from the prize
-  wallet, not a separate tally, so it can't drift from what she actually holds.
-  A prize with no `qty` is unlimited. **Quiz Deck** — questions
+  reached, once, for good (see *Prize draws* under Persistence). **Quiz Deck** — questions
   generated from the plan's moves.
 - **Grown-up Zone** — Overview · Analytics (Week/Month/All: adherence, ACWR,
   heatmap, load trend, pace, pauses/skips by block, form quality, mood, quiz
