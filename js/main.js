@@ -32,6 +32,7 @@ export const state = {
   logScope: "week",
   expanded: {},                 // day-card block expansion
   selectedDay: null,            // monday..sunday
+  // Seeded from the saved setting below, once the store has migrated.
   practiceMode: false,
   inSession: false,
   readiness: null,              // active readiness-check flow state (null = not in flow)
@@ -128,7 +129,11 @@ const actions = {
   selectDay(arg) { state.selectedDay = arg; state.expanded = {}; render(); },
   toggleBlock(arg) { state.expanded[arg] = !state.expanded[arg]; render(); },
   toggleCoachVoice() { updateSettings({ coachVoiceOn: !settings.coachVoiceOn }); render(); },
-  togglePractice() { state.practiceMode = !state.practiceMode; render(); },
+  togglePractice() {
+    state.practiceMode = !state.practiceMode;
+    updateSettings({ practiceMode: state.practiceMode });
+    render();
+  },
   goSession(arg) {
     state.readiness = newReadinessFlow(arg || state.selectedDay || edmontonDayKey(), state.practiceMode);
     render();
@@ -402,6 +407,9 @@ function boot() {
     if (!state.inSession) render();
   });
   migrate();
+  // Restore the saved try-it mode — migrate() has to run first for `settings`
+  // to hold anything.
+  state.practiceMode = !!settings.practiceMode;
   if (!state.selectedDay) state.selectedDay = edmontonDayKey();
   render();
   fetchWeather();

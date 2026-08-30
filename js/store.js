@@ -90,7 +90,12 @@ export const DEFAULT_SETTINGS = {
   coachVoiceOn: true,       // NEW: design's 🎧 toggle gates ALL coach audio
   athleteName: "Jenn",      // NEW: editable in Grown-up Settings
   prizePool: null,          // NEW: null = default PRIZE_POOL
-  cloudMirror: true         // NEW: privacy — mirror completed sessions to Firestore
+  cloudMirror: true,        // NEW: privacy — mirror completed sessions to Firestore
+  // Try-it mode sits in Grown-up Settings beside the coach voice and the rest
+  // steppers, so it has to survive a reload like they do. It used to live only
+  // in memory: a grown-up switched it on, the page reloaded, and it was
+  // silently off again — the next run counted for real.
+  practiceMode: false
 };
 
 export let settings = loadSettings();

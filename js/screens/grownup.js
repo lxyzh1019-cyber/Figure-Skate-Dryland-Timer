@@ -390,7 +390,8 @@ function libraryTab(vm) {
               <div style="font-weight:900;font-size:16px;color:var(--ink);">${lib.name}</div>
               <div style="font-family:var(--font-hand);font-size:15px;color:var(--aqua-ink);flex-shrink:0;">${lib.dose}</div>
             </div>
-            <a href="${lib.videoUrl}" target="_blank" rel="noopener" style="align-self:flex-start;display:flex;align-items:center;gap:6px;text-decoration:none;background:var(--aqua-wash);color:var(--aqua-ink);font-weight:900;font-size:13px;border-radius:var(--radius-pill);padding:7px 14px;">▶ Watch the move</a>
+            <a href="${lib.videoUrl}" target="_blank" rel="noopener" title="Searches YouTube for: ${escapeHtml(lib.videoQuery || "")}" style="align-self:flex-start;display:flex;align-items:center;gap:6px;text-decoration:none;background:var(--aqua-wash);color:var(--aqua-ink);font-weight:900;font-size:13px;border-radius:var(--radius-pill);padding:7px 14px;">▶ Watch the move</a>
+            ${lib.videoQuery ? `<div style="font-size:11px;font-weight:700;color:var(--ink-faint);">Searches for “${escapeHtml(lib.videoQuery)}”</div>` : ""}
             ${lib.cue ? `<div style="font-size:13px;color:var(--ink);line-height:1.4;"><span style="font-weight:900;color:var(--aqua-ink);">Cue · </span>${lib.cue}</div>` : ""}
             ${lib.parentWatch ? `<div style="font-size:13px;color:var(--ink);line-height:1.4;"><span style="font-weight:900;color:var(--sun-ink);">👀 Watch for · </span>${lib.parentWatch}${lib.fix ? ` <span style="color:var(--ink-soft);">🔧 ${lib.fix}</span>` : ""}</div>` : ""}
             ${lib.skate ? `<div style="font-size:13px;color:var(--ink);line-height:1.4;"><span style="font-weight:900;color:var(--sea-ink);">⛸️ On-ice transfer · </span>${lib.skate}</div>` : ""}

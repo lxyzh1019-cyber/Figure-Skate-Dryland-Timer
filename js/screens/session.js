@@ -147,7 +147,8 @@ export function detailOverlayHtml(vm) {
           <div style="font-family:var(--font-display);font-size:26px;font-weight:600;color:var(--ink);">${vm.detailName}</div>
           <div style="font-family:var(--font-hand);font-size:18px;color:var(--aqua-ink);">${vm.detailDose}</div>
         </div>
-        <a href="${vm.detailVideoUrl}" target="_blank" rel="noopener" style="align-self:flex-start;display:flex;align-items:center;gap:8px;text-decoration:none;background:var(--aqua);color:#fff;font-weight:900;font-size:15px;border-radius:var(--radius-pill);padding:12px 22px;box-shadow:0 4px 0 var(--aqua-deep);">▶ Watch the move</a>
+        <a href="${vm.detailVideoUrl}" target="_blank" rel="noopener" title="Searches YouTube for: ${vm.detailVideoQuery}" style="align-self:flex-start;display:flex;align-items:center;gap:8px;text-decoration:none;background:var(--aqua);color:#fff;font-weight:900;font-size:15px;border-radius:var(--radius-pill);padding:12px 22px;box-shadow:0 4px 0 var(--aqua-deep);">▶ Watch the move</a>
+        ${vm.detailVideoQuery ? `<div style="font-size:12px;font-weight:700;color:var(--ink-faint);margin-top:-8px;">Searches for “${vm.detailVideoQuery}”</div>` : ""}
         ${vm.detailCue ? `
         <div style="background:var(--aqua-wash);border-radius:var(--radius-md);padding:12px 14px;">
           <div style="font-size:11px;font-weight:900;letter-spacing:0.06em;text-transform:uppercase;color:var(--aqua-ink);margin-bottom:4px;">Coach tip</div>

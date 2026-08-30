@@ -4,7 +4,7 @@
    ============================================================ */
 
 import { sess, refTime, screenRepsDetail } from "../engine.js";
-import { DAYS, CHEERS, INTENT_WORDS, MICRO_LOOP, BREATH_REHEARSAL, exWork, videoSearchUrl, exDoseWithTime } from "../data.js";
+import { DAYS, CHEERS, INTENT_WORDS, MICRO_LOOP, BREATH_REHEARSAL, exWork, videoSearchUrl, videoSearchQuery, exDoseWithTime } from "../data.js";
 import { fmtMMSS, exercisePhotoUrl } from "../util.js";
 import { loadSessions } from "../store.js";
 
@@ -183,6 +183,10 @@ export function buildSessionVM(state) {
     detailSkate: de.skateTransfer || "",
     detailPhotoUrl: exercisePhotoUrl(de.name, "Demo"),
     detailVideoUrl: videoSearchUrl(de),
+    // Several moves are searched under a different name than the plan uses
+    // ("SL-RDL" -> single leg romanian deadlift), so say what gets searched
+    // rather than leaving the mismatch to be discovered on YouTube.
+    detailVideoQuery: videoSearchQuery(de),
 
     sessionDayTitle: day.title || "",
     elapsedDisplay: fmtMMSS(sess.elapsed),

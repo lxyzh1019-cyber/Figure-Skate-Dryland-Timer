@@ -112,6 +112,52 @@ ok(data.exSuggestedTime({ driver: "time", work: 30, dose: "30s" }) === "",
 ok(data.exDoseWithTime({ driver: "reps", estSecs: 60, byReps: true, repsDetail: "8/side", dose: "8/side" }) === "8/side · ~1:00",
    "the plan list shows dose plus its suggested time");
 
+/* --- every demo link names exactly one validated channel -------------------
+   The channel bias this file documents was dead code: `yt(q, ch)` appended a
+   channel and nothing called it, so demo links went out as bare keyword
+   searches. Nothing on YouTube is called "Axis Micro", so its query landed in
+   general ballet. Naming a channel pins each search to a real source — but
+   naming two narrows it to nothing, which is what happened when the block
+   channel was appended to a query that already spelled one out inline. */
+const CHANNEL_NAMES = Object.values(data.COACH_CHANNELS).map(c => c.name)
+  .concat(["The Prehab Guys"]);
+const libraryEx = [];
+Object.values(data.DAYS).forEach(day => {
+  Object.values(day.blocks || {}).flat()
+    .concat(day.prepMenu || [], day.recoveryHolds || [], day.recovery || [])
+    .forEach(ex => ex && ex.name && libraryEx.push(ex));
+});
+ok(libraryEx.length > 0, "there are moves to build demo searches for");
+const channelCount = q => CHANNEL_NAMES.filter(n => q.toLowerCase().includes(n.toLowerCase())).length;
+const wrongChannels = libraryEx.filter(ex => channelCount(data.videoSearchQuery(ex)) !== 1);
+ok(wrongChannels.length === 0,
+   "every demo search names exactly one channel — wrong: "
+   + wrongChannels.map(ex => ex.name + " -> " + data.videoSearchQuery(ex)).join(" | "));
+ok(/iSk8 Mom Maja$/.test(data.videoSearchQuery({ name: "Axis Micro", block: "skateskill" })),
+   "a skate-skill drill searches the figure-skating channel");
+ok(/Tom Merrick$/.test(data.videoSearchQuery({ name: "Calves — foam roller", block: "recovery" })),
+   "recovery work searches the mobility channel, not the strength one");
+ok(/The Prehab Guys$/.test(data.videoSearchQuery({ name: "Pallof Press", block: "main" })),
+   "a move whose best source isn't its block default keeps its own channel");
+ok(data.videoSearchUrl({ name: "Bird Dog", block: "main" }).startsWith("https://www.youtube.com/results?search_query="),
+   "the demo link is a YouTube search URL");
+
+/* --- try-it mode survives a reload ----------------------------------------
+   It sits in Grown-up Settings beside the coach voice and the rest steppers,
+   but lived only in memory: switched on, reloaded, silently off again — and
+   the next run counted for real. */
+ok("practiceMode" in store.DEFAULT_SETTINGS, "try-it mode is a persisted setting");
+ok(store.DEFAULT_SETTINGS.practiceMode === false, "try-it mode is off by default");
+localStorage.clear();
+store.migrate();
+store.updateSettings({ practiceMode: true });
+ok(store.settings.practiceMode === true, "try-it mode persists when switched on");
+store.migrate();
+ok(store.settings.practiceMode === true, "try-it mode is still on after a reload");
+store.updateSettings({ practiceMode: false });
+localStorage.clear();
+store.migrate();
+
 /* --- streak math with the recovery-friendly grace --- */
 ok(store.currentStreak([]) === 0, "empty streak is 0");
 const s = iso => ({ isoDate: iso, completedFully: true });
