@@ -611,10 +611,13 @@ localStorage.removeItem("skate_quiz_v1");
    disagreed about the same session the moment the rates changed. */
 localStorage.clear();
 store.migrate();
-const todayKeyForCard = new Date().toLocaleString("en-US", { timeZone: "America/Edmonton", weekday: "long" }).toLowerCase();
-store.saveSession({ isoDate: new Date().toISOString(), dayKey: todayKeyForCard, completedFully: true,
+// Pin a TRAINING day rather than the real weekday. Sunday is the recovery day
+// and a spa card deliberately shows no XP line, so keying this off "today" made
+// the assertion pass six days a week and fail every Sunday.
+const cardDayKey = data.WEEK_ORDER.find(k => !data.DAYS[k].spa);
+store.saveSession({ isoDate: new Date().toISOString(), dayKey: cardDayKey, completedFully: true,
                     roundsDone: 3, xpVersion: store.XP_VERSION, cleanLandings: 4, perExercise: Array(19).fill(1) });
-const cardVM = tvm.buildTodayVM({ selectedDay: todayKeyForCard, expanded: {}, practiceMode: false, isWide: true });
+const cardVM = tvm.buildTodayVM({ selectedDay: cardDayKey, expanded: {}, practiceMode: false, isWide: true });
 ok(/\+380 XP earned/.test(cardVM.dayView.earnedXpLabel || ""),
    "a finished 3-round day says +380 — the flat 360 plus its 4 clean landings");
 localStorage.clear();
