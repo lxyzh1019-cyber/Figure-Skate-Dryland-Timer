@@ -30,6 +30,7 @@ const rvm    = await import(base + "vm/readiness.js");
 const svm    = await import(base + "vm/session.js");
 const tvm    = await import(base + "vm/today.js");
 const pvm    = await import(base + "vm/progress.js");
+const gvm    = await import(base + "vm/grownup.js");
 const sscreen = await import(base + "screens/session.js");
 const rscreen = await import(base + "screens/readiness.js");
 const overlays = await import(base + "screens/overlays.js");
@@ -155,6 +156,55 @@ ok(store.settings.practiceMode === true, "try-it mode persists when switched on"
 store.migrate();
 ok(store.settings.practiceMode === true, "try-it mode is still on after a reload");
 store.updateSettings({ practiceMode: false });
+localStorage.clear();
+store.migrate();
+
+/* --- try-it mode ----------------------------------------------------------
+   Five defects, all of which let a demo run be mistaken for a real one (or a
+   real one be silently thrown away). */
+localStorage.clear();
+store.migrate();
+
+// It survives a reload...
+store.updateSettings({ practiceMode: true });
+store.migrate();
+ok(store.settings.practiceMode === true, "try-it mode survives a reload while it is on");
+
+// ...but the badge now shows on every card that can start a run, not just today.
+const tryDay = data.WEEK_ORDER.find(k => !data.DAYS[k].spa);
+const withPractice = (extra = {}) => tvm.buildTodayVM({
+  selectedDay: tryDay, expanded: {}, practiceMode: true, isWide: true, ...extra });
+const practiceVM = withPractice();
+ok(practiceVM.dayView.showCta ? practiceVM.dayView.showTryBadge === true : true,
+   "any card that can start a run carries the try-it badge when the mode is on");
+const offVM = tvm.buildTodayVM({ selectedDay: tryDay, expanded: {}, practiceMode: false, isWide: true });
+ok(!offVM.dayView.showTryBadge, "and no badge when the mode is off");
+ok(/ON/.test(practiceVM.practiceLinkLabel) && /Try-it/.test(offVM.practiceLinkLabel),
+   "the bottom button states its mode in words, not just a colour");
+ok(typeof practiceVM.practiceButtonStyle === "string" && practiceVM.practiceButtonStyle.length > 0,
+   "the button is styled as a button, not a faint link");
+
+// A missed / catch-up day is the case that used to run as practice with
+// nothing on screen saying so.
+localStorage.clear();
+store.migrate();
+const missedVM = tvm.buildTodayVM({ selectedDay: tryDay, expanded: {}, practiceMode: true, isWide: true });
+ok(!missedVM.dayView.showCta || missedVM.dayView.showTryBadge,
+   "a catch-up card in try-it mode says so");
+
+// Pain escapes the sandbox: an event is logged, but no session is recorded.
+localStorage.clear();
+store.migrate();
+store.logEvent("pain_report", { source: "readiness", practice: true, day: tryDay, severity: 3 });
+ok(store.loadSessions().length === 0, "a try-it run still records no session");
+const painVM = gvm.buildGrownupVM({ gsScope: "all", grownupTab: "overview" });
+ok((painVM.analytics.flags || []).some(f => /try-it run/i.test(f.text)),
+   "a sore spot reported in a try-it run reaches Safety & flags");
+localStorage.clear();
+store.migrate();
+const cleanVM = gvm.buildGrownupVM({ gsScope: "all", grownupTab: "overview" });
+ok(!(cleanVM.analytics.flags || []).some(f => /try-it run/i.test(f.text)),
+   "and nothing is flagged when no pain was reported");
 localStorage.clear();
 store.migrate();
 

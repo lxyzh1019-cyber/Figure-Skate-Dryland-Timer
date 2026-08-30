@@ -59,10 +59,16 @@ export function buildGrownupVM(state) {
     date: dstr(s.isoDate), move: s.dayTitle || s.dayKey,
     note: "Stopped for pain after " + mins(s) + " min — check in before the next session."
   }));
+  // Pain reported during a try-it run. Those runs write no session record on
+  // purpose, so this is the only channel that carries them -- without it a
+  // sore spot reported in a demo reached nobody at all.
+  const painReports = events.filter(e => e.type === "pain_report" && eventInScope(e));
   const earlyEnds = sessions.filter(s => s.endedEarly && !s.pain);
   const yellowRed = sessions.filter(s => ["yellow", "red"].includes(s.lightResult));
   const flags = [
     ...stops.map(s => ({ icon: "🛑", rowStyle: alertRow("stop"), text: "Stopped for pain during “" + (s.dayTitle || "session") + "” (" + dstr(s.isoDate) + ")." })),
+    ...painReports.map(e => ({ icon: "🛑", rowStyle: alertRow("stop"),
+      text: "Sore spot reported during a try-it run (" + dstr(e.iso) + ") — the run wasn't recorded, but this was." })),
     ...(earlyEnds.length ? [{ icon: "⏱", rowStyle: alertRow("sun"), text: earlyEnds.length + " session" + (earlyEnds.length === 1 ? "" : "s") + " ended early — " + earlyEnds.map(s => dstr(s.isoDate)).join(", ") + "." }] : []),
     ...(yellowRed.length ? [{ icon: "💛", rowStyle: alertRow("sun"), text: yellowRed.length + " yellow/red-light day" + (yellowRed.length === 1 ? "" : "s") + " — she felt tired or sore; rounds were capped." }] : [])
   ];

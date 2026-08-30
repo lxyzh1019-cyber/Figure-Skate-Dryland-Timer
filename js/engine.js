@@ -685,6 +685,9 @@ export function finalize(completed) {
   sess.endedEarly = !completed;
 
   if (sess.practice) {
+    // No session record is written for a try-it run, so a pain stop would
+    // otherwise vanish with it. Pain escapes the sandbox; nothing else does.
+    if (sess.painFlag) logEvent("pain_report", { source: "session", practice: true, day: sess.dayKey });
     if (completed) speak("Practice run complete. Nothing recorded. You know the movements now.");
     playCue("done");
     setPhase("done");

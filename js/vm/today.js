@@ -356,6 +356,13 @@ export function buildTodayVM(state) {
     }
   }
 
+  // The try-it badge belongs on every card that can START a run, not just
+  // today's. Catch-up and partial days used to launch a practice run with
+  // nothing on screen saying so. The second clause covers the "Practice
+  // again" card, whose action is practice whatever the mode flag says.
+  dayView.showTryBadge = (practiceMode && !!dayView.showCta)
+    || dayView.ctaAction === "goSessionPractice";
+
   dayView.showBackToToday = selectedKey !== todayKey;
   if (dayView.isActive && !dayView.ctaSubtext) dayView.ctaSubtext = (dayView.movesLabel || "") + " · about " + (dayView.mins || "?") + " min · that’s the whole thing — no surprises.";
   if (dayView.isActive && !practiceMode && !isSpaDay) {
@@ -370,7 +377,17 @@ export function buildTodayVM(state) {
 
   const coachIconBtnStyle = "width:34px;height:34px;border-radius:50%;border:none;cursor:pointer;flex-shrink:0;font-size:15px;display:flex;align-items:center;justify-content:center;"
     + (settings.coachVoiceOn ? "background:#fff;color:var(--aqua-deep);" : "background:rgba(255,255,255,0.18);color:#fff;");
-  const practiceLinkLabel = practiceMode ? "Try-it mode is on — tap to turn off" : "Just practicing? Try-it mode";
+  // A real button at the bottom of the card, not a faint underlined link, and
+  // shown on every card that can start a run. When it is ON it has to look ON
+  // from across the room -- that is the whole safeguard against a demo run
+  // being mistaken for a real one.
+  const practiceLinkLabel = practiceMode
+    ? "🧪 Try-it mode is ON — nothing will be saved. Tap to turn off"
+    : "🧪 Just practicing? Turn on Try-it mode";
+  const practiceButtonStyle = "width:100%;min-height:46px;border-radius:var(--radius-pill);cursor:pointer;font-family:inherit;font-size:13px;font-weight:900;padding:0 18px;"
+    + (practiceMode
+      ? "background:#fff;color:var(--grape-deep);border:3px solid var(--grape);"
+      : "background:rgba(255,255,255,0.16);color:#fff;border:2px solid rgba(255,255,255,0.45);");
 
   // Echo-back: her own last "next time" promise, remembered on the day card.
   const lastSaid = sessions.slice().reverse().map(h => h.nextTime).find(Boolean);
@@ -394,7 +411,7 @@ export function buildTodayVM(state) {
   return {
     athleteName: settings.athleteName || "Jenn",
     dateLine, statChips, journey, blocks, week, legend, dayView,
-    gearLabel, focusCue, coachIconBtnStyle, practiceLinkLabel, echoLine, weather,
+    gearLabel, focusCue, coachIconBtnStyle, practiceLinkLabel, practiceButtonStyle, echoLine, weather,
     selectedKey, todayKey,
     railToday: railNav(state.nav === "today"),
     railProgress: railNav(state.nav === "progress"),

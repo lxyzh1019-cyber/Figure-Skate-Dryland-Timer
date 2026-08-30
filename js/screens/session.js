@@ -252,6 +252,7 @@ function centerStack(vm, wide) {
     <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;">
       ${badge(vm.blockBadgeVariant, vm.blockLabel)}
       ${vm.roundLabelText ? `<span style="font-size:12px;font-weight:900;color:var(--ink-soft);background:var(--surface-2);border-radius:var(--radius-pill);padding:3px 10px;">${vm.roundLabelText}</span>` : ""}
+      ${vm.practice ? `<span style="font-size:12px;font-weight:900;color:var(--grape-deep);background:var(--grape-wash);border:1.5px solid var(--grape);border-radius:var(--radius-pill);padding:3px 10px;">🧪 TRY-IT · NOT SAVED</span>` : ""}
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
       <div style="font-family:var(--font-display);font-size:${wide ? 22 : 19}px;font-weight:600;color:var(--ink);line-height:1.15;">${vm.stageTitle}</div>
