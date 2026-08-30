@@ -61,7 +61,15 @@ word, micro-loop, breath rehearsal, rep voice counting, same-day resume, etc.).
 - **Progress** — streak hero + week chart, **Ice Story** rank cards (lore +
   locked mystery cards), milestones, training log (Recent / All tabs), prize wallet.
 - **Prize Draw** — pick a sealed card on level-up, one envelope per level
-  reached, once, for good (see *Prize draws* under Persistence). **Quiz Deck** — questions
+  reached, once, for good (see *Prize draws* under Persistence). Every prize in
+  the pool is unlimited and equally drawable. The *wallet* is capped, though:
+  an old over-granting bug left 32 prizes against an entitlement of 14, and
+  because `pending = drawsEarned − wallet.length` that stopped her drawing
+  anything at all. `capWallet` trims it to `max(drawCap(drawLevel),
+  drawsEarned)` — six chore skips plus the oldest unclaimed — as a standing
+  invariant on every read and write, for the same reason the draw cap is one.
+  It keeps *exactly* the cap: keeping fewer would pay the difference out as
+  fresh envelopes. **Quiz Deck** — questions
   generated from the plan's moves.
 - **Grown-up Zone** — Overview · Analytics (Week/Month/All: adherence, ACWR,
   heatmap, load trend, pace, pauses/skips by block, form quality, mood, quiz

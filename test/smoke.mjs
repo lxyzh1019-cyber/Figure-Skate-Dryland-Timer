@@ -158,6 +158,106 @@ store.updateSettings({ practiceMode: false });
 localStorage.clear();
 store.migrate();
 
+/* --- the wallet cap: 32 prizes held against an entitlement of 14 -----------
+   An old over-granting bug let her claim 32 envelopes. pendingFor is
+   drawsEarned minus wallet length, so max(0, 14 - 32) = 0 and she drew
+   nothing at all. capWallet trims the wallet itself: six chore skips plus the
+   oldest unclaimed, exactly to the cap. */
+function seedWallet(n, opts = {}) {
+  localStorage.clear();
+  const prizesWon = Array.from({ length: n }, (_, i) => ({
+    id: i + 1, icon: "🎁",
+    label: i < (opts.chores == null ? 8 : opts.chores) ? "Skip one chore" : "prize-" + i,
+    date: "2026-0" + ((i % 9) + 1) + "-0" + ((i % 9) + 1),
+    redeemed: opts.allRedeemed ? true : i % 4 === 0
+  }));
+  localStorage.setItem("skate_journey_v1", JSON.stringify({
+    xp: opts.xp == null ? 9000 : opts.xp, drawsEarned: n,
+    drawLevel: opts.drawLevel == null ? 12 : opts.drawLevel, prizesWon
+  }));
+  store.migrate();
+  return store.loadJourney();
+}
+const walletCapped = seedWallet(32);
+const capLvl = store.drawCap(12);
+ok(capLvl === 14, "level 12 entitles her to 14 envelopes");
+ok(walletCapped.prizesWon.length === 14, "a 32-prize wallet is trimmed to exactly the cap");
+ok(walletCapped.prizesWon.filter(p => p.label === "Skip one chore").length === 6,
+   "six chore skips survive the trim");
+ok(store.pendingDrawCount() === 0,
+   "the trim hands out no envelopes — keeping fewer than the cap would mint draws");
+ok(new Set(walletCapped.prizesWon.map(p => String(p.id))).size === 14, "no duplicate ids survive");
+ok(walletCapped.prizesWon.every(p => !p.redeemed),
+   "with enough unclaimed prizes to fill the cap, the redeemed ones are the ones dropped");
+
+/* Idempotent, and stable across reboots. */
+const firstPass = JSON.stringify(store.loadJourney().prizesWon.map(p => p.id));
+store.migrate(); store.migrate();
+ok(JSON.stringify(store.loadJourney().prizesWon.map(p => p.id)) === firstPass,
+   "re-running the trim changes nothing");
+
+/* Under cap, nothing is ever deleted — this is what stops a prize vanishing
+   from the wallet the moment she marks it used. */
+seedWallet(5);
+ok(store.loadJourney().prizesWon.length === 5, "a wallet under the cap is left alone");
+const usedId = store.loadJourney().prizesWon[0].id;
+store.redeemPrize(usedId);
+store.addXp(360);
+ok(store.loadJourney().prizesWon.some(p => String(p.id) === String(usedId)),
+   "redeeming a prize does not make it a trim target");
+
+/* A mostly-redeemed wallet must be trimmed, never emptied — an empty wallet
+   would pay out the whole cap as fresh envelopes. */
+seedWallet(32, { allRedeemed: true, chores: 0 });
+ok(store.loadJourney().prizesWon.length === 14,
+   "an all-redeemed wallet is trimmed to the cap, not erased");
+ok(store.pendingDrawCount() === 0, "and it hands out no envelopes either");
+
+/* Guard: a fresh device restores a wallet before its XP is rebuilt. */
+localStorage.clear();
+store.migrate();
+const bigWallet = Array.from({ length: 32 }, (_, i) => ({
+  id: i + 1, icon: "🎁", label: "prize-" + i, date: "2026-05-0" + ((i % 9) + 1), redeemed: false
+}));
+store.mergeCloudJourney({ kind: "journey", prizesWon: bigWallet, drawsEarned: 32, drawLevel: 21 });
+ok(store.loadJourney().prizesWon.length >= 14,
+   "a fresh device with xp 0 does not shred the wallet it just restored");
+
+/* Legacy record shapes: a bare timestamp back-fills to "1700000000", which
+   sorts before every ISO date, and an id-less record has no date at all. */
+localStorage.clear();
+localStorage.setItem("skate_journey_v1", JSON.stringify({
+  xp: 9000, drawsEarned: 20, drawLevel: 12,
+  prizesWon: [
+    { id: 1, label: "legacy-when", when: 1700000000000 },
+    { id: 2, label: "no-date" },
+    ...Array.from({ length: 18 }, (_, i) => ({ id: 10 + i, label: "real-" + i, date: "2026-06-0" + ((i % 9) + 1), redeemed: false }))
+  ]
+}));
+store.migrate();
+const legacyKept = store.loadJourney().prizesWon;
+ok(legacyKept.length === 14, "a legacy-shaped wallet trims to the cap too");
+ok(legacyKept.some(p => /^real-/.test(p.label)),
+   "a real dated prize is not evicted in favour of a malformed legacy record");
+
+/* Two devices must agree on the survivors regardless of array order. */
+const shuffledSeed = (order) => {
+  localStorage.clear();
+  const recs = Array.from({ length: 30 }, (_, i) => ({
+    id: i + 1, icon: "🎁", label: i < 8 ? "Skip one chore" : "prize-" + i,
+    date: "2026-0" + ((i % 9) + 1) + "-0" + ((i % 9) + 1), redeemed: false
+  }));
+  localStorage.setItem("skate_journey_v1", JSON.stringify({
+    xp: 9000, drawsEarned: 30, drawLevel: 12, prizesWon: order === "rev" ? recs.reverse() : recs
+  }));
+  store.migrate();
+  return store.loadJourney().prizesWon.map(p => String(p.id)).sort().join(",");
+};
+ok(shuffledSeed("fwd") === shuffledSeed("rev"),
+   "survivor selection does not depend on the stored array order");
+localStorage.clear();
+store.migrate();
+
 /* --- streak math with the recovery-friendly grace --- */
 ok(store.currentStreak([]) === 0, "empty streak is 0");
 const s = iso => ({ isoDate: iso, completedFully: true });
