@@ -5,7 +5,7 @@
    thin history gets honest empty/partial states, never mock data.
    ============================================================ */
 
-import { DAYS, WEEK_ORDER, DAY_SHORT, STANDING_RULES, ENGAGEMENT_SYSTEMS, TOP7, PRIZE_POOL, BLOCK_LABEL, videoSearchUrl, fmtXp } from "../data.js";
+import { DAYS, WEEK_ORDER, DAY_SHORT, STANDING_RULES, ENGAGEMENT_SYSTEMS, TOP7, PRIZE_POOL, BLOCK_LABEL, videoSearchUrl, videoSearchQuery, fmtXp, exDoseWithTime } from "../data.js";
 import { settings, loadSessions, loadEvents, loadQuiz, loadGate, loadLadderRungs, loadTracker, getCurrentTrackerWeek, activeEngagement, activePrizePool, quizBankStatus, quizPaidToday, quizXpToday, QXP_DAILY_CAP } from "../store.js";
 import { edmontonWeekISODates, edmontonDayKey, edmontonISO, fmtHHMM, exercisePhotoUrl, DAY_MS } from "../util.js";
 
@@ -59,10 +59,16 @@ export function buildGrownupVM(state) {
     date: dstr(s.isoDate), move: s.dayTitle || s.dayKey,
     note: "Stopped for pain after " + mins(s) + " min — check in before the next session."
   }));
+  // Pain reported during a try-it run. Those runs write no session record on
+  // purpose, so this is the only channel that carries them -- without it a
+  // sore spot reported in a demo reached nobody at all.
+  const painReports = events.filter(e => e.type === "pain_report" && eventInScope(e));
   const earlyEnds = sessions.filter(s => s.endedEarly && !s.pain);
   const yellowRed = sessions.filter(s => ["yellow", "red"].includes(s.lightResult));
   const flags = [
     ...stops.map(s => ({ icon: "🛑", rowStyle: alertRow("stop"), text: "Stopped for pain during “" + (s.dayTitle || "session") + "” (" + dstr(s.isoDate) + ")." })),
+    ...painReports.map(e => ({ icon: "🛑", rowStyle: alertRow("stop"),
+      text: "Sore spot reported during a try-it run (" + dstr(e.iso) + ") — the run wasn't recorded, but this was." })),
     ...(earlyEnds.length ? [{ icon: "⏱", rowStyle: alertRow("sun"), text: earlyEnds.length + " session" + (earlyEnds.length === 1 ? "" : "s") + " ended early — " + earlyEnds.map(s => dstr(s.isoDate)).join(", ") + "." }] : []),
     ...(yellowRed.length ? [{ icon: "💛", rowStyle: alertRow("sun"), text: yellowRed.length + " yellow/red-light day" + (yellowRed.length === 1 ? "" : "s") + " — she felt tired or sore; rounds were capped." }] : [])
   ];
@@ -350,10 +356,10 @@ export function buildGrownupVM(state) {
     Object.values(day.blocks || {}).flat().concat(day.prepMenu || [], day.recovery || []).forEach(ex => {
       if (!ex || !ex.name || seen[ex.name]) return; seen[ex.name] = true;
       libraryList.push({
-        name: ex.name, dose: ex.dose || "", cue: ex.cue || "",
+        name: ex.name, dose: exDoseWithTime(ex) || "", cue: ex.cue || "",
         parentWatch: ex.parentWatch || "", fix: ex.redFlag || "", skate: ex.skateTransfer || "",
         photoUrl: exercisePhotoUrl(ex.name, "Demo"),
-        videoUrl: videoSearchUrl(ex)
+        videoUrl: videoSearchUrl(ex), videoQuery: videoSearchQuery(ex)
       });
     });
   });

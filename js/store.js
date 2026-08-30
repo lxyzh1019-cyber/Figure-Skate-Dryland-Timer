@@ -90,7 +90,12 @@ export const DEFAULT_SETTINGS = {
   coachVoiceOn: true,       // NEW: design's 🎧 toggle gates ALL coach audio
   athleteName: "Jenn",      // NEW: editable in Grown-up Settings
   prizePool: null,          // NEW: null = default PRIZE_POOL
-  cloudMirror: true         // NEW: privacy — mirror completed sessions to Firestore
+  cloudMirror: true,        // NEW: privacy — mirror completed sessions to Firestore
+  // Try-it mode sits in Grown-up Settings beside the coach voice and the rest
+  // steppers, so it has to survive a reload like they do. It used to live only
+  // in memory: a grown-up switched it on, the page reloaded, and it was
+  // silently off again — the next run counted for real.
+  practiceMode: false
 };
 
 export let settings = loadSettings();
@@ -605,6 +610,89 @@ function capDraws(j) {
   return j;
 }
 
+/* How many chore skips the wallet keeps when it has to be trimmed. */
+export const CHORE_SKIP_QUOTA = 6;
+const CHORE_SKIP_LABEL = "Skip one chore";
+
+/* The most prizes a wallet may HOLD.
+
+   Keyed off drawLevel, never levelFromXp(j.xp). journeySnapshot() does not
+   carry xp, and restoreFromCloud rebuilds it AFTER it merges and publishes —
+   so on a new device migrate() seeds xp 0, the merge unions in the whole
+   wallet, and a level-derived cap would delete almost all of it and then push
+   that loss to the cloud before the XP came back. drawLevel is a monotone
+   high-water mark and merges by max BEFORE persistJourney runs, so it is
+   already right at cap time. Flooring at drawsEarned adds the other half:
+   never trim below what she has legitimately been granted. */
+function walletCap(j) {
+  return Math.max(drawCap(j.drawLevel || 1), j.drawsEarned || 0);
+}
+
+/* Sort key for a prize. Legacy dates are a minefield: migrate() back-fills
+   from `when` with String(when).slice(0,10), so 1700000000000 becomes
+   "1700000000" — which sorts BEFORE every real ISO date. A missing date maps
+   to "" and sorts first too. Left alone, an oldest-first rule would keep all
+   the malformed junk and evict the real prizes, so unknown dates are pushed
+   to the END and the id is a total-order tiebreak (never rely on sort
+   stability — two devices must pick the same survivors). */
+function prizeDateKey(p) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(p && p.date)) return p.date;
+  const raw = Number(p && (p.when != null ? p.when : p.date));
+  if (Number.isFinite(raw) && raw > 0) {
+    const d = new Date(raw);
+    if (!isNaN(d)) return d.toISOString().slice(0, 10);
+  }
+  return "9999-99-99";
+}
+function byOldest(a, b) {
+  const ka = prizeDateKey(a), kb = prizeDateKey(b);
+  if (ka !== kb) return ka < kb ? -1 : 1;
+  const ia = String(a && a.id), ib = String(b && b.id);
+  return ia < ib ? -1 : ia > ib ? 1 : 0;
+}
+
+/* Hold the WALLET to the cap.
+
+   Unlike capDraws this deletes records, not a number, so it is deliberately
+   timid: a no-op unless the wallet is genuinely over cap (which is why
+   redeeming a prize never makes it vanish), skipped entirely on a fresh or
+   unknown journey, and it always keeps EXACTLY min(length, cap) records.
+
+   That exact count is load-bearing. pendingFor() is drawsEarned minus wallet
+   length, so a trim that kept FEWER than the cap would hand out the
+   difference as new envelopes — an all-redeemed wallet would be erased and
+   pay out fourteen draws at once, re-opening the very hole the draw ledger
+   exists to close. Preference order is: up to six unredeemed chore skips,
+   oldest first; then the oldest unredeemed everything-else; then, only if
+   that still falls short, the newest of what would otherwise be dropped. */
+function capWallet(j) {
+  const wallet = Array.isArray(j.prizesWon) ? j.prizesWon : [];
+  // A fresh or unknown journey has no business deleting anything.
+  if (!Number.isFinite(j.drawLevel) || j.drawLevel <= 1) return j;
+  const cap = walletCap(j);
+  if (!(wallet.length > cap)) return j;
+
+  const isChore = p => p && p.label === CHORE_SKIP_LABEL;
+  const live = wallet.filter(p => p && !p.redeemed).sort(byOldest);
+  const chores = live.filter(isChore).slice(0, Math.min(CHORE_SKIP_QUOTA, cap));
+  const kept = new Set(chores);
+  for (const p of live) {
+    if (kept.size >= cap) break;
+    if (!kept.has(p)) kept.add(p);
+  }
+  // Still short (mostly-redeemed wallet): top back up from the dropped ones,
+  // newest first, rather than deleting more than the cap requires.
+  if (kept.size < cap) {
+    const rest = wallet.filter(p => !kept.has(p)).sort(byOldest).reverse();
+    for (const p of rest) {
+      if (kept.size >= cap) break;
+      kept.add(p);
+    }
+  }
+  j.prizesWon = wallet.filter(p => kept.has(p));
+  return j;
+}
+
 function blankJourney() {
   return { xp: 0, prizesWon: [], drawsEarned: 0, drawLevel: 1 };
 }
@@ -619,7 +707,7 @@ function normalizeDraws(j) {
     j.drawsEarned = j.prizesWon.length + Math.max(0, j.pendingDraws || 0);
   }
   if (!Number.isFinite(j.drawLevel)) j.drawLevel = levelFromXp(j.xp || 0).level;
-  return capDraws(j);
+  return capWallet(capDraws(j));
 }
 
 /* The journey, always present and always normalized. */
@@ -637,6 +725,7 @@ function pendingFor(j) {
    than a migration: there is no path that can store more than it. */
 function persistJourney(j) {
   capDraws(j);
+  capWallet(j);            // after capDraws — the wallet floor reads drawsEarned
   j.pendingDraws = pendingFor(j);
   saveJourney(j);
   return j;
@@ -800,7 +889,7 @@ export function mergeCloudJourney(snap) {
   const j = readJourney();
   const wallet = new Map();
   [...(j.prizesWon || []), ...(snap.prizesWon || [])].forEach(p => {
-    if (p && p.id != null && !wallet.has(p.id)) wallet.set(p.id, p);
+    if (p && p.id != null && !wallet.has(String(p.id))) wallet.set(String(p.id), p);
   });
   if (wallet.size !== (j.prizesWon || []).length) changed = true;
   // Both halves of the draw ledger move UP only, which is what makes a sync
@@ -922,7 +1011,10 @@ export function importProfileData(payload) {
     const local = readJourney();
     const wallet = new Map();
     [...(local.prizesWon || []), ...(inc.prizesWon || [])].forEach(p => {
-      if (p && !wallet.has(p.id)) wallet.set(p.id, p);
+      // Same guard as the cloud merge: without `p.id != null` every id-less
+      // record collapses onto one `undefined` key and all but one is lost, and
+      // without String() a numeric id and its string twin duplicate the prize.
+      if (p && p.id != null && !wallet.has(String(p.id))) wallet.set(String(p.id), p);
     });
     persistJourney({
       ...inc, ...local,

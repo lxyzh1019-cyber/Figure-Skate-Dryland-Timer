@@ -66,12 +66,18 @@ export async function restoreFromCloud() {
       if (await fsAddSession(s)) uploaded++;
     }
 
-    // 3. journey — merge the ledger and wallet, publish the merged result for
-    // the other device, then recompute the total from the two shared sources.
-    // Every device that gets here lands on the same number.
+    // 3. journey — merge the ledger and wallet, recompute the total from the
+    // two shared sources, and only THEN publish. Every device that gets here
+    // lands on the same number.
+    //
+    // The rebuild has to come before the publish. A fresh device starts at
+    // xp 0 (the snapshot does not carry xp), so publishing straight after the
+    // merge would push a journey whose level — and therefore every cap keyed
+    // to it — was still the seeded default, and the other device would merge
+    // that back in.
     const journeyChanged = mergeCloudJourney(await fsGetJourney());
-    await fsSaveJourney(journeySnapshot());
     const xp = rebuildJourneyXp();
+    await fsSaveJourney(journeySnapshot());
 
     if (added || uploaded || journeyChanged) {
       logEvent("cloud_sync", { added, uploaded, xp });

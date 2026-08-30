@@ -6,7 +6,7 @@
    delegated click listener below.
    ============================================================ */
 
-import { migrate, settings, updateSettings, saveReadiness, addXp, patchLastSession, pendingDrawCount, onStorageError, LS_SESSIONS, payQuizQuestion, quizQuestionKey } from "./store.js";
+import { migrate, settings, updateSettings, saveReadiness, addXp, patchLastSession, pendingDrawCount, onStorageError, LS_SESSIONS, payQuizQuestion, quizQuestionKey, logEvent } from "./store.js";
 import { restoreFromCloud } from "./sync.js";
 import { downloadBackup, restoreBackupFile } from "./backup.js";
 import { edmontonDayKey, escapeHtml } from "./util.js";
@@ -32,6 +32,7 @@ export const state = {
   logScope: "week",
   expanded: {},                 // day-card block expansion
   selectedDay: null,            // monday..sunday
+  // Seeded from the saved setting below, once the store has migrated.
   practiceMode: false,
   inSession: false,
   readiness: null,              // active readiness-check flow state (null = not in flow)
@@ -128,7 +129,11 @@ const actions = {
   selectDay(arg) { state.selectedDay = arg; state.expanded = {}; render(); },
   toggleBlock(arg) { state.expanded[arg] = !state.expanded[arg]; render(); },
   toggleCoachVoice() { updateSettings({ coachVoiceOn: !settings.coachVoiceOn }); render(); },
-  togglePractice() { state.practiceMode = !state.practiceMode; render(); },
+  togglePractice() {
+    state.practiceMode = !state.practiceMode;
+    updateSettings({ practiceMode: state.practiceMode });
+    render();
+  },
   goSession(arg) {
     state.readiness = newReadinessFlow(arg || state.selectedDay || edmontonDayKey(), state.practiceMode);
     render();
@@ -196,6 +201,16 @@ const actions = {
     // continue: persist the check (try-it runs don't overwrite the real day's
     // check), then hand the resolved light to the session
     if (!r.practice) saveReadiness({ answers: r.answers, zoneSev: r.zoneSev, light: r.light, overridden: r.overridden });
+    // Pain is the one thing that escapes the try-it sandbox. A demo run saves
+    // no session, and Safety & Flags reads sessions -- so a sore spot reported
+    // during a try-it run used to reach nobody. Log it as an event instead:
+    // the grown-up sees it, while streaks, XP and adherence stay untouched.
+    // saveReadiness stays suppressed on purpose, so a demo answer cannot become
+    // "yesterday's check" for sameAsYesterday.
+    if (r.practice && (r.answers.q_pain === "no" || r.severity)) {
+      logEvent("pain_report", { source: "readiness", practice: true,
+        day: r.dayKey, severity: r.severity || null, zoneSev: r.zoneSev || null });
+    }
     startPendingSession({ light: r.light || "green", dayKey: r.dayKey, practice: r.practice });
   },
   rResultSecondary(arg) {
@@ -324,6 +339,13 @@ const actions = {
   resetPrizePool() { updateSettings({ prizePool: null }); render(); },
   exitSession() {
     engine.exitSession();
+    // Try-it mode is single-use. Nothing used to clear it, so switching it on
+    // once to demo a drill meant every session afterwards was silently thrown
+    // away -- she trained, finished, and her streak and XP never moved.
+    if (state.practiceMode) {
+      state.practiceMode = false;
+      updateSettings({ practiceMode: false });
+    }
     state.inSession = false;
     state.pendingSession = null;
     state.detailOverlay = false;
@@ -402,6 +424,9 @@ function boot() {
     if (!state.inSession) render();
   });
   migrate();
+  // Restore the saved try-it mode — migrate() has to run first for `settings`
+  // to hold anything.
+  state.practiceMode = !!settings.practiceMode;
   if (!state.selectedDay) state.selectedDay = edmontonDayKey();
   render();
   fetchWeather();

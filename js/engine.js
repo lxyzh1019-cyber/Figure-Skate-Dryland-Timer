@@ -108,12 +108,20 @@ export function estimateSessionSecs(circuits) {
         if (ex.rounds && r > ex.rounds) return;
         exInRound++;
         if (ex.byReps) {
-          const m = (ex.repsDetail || "").match(/(\d+)\s*(?:reps?|steps?|alternating)/i)
-                 || (ex.repsDetail || "").match(/(\d+)/);
-          const reps = m ? parseInt(m[1], 10) : 10;
-          const detail = ex.repsDetail || "";
-          const multiplier = /each direction/i.test(detail) ? 4 : (/each side|per side|\/side/i.test(detail) ? 2 : 1);
-          total += reps * (settings.secondsPerRep || 3) * multiplier;
+          // Authored suggested time wins. The dose string can't be parsed
+          // reliably — "3 × 4s ecc + max clean" is 3 SETS (the old fallback
+          // read it as 3 reps = 9s) and "8/dir/leg" is 32 swings, not 8.
+          if (ex.estSecs) { total += ex.estSecs; }
+          else {
+            const m = (ex.repsDetail || "").match(/(\d+)\s*(?:reps?|steps?|alternating)/i)
+                   || (ex.repsDetail || "").match(/(\d+)/);
+            const reps = m ? parseInt(m[1], 10) : 10;
+            const detail = ex.repsDetail || "";
+            const perSide = /each side|per side|\/side|\/leg|both/i.test(detail);
+            const multiplier = /each direction/i.test(detail) ? 4
+              : (/\/dir/i.test(detail) ? (perSide ? 4 : 2) : (perSide ? 2 : 1));
+            total += reps * (settings.secondsPerRep || 3) * multiplier;
+          }
         } else {
           total += exWork(ex) + (ex.eachSide ? SIDE_SWITCH_BUFFER : 0);
         }
@@ -677,6 +685,9 @@ export function finalize(completed) {
   sess.endedEarly = !completed;
 
   if (sess.practice) {
+    // No session record is written for a try-it run, so a pain stop would
+    // otherwise vanish with it. Pain escapes the sandbox; nothing else does.
+    if (sess.painFlag) logEvent("pain_report", { source: "session", practice: true, day: sess.dayKey });
     if (completed) speak("Practice run complete. Nothing recorded. You know the movements now.");
     playCue("done");
     setPhase("done");

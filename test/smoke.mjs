@@ -30,6 +30,7 @@ const rvm    = await import(base + "vm/readiness.js");
 const svm    = await import(base + "vm/session.js");
 const tvm    = await import(base + "vm/today.js");
 const pvm    = await import(base + "vm/progress.js");
+const gvm    = await import(base + "vm/grownup.js");
 const sscreen = await import(base + "screens/session.js");
 const rscreen = await import(base + "screens/readiness.js");
 const overlays = await import(base + "screens/overlays.js");
@@ -41,6 +42,271 @@ const ok = (cond, msg) => { if (!cond) throw new Error("FAIL: " + msg); passed++
 ok(engine.refTime === util.refTime, "engine.refTime === util.refTime");
 ok(util.refTime({ driver: "time", work: 22 }) === 22, "refTime time-driver");
 ok(util.refTime({ dose: "10 reps/side" }) === 40, "refTime /side heuristic");
+
+/* --- rep moves carry an authored suggested time ---------------------------
+   Rep moves are self-paced (the athlete taps Done), so without an authored
+   estSecs the app had to guess from the dose string — and guessed badly:
+   "3 × 4s ecc + max clean" is 3 SETS, priced at 3 reps × 3s = 9 seconds, and
+   "8/dir/leg" is 32 swings, priced at 8. That is what made a 3-round Saturday
+   estimate under 20 minutes against an authored 30–35. estSecs is now
+   required on every rep move; this guards new ones. */
+const everyEx = [];
+Object.entries(data.DAYS).forEach(([dayKey, day]) => {
+  Object.values(day.blocks || {}).flat()
+    .concat(day.prepMenu || [], day.recoveryHolds || [])
+    .forEach(ex => ex && ex.name && everyEx.push([dayKey, ex]));
+});
+const repMoves = everyEx.filter(([, ex]) => ex.driver === "reps");
+ok(repMoves.length > 0, "the plan has rep-driven moves to check");
+const missingEst = repMoves.filter(([, ex]) => !(ex.estSecs > 0));
+ok(missingEst.length === 0,
+   "every rep move has a suggested time — missing: " + missingEst.map(([d, ex]) => d + "/" + ex.name).join(", "));
+ok(everyEx.filter(([, ex]) => ex.driver === "time").every(([, ex]) => !ex.estSecs),
+   "timed moves carry no estSecs — they run their own countdown");
+
+/* refTime and the session estimate both read the authored value. */
+ok(util.refTime({ driver: "reps", estSecs: 150, dose: "3 × 4s ecc + max" }) === 150,
+   "refTime prefers the authored estSecs over the dose heuristic");
+ok(engine.estimateSessionSecs([{ name: "t", block: "main", rounds: 1,
+     exercises: [{ byReps: true, driver: "reps", repsDetail: "3 × 4s ecc + max clean", estSecs: 150 }] }]) === 150,
+   "the session estimate uses estSecs, not 3 reps × 3s");
+
+/* The dose-string fallback still runs for anything unauthored, and no longer
+   drops the /dir and /leg multipliers ("8/dir/leg" = 8 × 2 dirs × 2 legs). */
+const fallback = ex => engine.estimateSessionSecs([{ name: "t", block: "warmup", rounds: 1, exercises: [ex] }]);
+ok(fallback({ byReps: true, repsDetail: "8/dir/leg" }) === 8 * 3 * 4, "fallback counts /dir and /leg (×4)");
+ok(fallback({ byReps: true, repsDetail: "8/side" }) === 8 * 3 * 2, "fallback counts /side (×2)");
+ok(fallback({ byReps: true, repsDetail: "12 · full range" }) === 12 * 3, "fallback leaves a plain rep count alone");
+
+/* --- a suggested time must cover the tempo its own dose prescribes ---------
+   The failure this guards against, from an older version of this plan:
+   "Clamshell Band · 15 reps each side · 2s open / 1s hold / 2s close" is
+   15 × 2 sides × 5s = 2:30 of prescribed work, but a flat 3s/rep priced it at
+   45s — one exercise swallowing most of a round's real length. Any dose that
+   names its seconds is checked against them. The floor counts prescribed work
+   only (no setup, no side switch, no reset), so a sound estSecs clears it. */
+function tempoFloor(ex) {
+  const d = ex.repsDetail || ex.dose || "";
+  const secs = [...d.matchAll(/(\d+)\s*s\b/gi)].map(m => +m[1]);
+  if (!secs.length) return null;
+  const perRep = secs.reduce((a, b) => a + b, 0);
+  const rm = d.match(/(\d+)/);
+  const sides = /each side|per side|\/side|\/leg/i.test(d) ? 2 : 1;
+  return (rm ? +rm[1] : 0) * sides * perRep;
+}
+const shortOfTempo = repMoves.filter(([, ex]) => {
+  const floor = tempoFloor(ex);
+  return floor !== null && ex.estSecs < floor;
+});
+ok(shortOfTempo.length === 0,
+   "no rep move is suggested less time than its own dose prescribes — short: "
+   + shortOfTempo.map(([d, ex]) => d + "/" + ex.name + " (" + ex.estSecs + "s < " + tempoFloor(ex) + "s)").join(", "));
+ok(tempoFloor({ repsDetail: "15 reps each side · 2s open / 1s hold / 2s close" }) === 150,
+   "the tempo floor reads a multi-phase tempo across both sides");
+ok(tempoFloor({ repsDetail: "8/side" }) === null, "a dose naming no seconds has no tempo floor");
+
+/* The suggested time is shown to the athlete, not just used in the estimate. */
+ok(data.exSuggestedTime({ driver: "reps", estSecs: 45 }) === "45s", "suggested time under a minute reads as seconds");
+ok(data.exSuggestedTime({ driver: "reps", estSecs: 150 }) === "2:30", "suggested time over a minute reads as m:ss");
+ok(data.exSuggestedTime({ driver: "time", work: 30, dose: "30s" }) === "",
+   "a timed move has no suggested time — its countdown IS the time");
+ok(data.exDoseWithTime({ driver: "reps", estSecs: 60, byReps: true, repsDetail: "8/side", dose: "8/side" }) === "8/side · ~1:00",
+   "the plan list shows dose plus its suggested time");
+
+/* --- every demo link names exactly one validated channel -------------------
+   The channel bias this file documents was dead code: `yt(q, ch)` appended a
+   channel and nothing called it, so demo links went out as bare keyword
+   searches. Nothing on YouTube is called "Axis Micro", so its query landed in
+   general ballet. Naming a channel pins each search to a real source — but
+   naming two narrows it to nothing, which is what happened when the block
+   channel was appended to a query that already spelled one out inline. */
+const CHANNEL_NAMES = Object.values(data.COACH_CHANNELS).map(c => c.name)
+  .concat(["The Prehab Guys"]);
+const libraryEx = [];
+Object.values(data.DAYS).forEach(day => {
+  Object.values(day.blocks || {}).flat()
+    .concat(day.prepMenu || [], day.recoveryHolds || [], day.recovery || [])
+    .forEach(ex => ex && ex.name && libraryEx.push(ex));
+});
+ok(libraryEx.length > 0, "there are moves to build demo searches for");
+const channelCount = q => CHANNEL_NAMES.filter(n => q.toLowerCase().includes(n.toLowerCase())).length;
+const wrongChannels = libraryEx.filter(ex => channelCount(data.videoSearchQuery(ex)) !== 1);
+ok(wrongChannels.length === 0,
+   "every demo search names exactly one channel — wrong: "
+   + wrongChannels.map(ex => ex.name + " -> " + data.videoSearchQuery(ex)).join(" | "));
+ok(/iSk8 Mom Maja$/.test(data.videoSearchQuery({ name: "Axis Micro", block: "skateskill" })),
+   "a skate-skill drill searches the figure-skating channel");
+ok(/Tom Merrick$/.test(data.videoSearchQuery({ name: "Calves — foam roller", block: "recovery" })),
+   "recovery work searches the mobility channel, not the strength one");
+ok(/The Prehab Guys$/.test(data.videoSearchQuery({ name: "Pallof Press", block: "main" })),
+   "a move whose best source isn't its block default keeps its own channel");
+ok(data.videoSearchUrl({ name: "Bird Dog", block: "main" }).startsWith("https://www.youtube.com/results?search_query="),
+   "the demo link is a YouTube search URL");
+
+/* --- try-it mode survives a reload ----------------------------------------
+   It sits in Grown-up Settings beside the coach voice and the rest steppers,
+   but lived only in memory: switched on, reloaded, silently off again — and
+   the next run counted for real. */
+ok("practiceMode" in store.DEFAULT_SETTINGS, "try-it mode is a persisted setting");
+ok(store.DEFAULT_SETTINGS.practiceMode === false, "try-it mode is off by default");
+localStorage.clear();
+store.migrate();
+store.updateSettings({ practiceMode: true });
+ok(store.settings.practiceMode === true, "try-it mode persists when switched on");
+store.migrate();
+ok(store.settings.practiceMode === true, "try-it mode is still on after a reload");
+store.updateSettings({ practiceMode: false });
+localStorage.clear();
+store.migrate();
+
+/* --- try-it mode ----------------------------------------------------------
+   Five defects, all of which let a demo run be mistaken for a real one (or a
+   real one be silently thrown away). */
+localStorage.clear();
+store.migrate();
+
+// It survives a reload...
+store.updateSettings({ practiceMode: true });
+store.migrate();
+ok(store.settings.practiceMode === true, "try-it mode survives a reload while it is on");
+
+// ...but the badge now shows on every card that can start a run, not just today.
+const tryDay = data.WEEK_ORDER.find(k => !data.DAYS[k].spa);
+const withPractice = (extra = {}) => tvm.buildTodayVM({
+  selectedDay: tryDay, expanded: {}, practiceMode: true, isWide: true, ...extra });
+const practiceVM = withPractice();
+ok(practiceVM.dayView.showCta ? practiceVM.dayView.showTryBadge === true : true,
+   "any card that can start a run carries the try-it badge when the mode is on");
+const offVM = tvm.buildTodayVM({ selectedDay: tryDay, expanded: {}, practiceMode: false, isWide: true });
+ok(!offVM.dayView.showTryBadge, "and no badge when the mode is off");
+ok(/ON/.test(practiceVM.practiceLinkLabel) && /Try-it/.test(offVM.practiceLinkLabel),
+   "the bottom button states its mode in words, not just a colour");
+ok(typeof practiceVM.practiceButtonStyle === "string" && practiceVM.practiceButtonStyle.length > 0,
+   "the button is styled as a button, not a faint link");
+
+// A missed / catch-up day is the case that used to run as practice with
+// nothing on screen saying so.
+localStorage.clear();
+store.migrate();
+const missedVM = tvm.buildTodayVM({ selectedDay: tryDay, expanded: {}, practiceMode: true, isWide: true });
+ok(!missedVM.dayView.showCta || missedVM.dayView.showTryBadge,
+   "a catch-up card in try-it mode says so");
+
+// Pain escapes the sandbox: an event is logged, but no session is recorded.
+localStorage.clear();
+store.migrate();
+store.logEvent("pain_report", { source: "readiness", practice: true, day: tryDay, severity: 3 });
+ok(store.loadSessions().length === 0, "a try-it run still records no session");
+const painVM = gvm.buildGrownupVM({ gsScope: "all", grownupTab: "overview" });
+ok((painVM.analytics.flags || []).some(f => /try-it run/i.test(f.text)),
+   "a sore spot reported in a try-it run reaches Safety & flags");
+localStorage.clear();
+store.migrate();
+const cleanVM = gvm.buildGrownupVM({ gsScope: "all", grownupTab: "overview" });
+ok(!(cleanVM.analytics.flags || []).some(f => /try-it run/i.test(f.text)),
+   "and nothing is flagged when no pain was reported");
+localStorage.clear();
+store.migrate();
+
+/* --- the wallet cap: 32 prizes held against an entitlement of 14 -----------
+   An old over-granting bug let her claim 32 envelopes. pendingFor is
+   drawsEarned minus wallet length, so max(0, 14 - 32) = 0 and she drew
+   nothing at all. capWallet trims the wallet itself: six chore skips plus the
+   oldest unclaimed, exactly to the cap. */
+function seedWallet(n, opts = {}) {
+  localStorage.clear();
+  const prizesWon = Array.from({ length: n }, (_, i) => ({
+    id: i + 1, icon: "🎁",
+    label: i < (opts.chores == null ? 8 : opts.chores) ? "Skip one chore" : "prize-" + i,
+    date: "2026-0" + ((i % 9) + 1) + "-0" + ((i % 9) + 1),
+    redeemed: opts.allRedeemed ? true : i % 4 === 0
+  }));
+  localStorage.setItem("skate_journey_v1", JSON.stringify({
+    xp: opts.xp == null ? 9000 : opts.xp, drawsEarned: n,
+    drawLevel: opts.drawLevel == null ? 12 : opts.drawLevel, prizesWon
+  }));
+  store.migrate();
+  return store.loadJourney();
+}
+const walletCapped = seedWallet(32);
+const capLvl = store.drawCap(12);
+ok(capLvl === 14, "level 12 entitles her to 14 envelopes");
+ok(walletCapped.prizesWon.length === 14, "a 32-prize wallet is trimmed to exactly the cap");
+ok(walletCapped.prizesWon.filter(p => p.label === "Skip one chore").length === 6,
+   "six chore skips survive the trim");
+ok(store.pendingDrawCount() === 0,
+   "the trim hands out no envelopes — keeping fewer than the cap would mint draws");
+ok(new Set(walletCapped.prizesWon.map(p => String(p.id))).size === 14, "no duplicate ids survive");
+ok(walletCapped.prizesWon.every(p => !p.redeemed),
+   "with enough unclaimed prizes to fill the cap, the redeemed ones are the ones dropped");
+
+/* Idempotent, and stable across reboots. */
+const firstPass = JSON.stringify(store.loadJourney().prizesWon.map(p => p.id));
+store.migrate(); store.migrate();
+ok(JSON.stringify(store.loadJourney().prizesWon.map(p => p.id)) === firstPass,
+   "re-running the trim changes nothing");
+
+/* Under cap, nothing is ever deleted — this is what stops a prize vanishing
+   from the wallet the moment she marks it used. */
+seedWallet(5);
+ok(store.loadJourney().prizesWon.length === 5, "a wallet under the cap is left alone");
+const usedId = store.loadJourney().prizesWon[0].id;
+store.redeemPrize(usedId);
+store.addXp(360);
+ok(store.loadJourney().prizesWon.some(p => String(p.id) === String(usedId)),
+   "redeeming a prize does not make it a trim target");
+
+/* A mostly-redeemed wallet must be trimmed, never emptied — an empty wallet
+   would pay out the whole cap as fresh envelopes. */
+seedWallet(32, { allRedeemed: true, chores: 0 });
+ok(store.loadJourney().prizesWon.length === 14,
+   "an all-redeemed wallet is trimmed to the cap, not erased");
+ok(store.pendingDrawCount() === 0, "and it hands out no envelopes either");
+
+/* Guard: a fresh device restores a wallet before its XP is rebuilt. */
+localStorage.clear();
+store.migrate();
+const bigWallet = Array.from({ length: 32 }, (_, i) => ({
+  id: i + 1, icon: "🎁", label: "prize-" + i, date: "2026-05-0" + ((i % 9) + 1), redeemed: false
+}));
+store.mergeCloudJourney({ kind: "journey", prizesWon: bigWallet, drawsEarned: 32, drawLevel: 21 });
+ok(store.loadJourney().prizesWon.length >= 14,
+   "a fresh device with xp 0 does not shred the wallet it just restored");
+
+/* Legacy record shapes: a bare timestamp back-fills to "1700000000", which
+   sorts before every ISO date, and an id-less record has no date at all. */
+localStorage.clear();
+localStorage.setItem("skate_journey_v1", JSON.stringify({
+  xp: 9000, drawsEarned: 20, drawLevel: 12,
+  prizesWon: [
+    { id: 1, label: "legacy-when", when: 1700000000000 },
+    { id: 2, label: "no-date" },
+    ...Array.from({ length: 18 }, (_, i) => ({ id: 10 + i, label: "real-" + i, date: "2026-06-0" + ((i % 9) + 1), redeemed: false }))
+  ]
+}));
+store.migrate();
+const legacyKept = store.loadJourney().prizesWon;
+ok(legacyKept.length === 14, "a legacy-shaped wallet trims to the cap too");
+ok(legacyKept.some(p => /^real-/.test(p.label)),
+   "a real dated prize is not evicted in favour of a malformed legacy record");
+
+/* Two devices must agree on the survivors regardless of array order. */
+const shuffledSeed = (order) => {
+  localStorage.clear();
+  const recs = Array.from({ length: 30 }, (_, i) => ({
+    id: i + 1, icon: "🎁", label: i < 8 ? "Skip one chore" : "prize-" + i,
+    date: "2026-0" + ((i % 9) + 1) + "-0" + ((i % 9) + 1), redeemed: false
+  }));
+  localStorage.setItem("skate_journey_v1", JSON.stringify({
+    xp: 9000, drawsEarned: 30, drawLevel: 12, prizesWon: order === "rev" ? recs.reverse() : recs
+  }));
+  store.migrate();
+  return store.loadJourney().prizesWon.map(p => String(p.id)).sort().join(",");
+};
+ok(shuffledSeed("fwd") === shuffledSeed("rev"),
+   "survivor selection does not depend on the stored array order");
+localStorage.clear();
+store.migrate();
 
 /* --- streak math with the recovery-friendly grace --- */
 ok(store.currentStreak([]) === 0, "empty streak is 0");
@@ -495,10 +761,13 @@ localStorage.removeItem("skate_quiz_v1");
    disagreed about the same session the moment the rates changed. */
 localStorage.clear();
 store.migrate();
-const todayKeyForCard = new Date().toLocaleString("en-US", { timeZone: "America/Edmonton", weekday: "long" }).toLowerCase();
-store.saveSession({ isoDate: new Date().toISOString(), dayKey: todayKeyForCard, completedFully: true,
+// Pin a TRAINING day rather than the real weekday. Sunday is the recovery day
+// and a spa card deliberately shows no XP line, so keying this off "today" made
+// the assertion pass six days a week and fail every Sunday.
+const cardDayKey = data.WEEK_ORDER.find(k => !data.DAYS[k].spa);
+store.saveSession({ isoDate: new Date().toISOString(), dayKey: cardDayKey, completedFully: true,
                     roundsDone: 3, xpVersion: store.XP_VERSION, cleanLandings: 4, perExercise: Array(19).fill(1) });
-const cardVM = tvm.buildTodayVM({ selectedDay: todayKeyForCard, expanded: {}, practiceMode: false, isWide: true });
+const cardVM = tvm.buildTodayVM({ selectedDay: cardDayKey, expanded: {}, practiceMode: false, isWide: true });
 ok(/\+380 XP earned/.test(cardVM.dayView.earnedXpLabel || ""),
    "a finished 3-round day says +380 — the flat 360 plus its 4 clean landings");
 localStorage.clear();

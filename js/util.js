@@ -115,11 +115,19 @@ export function exercisePhotoUrl(name, kind) {
 }
 
 /* Planning-estimate seconds for one exercise (time-driver → work seconds;
-   rep/hold → dose heuristic). Single source shared by the engine estimate and
-   the Today/plan view-models — previously duplicated verbatim in both. */
+   rep-driver → its authored estSecs; anything else → dose heuristic). Single
+   source shared by the engine estimate and the Today/plan view-models —
+   previously duplicated verbatim in both.
+
+   Rep-driven moves are self-paced (the athlete taps Done, there is no
+   countdown), so estSecs is a SUGGESTED time to work to, never a cap. It is
+   authored per move in data.js because the dose string alone can't be read
+   reliably — "3 × 4s ecc + max clean" is 3 sets, not 3 reps, and the old
+   heuristic priced it at 9 seconds. */
 export function refTime(ex) {
   if (!ex) return 30;
   if (ex.driver === "time") return ex.work || 30;
+  if (ex.estSecs) return ex.estSecs;
   const d = (ex.dose || "").toLowerCase();
   let base = 30;
   if (/\/side|\/leg|\/dir/.test(d)) base = 40;

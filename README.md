@@ -22,6 +22,16 @@ Quality gates baked into the engine: valgus gate (left knee), spin-dizziness
 stop, never-to-failure pull series, bilateral ankle gate (right deeper),
 progressive overload (currently paused).
 
+**Timed vs rep moves.** A timed move carries `work` seconds and runs a
+countdown. A rep move is *self-paced* — the athlete taps Done, there is no
+countdown — so it carries `estSecs`, a **suggested** time to work to. That
+time paces the athlete (the rep ring counts up against it, and nudges gently
+past it) and is what the session-length estimate uses. `estSecs` is authored
+per move rather than inferred, because dose strings can't be parsed reliably:
+`"3 × 4s ecc + max clean"` is 3 *sets*, and the old heuristic read it as 3 reps
+and priced the move at 9 seconds. A smoke test requires `estSecs` on every rep
+move, so a newly added one can't silently fall back to guessing.
+
 ## Skating-specific session features (kept from the original skate app)
 
 - **Landing check** — after every valgus-gated jump the athlete grades the
@@ -51,7 +61,15 @@ word, micro-loop, breath rehearsal, rep voice counting, same-day resume, etc.).
 - **Progress** — streak hero + week chart, **Ice Story** rank cards (lore +
   locked mystery cards), milestones, training log (Recent / All tabs), prize wallet.
 - **Prize Draw** — pick a sealed card on level-up, one envelope per level
-  reached, once, for good (see *Prize draws* under Persistence). **Quiz Deck** — questions
+  reached, once, for good (see *Prize draws* under Persistence). Every prize in
+  the pool is unlimited and equally drawable. The *wallet* is capped, though:
+  an old over-granting bug left 32 prizes against an entitlement of 14, and
+  because `pending = drawsEarned − wallet.length` that stopped her drawing
+  anything at all. `capWallet` trims it to `max(drawCap(drawLevel),
+  drawsEarned)` — six chore skips plus the oldest unclaimed — as a standing
+  invariant on every read and write, for the same reason the draw cap is one.
+  It keeps *exactly* the cap: keeping fewer would pay the difference out as
+  fresh envelopes. **Quiz Deck** — questions
   generated from the plan's moves.
 - **Grown-up Zone** — Overview · Analytics (Week/Month/All: adherence, ACWR,
   heatmap, load trend, pace, pauses/skips by block, form quality, mood, quiz
