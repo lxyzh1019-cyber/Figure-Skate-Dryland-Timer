@@ -6,7 +6,7 @@
    ============================================================ */
 
 import { DAYS, WEEK_ORDER, DAY_SHORT, STANDING_RULES, ENGAGEMENT_SYSTEMS, TOP7, PRIZE_POOL, BLOCK_LABEL, videoSearchUrl, videoSearchQuery, fmtXp, exDoseWithTime } from "../data.js";
-import { settings, loadSessions, loadEvents, loadQuiz, loadGate, loadLadderRungs, loadTracker, getCurrentTrackerWeek, activeEngagement, activePrizePool, quizBankStatus, quizPaidToday, quizXpToday, QXP_DAILY_CAP } from "../store.js";
+import { settings, loadSessions, loadEvents, loadQuiz, loadGate, loadLadderRungs, loadTracker, getCurrentTrackerWeek, activeEngagement, activePrizePool, prizeRemaining, quizBankStatus, quizPaidToday, quizXpToday, QXP_DAILY_CAP } from "../store.js";
 import { edmontonWeekISODates, edmontonDayKey, edmontonISO, fmtHHMM, exercisePhotoUrl, DAY_MS } from "../util.js";
 
 const LIGHT_COLORS = { green: "var(--mint)", yellow: "var(--sun)", red: "var(--stop)", recovery: "var(--grape)" };
@@ -430,7 +430,13 @@ export function buildGrownupVM(state) {
     practiceMode: !!state.practiceMode,
     practiceTrack: onTrack(!!state.practiceMode, "var(--grape)"), practiceKnob: onKnob(!!state.practiceMode),
     practiceHint: state.practiceMode ? "On — runs won't be saved or counted. Great for trying it out." : "Off — sessions count toward streaks & progress.",
-    prizePool: activePrizePool(),
+    // Raw stored entries (qty and all) plus a display-only `left` label. The
+    // add/remove actions write from activePrizePool(), never from this list,
+    // so a trim can't persist the derived label or drop a prize's qty.
+    prizePool: activePrizePool().map(p => {
+      const left = prizeRemaining(p);
+      return { ...p, leftLabel: left === Infinity ? "" : left + " of " + p.qty + " left" };
+    }),
     isDefaultPool: !(Array.isArray(settings.prizePool) && settings.prizePool.length),
 
     coaching: {

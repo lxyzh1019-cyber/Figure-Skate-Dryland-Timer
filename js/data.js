@@ -961,7 +961,10 @@ export const RANK_TEASE = {
 // can still add whatever they like in Settings; this is only the starting pool.
 export const PRIZE_POOL = [
   { icon: "🎡", label: "Plan a weekend outing" },
-  { icon: "✨", label: "Skip one chore" },
+  // `qty` caps how many of a prize exist. Chore skips are a finite supply of
+  // six: each one won burns one, and at zero the prize stops being dealt.
+  // A prize with no qty is unlimited.
+  { icon: "✨", label: "Skip one chore", qty: 6 },
   { icon: "⚽", label: "+30 min play time" },
   { icon: "🎬", label: "Family movie pick" },
   { icon: "🛌", label: "Stay up 20 min later" },

@@ -961,6 +961,34 @@ export function importProfileData(payload) {
   return result;
 }
 
+/* How many of a limited prize are still available. A prize with no `qty` is
+   unlimited and returns Infinity.
+
+   The count is derived from the wallet rather than kept as its own tally.
+   prizesWon is the permanent, id-merged record of every prize ever claimed —
+   nothing prunes it — so "six minus the ones she holds" cannot drift from what
+   she actually has, and it survives a sync from another device. A separate
+   counter would be a second source of truth for the same fact, and the merge
+   would have to reconcile the two. */
+export function prizeRemaining(prize, journey) {
+  if (!prize || prize.qty == null) return Infinity;
+  const j = journey !== undefined ? journey : loadJourney();
+  const won = ((j && j.prizesWon) || []).filter(p => p.label === prize.label).length;
+  return Math.max(0, prize.qty - won);
+}
+
+/* The prizes a draw can still deal — a used-up limited prize drops out. */
+export function drawablePool() {
+  const j = loadJourney();
+  const pool = activePrizePool();
+  const live = pool.filter(p => prizeRemaining(p, j) > 0);
+  // Only reachable if a grown-up trimmed the pool down to limited prizes and
+  // the skater exhausted every one. Dealing a spent prize is wrong, but so is
+  // handing a kid an empty level-up envelope, so the full pool wins that
+  // trade-off — and the Settings list shows "0 left" to explain why.
+  return live.length ? live : pool;
+}
+
 export function pendingDrawCount() {
   const j = loadJourney();
   return j ? pendingFor(normalizeDraws(j)) : 0;
@@ -1016,6 +1044,14 @@ export function migrate() {
   if (Array.isArray(settings.prizePool)) {
     settings.prizePool = settings.prizePool.map(p =>
       typeof p === "string" ? { icon: "🎁", label: p } : p);
+    // Backfill quantities onto a pool customized before prizes had them, so a
+    // grown-up who had already edited the pool still gets the chore-skip cap
+    // instead of an unlimited supply. Matched by label, and only when the
+    // entry carries no qty of its own — an explicit quantity is never
+    // overwritten.
+    const defaultQty = new Map(PRIZE_POOL.filter(p => p.qty != null).map(p => [p.label, p.qty]));
+    settings.prizePool = settings.prizePool.map(p =>
+      (p && p.qty == null && defaultQty.has(p.label)) ? { ...p, qty: defaultQty.get(p.label) } : p);
   }
   // testMode was a V2 setting; practice mode is now a per-launch choice.
   delete settings.testMode;

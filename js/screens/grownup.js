@@ -446,6 +446,7 @@ function settingsTab(vm) {
           <div style="display:flex;align-items:center;gap:10px;background:var(--surface-2);border-radius:12px;padding:8px 12px;">
             <span style="font-size:18px;">${p.icon}</span>
             <span style="flex:1;font-size:14px;font-weight:700;color:var(--ink);">${escapeHtml(p.label)}</span>
+            ${p.leftLabel ? `<span style="font-size:12px;font-weight:900;color:var(--ink-faint);white-space:nowrap;">${p.leftLabel}</span>` : ""}
             <button type="button" data-action="removePrizePoolItem" data-arg="${i}" style="border:none;background:none;color:var(--ink-faint);font-weight:900;cursor:pointer;font-size:15px;" aria-label="Remove prize">✕</button>
           </div>`).join("")}
       </div>

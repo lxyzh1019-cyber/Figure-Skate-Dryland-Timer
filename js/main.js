@@ -6,7 +6,7 @@
    delegated click listener below.
    ============================================================ */
 
-import { migrate, settings, updateSettings, saveReadiness, addXp, patchLastSession, pendingDrawCount, onStorageError, LS_SESSIONS, payQuizQuestion, quizQuestionKey } from "./store.js";
+import { migrate, settings, updateSettings, saveReadiness, addXp, patchLastSession, pendingDrawCount, onStorageError, LS_SESSIONS, payQuizQuestion, quizQuestionKey, activePrizePool } from "./store.js";
 import { restoreFromCloud } from "./sync.js";
 import { downloadBackup, restoreBackupFile } from "./backup.js";
 import { edmontonDayKey, escapeHtml } from "./util.js";
@@ -314,14 +314,17 @@ const actions = {
     if (!text) return;
     const m = text.match(/^(\p{Extended_Pictographic}(?:️)?)\s*(.*)$/u);
     const item = m && m[2] ? { icon: m[1], label: m[2] } : { icon: "🎁", label: text };
-    const pool = (Array.isArray(settings.prizePool) && settings.prizePool.length)
-      ? settings.prizePool.slice() : buildGrownupVM(state).prizePool.slice();
+    // Read the stored pool, not the Settings view-model. The view-model carries
+    // a derived "n of 6 left" label for display; writing that back would
+    // persist a stale count, and building the list from it risks dropping a
+    // prize's qty. activePrizePool() is the raw entries, quantities intact.
+    const pool = activePrizePool().slice();
     pool.push(item);
     updateSettings({ prizePool: pool });
     render();
   },
   removePrizePoolItem(arg) {
-    const pool = buildGrownupVM(state).prizePool.slice();
+    const pool = activePrizePool().slice();
     pool.splice(Number(arg), 1);
     updateSettings({ prizePool: pool });
     render();
