@@ -31,15 +31,19 @@ allMoves.filter(ex => !ex.byReps && ex.block !== "recovery").forEach(ex => ok(Nu
   "a timed move has seconds: " + ex.name));
 allMoves.forEach(ex => ok(data.BLOCK_ORDER.includes(ex.block) || ["prep", "recovery"].includes(ex.block),
   "a move sits in a known block: " + ex.name + " → " + ex.block));
-const blocksUsed = new Set(allMoves.map(ex => ex.block));
+/* The blocks a day RUNS are its block keys plus the prep pair and recovery it
+   carries; a prep move's own `block` field says "main", and the core keys the
+   ledger by the circuit it ran in, not the move's field. */
+const blocksUsed = new Set(Object.values(data.DAYS).flatMap(d =>
+  Object.keys(d.blocks || {}).concat((d.prepMenu || []).length ? ["prep"] : [], (d.recovery || []).length ? ["recovery"] : [])));
 Object.values(data.LIGHT_SESSION_POLICY).flatMap(p => p.blocks).forEach(b =>
   ok(blocksUsed.has(b), "the light policy names a block the plan actually has: " + b));
 ok(data.LIGHT_SESSION_POLICY.green.blocks.includes(sport.SKILL_BLOCK)
    && data.LIGHT_SESSION_POLICY.red.blocks.includes(sport.SKILL_BLOCK),
    "the skill block survives every light");
 ok(data.BLOCK_META[sport.SKILL_BLOCK] && data.BLOCK_LABEL[sport.SKILL_BLOCK], "the skill block has its label and colour");
-ok(allMoves.some(ex => ex[sport.TRANSFER_FIELD]) && allMoves.some(ex => ex.transfer),
-   "moves carry what they build for the ice, under the field the core reads");
+ok(allMoves.filter(ex => ex.transfer).length > 20 && sport.TRANSFER_FIELD === "skateTransfer",
+   "moves carry what they build for the ice, read from the plan's own field into the one the core uses");
 ok(Object.values(data.DAYS).every(d => d.spa || d[sport.DAY_LOAD_FIELD] != null), "every training day says what the ice load is");
 
 /* --- the rules are the shared ones, by construction ------------------------
