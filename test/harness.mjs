@@ -12,13 +12,32 @@ globalThis.localStorage = (() => { const m = new Map(); return {
   removeItem: k => m.delete(k), clear: () => m.clear() }; })();
 
 /* An utterance that starts and ends IMMEDIATELY — the real behaviour of a
-   device with no installed voices. */
+   device with no installed voices — unless a test asks for a SLOW voice, in
+   which case each line takes `speechDelayMs` of fake-clock time to say and
+   cancel() ends it early, the way a real synthesiser does. The slow mode is
+   what makes "she tapped while the coach was still talking" a testable moment
+   rather than a race nobody could reproduce. */
 globalThis.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
+let speechDelayMs = 0;
+const inFlight = new Set();
+export function setSpeechDelay(ms) { speechDelayMs = Math.max(0, Number(ms) || 0); }
+export function speechInFlight() { return inFlight.size > 0; }
+/* Every line the coach was asked to say, in order — so a test can ask "was the
+   next move's name spoken?" rather than trusting a flag. */
+export const spoken = [];
 globalThis.window = {
   SpeechSynthesisUtterance: globalThis.SpeechSynthesisUtterance,
-  speechSynthesis: { getVoices: () => [], cancel() {}, speaking: false, pending: false,
+  speechSynthesis: { getVoices: () => [], speaking: false, pending: false,
     set onvoiceschanged(f) {},
-    speak(u) { if (u && u.onstart) u.onstart(); if (u && u.onend) u.onend(); } },
+    cancel() { [...inFlight].forEach(u => { inFlight.delete(u); clearTimeout(u._t); if (u.onend) u.onend(); }); },
+    speak(u) {
+      if (!u) return;
+      spoken.push(String(u.text));
+      if (u.onstart) u.onstart();
+      if (!speechDelayMs) { if (u.onend) u.onend(); return; }
+      inFlight.add(u);
+      u._t = setTimeout(() => { inFlight.delete(u); if (u.onend) u.onend(); }, speechDelayMs);
+    } },
   AudioContext: function () { this.state = "running"; this.currentTime = 0;
     this.createOscillator = () => ({ type: "", frequency: { value: 0 }, connect() {}, start() {}, stop() {} });
     this.createGain = () => ({ gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {} });
@@ -54,6 +73,11 @@ export const tvm     = await import(base + "vm/today.js");
 export const pvm     = await import(base + "vm/progress.js");
 export const gvm     = await import(base + "vm/grownup.js");
 export const gscreen = await import(base + "screens/grownup.js");
+export const rvm     = await import(base + "vm/readiness.js");
+export const rscreen = await import(base + "screens/readiness.js");
+export const sscreen = await import(base + "screens/session.js");
+export const tscreen = await import(base + "screens/today.js");
+export const overlays = await import(base + "screens/overlays.js");
 export const pscreen = await import(base + "screens/progress.js");
 
 const realNow = Date.now;
@@ -114,6 +138,20 @@ export async function runSession(opts, script = {}) {
   await run;
   clock.restore();
   return { ...engine.sess };
+}
+
+/* Pin the wall clock (Date.now AND new Date()) to one instant, for a test that
+   depends on which day it is. Returns the restore function. Used after a
+   runSession, never during one — the fake session clock replaces Date.now on
+   its own. */
+export function pinClock(iso) {
+  const RealDate = Date, fixed = new RealDate(iso).getTime();
+  class PinnedDate extends RealDate {
+    constructor(...a) { super(...(a.length ? a : [fixed])); }
+    static now() { return fixed; }
+  }
+  globalThis.Date = PinnedDate;
+  return () => { globalThis.Date = RealDate; };
 }
 
 /* Answer every form spot-check so a run reaches its end. */

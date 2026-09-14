@@ -19,7 +19,7 @@ import { settings, configuredExerciseRest, configuredRoundRest, configuredSectio
          XP_VERSION, flaggedMoves, isAbnormalCheck, stampReadinessOutcome } from "./store.js";
 import { speak, speakIfIdle, speakAndWait, interruptSpeech, cancelSpeech, nextEncouragement, beep, endBeep, playCue, ensureAudio, voiceOn, speakSafety } from "./audio.js";
 import { fsAddSession } from "./firebase.js";
-import { APP_ID, DAY_LOAD_FIELD } from "./sport.js";
+import { APP_ID, DAY_LOAD_FIELD, FEATURES } from "./sport.js";
 import { recoveryDoseSecs, refTime, edmontonISO } from "./util.js";
 
 // Moves that deserve a longer "get ready" lead-in before they start. Kept in
@@ -46,6 +46,7 @@ function blankSession() {
     running: false, paused: false, pauseReasons: [], pauseCount: 0,
     abort: false, skipExercise: false, forceDone: false, forceDoneAt: 0,
     byRepsResolver: null, intentResolver: null, microResolver: null,
+    announceResolver: null, lastTapAt: 0,
     currentEx: null, skipped: [], perExercise: [], justSkipped: false,
     phase: "greeting",           // greeting|getready|work|reps|sideswitch|rest|roundRest|sectionRest|intent|microloop|breath|done
     circuits: [], ci: 0, ei: 0, round: 1, exDone: 0,
@@ -55,6 +56,7 @@ function blankSession() {
     upNextName: "", upNextDose: "", restCue: "",
     stopOverlay: false, confirmEnd: false, painFlag: false,
     pendingCleanCheck: false, cleanCount: 0, wobblyCount: 0, lastWobbly: false,
+    checkKind: null, landings: {}, wobblyStreak: 0, tierDropped: 0,
     spotChecks: [], spotAsked: {}, cleanCheckMove: null, formChecks: [], formResolver: null,
     intentWord: null, microLoop: null,
     exStatus: {},                // "ci-ei" -> done|partial|skipped
@@ -156,6 +158,40 @@ export function roundsForLight(light) {
    the light it started under while still letting a later, worse body check
    shorten what is left of it (see startSession). */
 export const LIGHT_ORDER = ["recovery", "red", "yellow", "green"];
+/* JUMP-FATIGUE TIER-DROP (pure). Two wobbly landings in a row remove the
+   highest remaining main round — never the one in progress. Only a sport with
+   a landing rule asks for landings at all (see FEATURES.landingCheck). */
+export function tierDroppedRounds(currentRounds, wobblyStreak, roundInProgress) {
+  if (wobblyStreak >= 2 && currentRounds > roundInProgress) {
+    return Math.max(roundInProgress, currentRounds - 1);
+  }
+  return currentRounds;
+}
+
+/* Apply a tier-drop mid-run. The circuit's rounds shrink, the steps of the
+   dropped round are taken out of the walk, and — because the day now asks for
+   fewer rounds — the cap is written to the day's progress record so a resume
+   cannot ask the round back, and the owed-work totals are re-derived from the
+   shortened plan. XP, the finish screen and Today then agree on what was owed. */
+function applyTierDrop(circuit, rounds, steps, s, moveName, round) {
+  circuit.rounds = rounds;
+  for (let k = steps.length - 1; k > s; k--) {
+    if (steps[k].circuit === circuit && steps[k].r > rounds) steps.splice(k, 1);
+  }
+  sess.totalSteps = steps.length;
+  sess.tierDropped = (sess.tierDropped || 0) + 1;
+  sess.wobblyStreak = 0;
+  sess.roundsPlanned = rounds;
+  sess.dayRoundsPlanned = Math.min(sess.dayRoundsPlanned, (sess.bankedRounds || 0) + rounds);
+  const prog = readDayProgress();
+  prog.roundsCap = sess.dayRoundsPlanned;
+  saveDayProgress(sess.dayKey, prog);
+  sess.dayExpectedWork = countExpectedWork(assembleCircuits(sess.dayKey, sess.light, { mainRounds: sess.dayRoundsPlanned }));
+  sess.expectedWork = Math.max(sess.dayExpectedWork, countExpectedWork(sess.circuits));
+  sess.expectedByRound = countExpectedByRound(sess.circuits);
+  logEvent("tier_drop", { move: moveName, round, rounds: sess.dayRoundsPlanned });
+}
+
 export function lowerLight(a, b) {
   const ia = LIGHT_ORDER.indexOf(a), ib = LIGHT_ORDER.indexOf(b);
   if (ia < 0) return b;
@@ -214,8 +250,12 @@ export function assembleCircuits(dayKey, light, opts = {}) {
     // progression would have run whatever the grown-up had set. Locked means
     // every jump stays at Drop-and-Stick, exactly as the Grown-up Zone says.
     if (opts.gated !== false && gateLocked() && exs.some(ex => VALGUS_PROGRESSIONS.includes(ex.name))) {
+      // The floor is looked for in this block, then this day's main, then
+      // anywhere in the week: a jump day that never lists the floor itself
+      // used to lose every jump behind a locked gate instead of keeping one.
       const floor = exs.find(ex => ex.name === VALGUS_FLOOR)
-        || (day.blocks.main || []).find(ex => ex.name === VALGUS_FLOOR);
+        || (day.blocks.main || []).find(ex => ex.name === VALGUS_FLOOR)
+        || Object.values(DAYS).flatMap(d => Object.values(d.blocks || {}).flat()).find(ex => ex && ex.name === VALGUS_FLOOR);
       exs = exs.filter(ex => !VALGUS_PROGRESSIONS.includes(ex.name));
       if (floor && !exs.includes(floor)) exs.push(floor);
     }
@@ -409,15 +449,24 @@ function countdown(seconds, opts = {}) {
     sess.timerSecs = seconds; sess.timerMax = seconds; sess.urgent = false;
     notify("tick");
     const started = Date.now();
+    const since = Math.min(started, Number(opts.since) || started);
     let deadline = started + seconds * 1000;
     let lastWhole = seconds;
     const id = setInterval(() => {
       if (sess.abort)        { clearInterval(id); resolve("abort"); return; }
       if (sess.backTo != null) { clearInterval(id); resolve("back"); return; }
       // Honor a Done-tap only if it landed AFTER this countdown began — a stale
-      // flag from the previous phase must not skip a freshly-started one.
-      if (sess.forceDone && sess.forceDoneAt >= started) { sess.forceDone = false; clearInterval(id); endBeep(); resolve("done"); return; }
-      if (sess.forceDone && sess.forceDoneAt < started) sess.forceDone = false;   // drop the stale flag
+      // flag from the previous phase must not skip a freshly-started one. A
+      // REST passes `since`, the moment its phase began: a Skip Rest tap while
+      // the coach is still saying "Rest. Next: …" is a decision about this
+      // rest, and used to be dropped as stale because the clock had not
+      // started yet. Work never passes it — a tap in the beat after a move's
+      // announcement is "go", not "done". A countdown SHE ended resolves
+      // "cut", not "done": a rest she skipped is not a rest that ran out, and
+      // the caller has to know which (see the rest phase, where "done" earns
+      // a "Go" and "cut" earns the move's name).
+      if (sess.forceDone && sess.forceDoneAt >= since) { sess.forceDone = false; clearInterval(id); endBeep(); resolve("cut"); return; }
+      if (sess.forceDone && sess.forceDoneAt < since) sess.forceDone = false;   // drop the stale flag
       if (sess.skipExercise) { clearInterval(id); resolve("skip");  return; }
       if (sess.paused) { deadline = Date.now() + lastWhole * 1000; return; }
 
@@ -700,6 +749,29 @@ function setPhase(phase) {
   // whatever came next — so every transition clears it.
   sess.confirmSkip = false;
   notify("phase");
+}
+
+/* Two Done taps this close together are one double tap, and the second half
+   of it is not a decision about whatever phase the first half started. The old
+   guard was a 1200 ms flag that self-cleared, which is the wrong shape: it let
+   the second tap ride into a rest that had already begun and cut it short. */
+export const DONE_GUARD_MS = 300;
+
+/* The move's announcement — "Dead Bug. Three, two, one, go." — spoken and
+   waited for, but hers to cut short: a tap during it means "I know this one,
+   go", and the clock starts at once. It used to be un-interruptible, so a tap
+   during the three or four seconds of speech did nothing at all (reps) or
+   expired before the countdown began (timed work). The clock is also charged
+   only from the end of the announcement, not from the start of the phase: the
+   speech was being counted as work she had done. */
+async function announce(msg) {
+  let cut = false;
+  const skipped = new Promise(resolve => {
+    sess.announceResolver = () => { cut = true; resolve(); };
+  });
+  await Promise.race([speakAndWait(msg), skipped]);
+  sess.announceResolver = null;
+  if (cut) cancelSpeech();
 }
 
 /* What comes after the step she is on — read off the step list, which is
@@ -1073,16 +1145,20 @@ function recordBlockDone(blockKey, ci) {
 
    It is an explicit phase now. Rest does not begin until she has answered or
    skipped. Skipping records no verdict, so it can never become valgus credit. */
-function formCheckPrompt(moveName) {
+function formCheckPrompt(moveName, kind = "form") {
   return new Promise(resolve => {
     sess.cleanCheckMove = moveName;
+    sess.checkKind = kind;
     sess.pendingCleanCheck = true;
     setPhase("formcheck");
-    speakIfIdle("How did that feel — clean, or wobbly?");
+    speakIfIdle(kind === "landing"
+      ? "Landing check. Clean and frozen, or a bit wobbly?"
+      : "How did that feel — clean, or wobbly?");
     const finish = (result) => {
       clearInterval(watchdog); clearTimeout(timeout);
       sess.formResolver = null;
       sess.pendingCleanCheck = false;
+      sess.checkKind = null;
       resolve(result);
     };
     const watchdog = setInterval(() => { if (sess.abort) finish("abort"); }, 200);
@@ -1176,7 +1252,10 @@ export function planResume(dayKey, light = "green") {
   const finalLight = lockedLight ? lowerLight(lockedLight, resolvedLight) : resolvedLight;
   const skipBlocks = (prog && prog.done) || [];
   const bankedRounds = (prog && Number(prog.mainRoundsCompleted)) || 0;
-  const mainOwed = care ? 0 : Math.max(0, roundsForLight(finalLight) - bankedRounds);
+  // A tier-drop earlier today lowered what the day asks for; like the locked
+  // light, the cap is only ever written downward.
+  const roundsCap = prog && Number.isFinite(Number(prog.roundsCap)) ? Number(prog.roundsCap) : Infinity;
+  const mainOwed = care ? 0 : Math.max(0, Math.min(roundsForLight(finalLight), roundsCap) - bankedRounds);
   const bankedMoves = (prog && prog.moves) || {};
   const circuits = care
     ? assembleCircuits(dayKey, finalLight, { skip: [] })
@@ -1189,7 +1268,7 @@ export function planResume(dayKey, light = "green") {
         // OF THE DAY and cannot collide with the earlier sitting's.
         roundOffset: bankedRounds
       });
-  return { circuits, prog, light: finalLight, care, mainOwed, bankedRounds, bankedMoves };
+  return { circuits, prog, light: finalLight, care, mainOwed, bankedRounds, bankedMoves, roundsCap };
 }
 
 /* ---- back a move -----------------------------------------------------------
@@ -1351,7 +1430,9 @@ export async function startSession({ dayKey, light = "green", mode = null, sugge
      carried in beside it (see bankedCredit in js/outcome.js) — so a day finished
      across two sittings still reads complete, and a two-move sitting on a
      barely-started day reads exactly as short as it is. */
-  sess.dayExpectedWork = countExpectedWork(assembleCircuits(dayKey, sess.light, {}));
+  const dayRounds = Math.min(roundsForLight(sess.light), plan.roundsCap == null ? Infinity : plan.roundsCap);
+  sess.dayExpectedWork = countExpectedWork(assembleCircuits(dayKey, sess.light,
+    Number.isFinite(dayRounds) && dayRounds < roundsForLight(sess.light) ? { mainRounds: dayRounds } : {}));
   sess.expectedWork = isCareSession()
     ? countExpectedWork(sess.circuits)
     : Math.max(sess.dayExpectedWork, countExpectedWork(sess.circuits));
@@ -1370,7 +1451,7 @@ export async function startSession({ dayKey, light = "green", mode = null, sugge
      rounds" on the finish screen, next to XP and a streak that were both
      judging all three. The record already carries day-wide expectedWork and
      bankedCredit for exactly this reason; rounds were the omission. */
-  sess.dayRoundsPlanned = (sess.spa || sess.recovery) ? 0 : roundsForLight(sess.light);
+  sess.dayRoundsPlanned = (sess.spa || sess.recovery) ? 0 : dayRounds;
   sess.bankedRounds = isCareSession() ? 0 : bankedRounds;
   // Computed here rather than at finalize, because the LIVE round check and the
   // saved record must be judged against the same expected counts. Deriving it
@@ -1422,9 +1503,9 @@ export async function startSession({ dayKey, light = "green", mode = null, sugge
   for (let s = 0; s < steps.length; s++) {
     const st = steps[s];
     const { ci, r, ei, ex, circuit, absRound } = st;
-    const next = steps[s + 1] || null;
-    const isLastOfRound = !next || next.ci !== ci || next.r !== r;
-    const isLastOfBlock = !next || next.ci !== ci;
+    let next = steps[s + 1] || null;
+    let isLastOfRound = !next || next.ci !== ci || next.r !== r;
+    let isLastOfBlock = !next || next.ci !== ci;
 
     sess.stepIdx = s;
     sess.skipExercise = false;
@@ -1444,20 +1525,22 @@ export async function startSession({ dayKey, light = "green", mode = null, sugge
     playCue("work");
     if (ex.byReps) {
       setPhase("reps");
-      if (!preAnnounced) await speakAndWait(ex.name + "." + (ex.reset ? " " + ex.reset : "") + " Go.");
+      if (!preAnnounced) await announce(ex.name + "." + (ex.reset ? " " + ex.reset : "") + " Go.");
       preAnnounced = false;
       if (sess.abort) return finalize(false);
       if (wentBack()) { back(); continue; }
+      resetExerciseClock();
       const result = await runPrescribedReps(ex);
       if (result === "abort") return finalize(false);
       if (result === "back" || wentBack()) { back(); continue; }
     } else {
       sess.timerSecs = work; sess.timerMax = work;
       setPhase("work");
-      if (!preAnnounced) await speakAndWait(ex.name + "." + (ex.reset ? " " + ex.reset : "") + " Three, two, one, go.");
+      if (!preAnnounced) await announce(ex.name + "." + (ex.reset ? " " + ex.reset : "") + " Three, two, one, go.");
       preAnnounced = false;
       if (sess.abort) return finalize(false);
       if (wentBack()) { back(); continue; }
+      resetExerciseClock();
 
       if (ex.eachSide) {
         const half = Math.floor(work / 2);
@@ -1476,7 +1559,7 @@ export async function startSession({ dayKey, light = "green", mode = null, sugge
           if (r4 !== "skip") {
             sess.sideLabel = `${half}s second side`;
             setPhase("work");
-            await speakAndWait(ex.name + " second side. Three, two, one, go.");
+            await announce(ex.name + " second side. Three, two, one, go.");
             if (sess.abort) return finalize(false);
             if (wentBack()) { back(); continue; }
             const r5 = await countdown(half);
@@ -1518,6 +1601,30 @@ export async function startSession({ dayKey, light = "green", mode = null, sugge
     sess.exStatus[key] = row.status === "skipped" ? "skipped"
       : r === circuit.rounds ? row.status : sess.exStatus[key];
 
+    /* LANDING CHECK. A sport with a landing rule grades every gated jump before
+       the rest starts — clean and frozen, or a bit wobbly. Two wobbly in a row
+       drop the highest remaining main round, never the one in progress, and
+       the plan is lowered with it (applyTierDrop). A graded jump is never also
+       spot-checked. Off unless the app turns it on: see FEATURES.landingCheck. */
+    if (FEATURES.landingCheck && ex.gate === "valgus" && row.status !== "skipped" && !sess.pendingCleanCheck) {
+      sess.spotAsked[ex.name] = true;
+      const lg = await formCheckPrompt(ex.name, "landing");
+      if (lg === "abort") return finalize(false);
+      if (wentBack()) { back(); continue; }
+      if (circuit.block === "main") {
+        const dropped = tierDroppedRounds(circuit.rounds, sess.wobblyStreak, r);
+        if (dropped < circuit.rounds) {
+          applyTierDrop(circuit, dropped, steps, s, ex.name, r);
+          next = steps[s + 1] || null;
+          isLastOfRound = !next || next.ci !== ci || next.r !== r;
+          isLastOfBlock = !next || next.ci !== ci;
+          setUpNext(next);
+          await speakAndWait("Two wobbly landings in a row — let's drop a round. Quality over quantity.");
+          if (sess.abort) return finalize(false);
+        }
+      }
+    }
+
     // Self-check only the moves this run is watching (see pickSpotChecks),
     // and only the first time each one comes round — main runs 2–3 rounds.
     // A pending check is never overwritten by the next move: it is awaited
@@ -1547,6 +1654,7 @@ export async function startSession({ dayKey, light = "green", mode = null, sugge
         }
         playCue("rest");
         setPhase("roundRest");
+        const restSince = Date.now();   // a Skip Rest tap from here on counts
         const roundProgress = `Round ${r} done! You've got ${circuit.rounds - r} more to crush!`;
         await speakAndWait(roundProgress);
         if (sess.abort) return finalize(false);
@@ -1554,6 +1662,7 @@ export async function startSession({ dayKey, light = "green", mode = null, sugge
         if (voiceOn()) speakIfIdle("Did that feel different from the first round? Just ask yourself.");
         const leadTime = upcomingEx && HARD_EXERCISES.has(upcomingEx.name) ? 8 : 5;
         const result = await countdown(configuredRoundRest() + setupSecs(upcomingEx), {
+          since: restSince,
           onTick: (rem) => {
             if (rem === leadTime && upcomingEx) {
               speakIfIdle("Get ready for " + upcomingEx.name + (upcomingEx.reset ? ". " + upcomingEx.reset : ""));
@@ -1568,10 +1677,12 @@ export async function startSession({ dayKey, light = "green", mode = null, sugge
       } else if (isBlockBreak) {
         playCue("rest");
         setPhase("sectionRest");
+        const restSince = Date.now();   // a Skip Rest tap from here on counts
         await speakAndWait(`Block done! Next up: ${circuits[ci + 1].name}.`);
         if (sess.abort) return finalize(false);
         if (wentBack()) { back(); continue; }
         const result = await countdown(configuredSectionRest() + setupSecs(upcomingEx), {
+          since: restSince,
           onTick: (rem) => {
             if (rem === 4 && upcomingEx) {
               speakIfIdle("Get ready for " + upcomingEx.name + (upcomingEx.reset ? ". " + upcomingEx.reset : ""));
@@ -1591,6 +1702,7 @@ export async function startSession({ dayKey, light = "green", mode = null, sugge
         sess.restCue = setup && upcomingEx ? `Get set up: ${upcomingEx.name}`
           : upcomingEx && upcomingEx.reset ? `Next: ${upcomingEx.reset}` : "Breathe and reset.";
         setPhase("rest");
+        const restSince = Date.now();   // a Skip Rest tap from here on counts
         const nextName = upcomingEx ? upcomingEx.name : "";
         if (voiceOn()) await speakAndWait(nextName
           ? (setup ? `Rest. Next: ${nextName} — get it set up.` : `Rest. Next: ${nextName}.`)
@@ -1599,13 +1711,19 @@ export async function startSession({ dayKey, light = "green", mode = null, sugge
         if (wentBack()) { back(); continue; }
         let said = {};
         const result = await countdown(restDuration, {
+          since: restSince,
           onTick: (rem) => {
             if (rem >= 1 && rem <= 3 && !said[rem]) { said[rem] = true; speak(String(rem)); }
           }
         });
         if (result === "abort") return finalize(false);
         if (result === "back") { back(); continue; }
-        if (result !== "skip") { speak("Go"); preAnnounced = true; }
+        // A rest that RAN OUT has already said "Rest. Next: <move>" and counted
+        // down, so "Go" is all that is left to say. A rest she cut short with
+        // Skip Rest used to take the same branch, which marked the next move as
+        // announced and skipped its name — she heard "Go" and nothing else. A
+        // cut rest gets the move's full announcement.
+        if (result === "done") { speak("Go"); preAnnounced = true; }
       }
     }
 
@@ -1847,6 +1965,8 @@ export function finalize(completed) {
     plannedSecs: sess.plannedSecs,
     clean: sess.cleanCount, wobbly: sess.wobblyCount,
     formChecks: sess.formChecks || [],       // per-move verdicts from this run's spot-checks
+    // Only a sport with a landing rule writes these; the row shape elsewhere is unchanged.
+    ...(FEATURES.landingCheck ? { landings: sess.landings || {}, tierDropped: sess.tierDropped || 0 } : {}),
     light: sess.light,
     pain: safetyStop,
     endedEarly: !completed,
@@ -2105,6 +2225,12 @@ export function advance() {
   // nothing: the button sat on screen and did nothing for up to thirty
   // seconds. Done during the question means "move on" — no verdict recorded.
   if (sess.phase === "formcheck") { skipFormCheck(); return; }
+  // The tail of a double tap, not a decision about this phase — see DONE_GUARD_MS.
+  const now = Date.now();
+  if (now - (sess.lastTapAt || 0) < DONE_GUARD_MS) return;
+  sess.lastTapAt = now;
+  // "I know this one — go": cut the announcement and start the clock.
+  if (sess.announceResolver) { sess.announceResolver(); return; }
   if (sess.phase === "reps" && sess.byRepsResolver) { sess.byRepsResolver("done"); return; }
   if (sess.phase === "intent" && sess.intentResolver) { sess.intentResolver(null); return; }
   if (sess.phase === "microloop" && sess.microResolver) { sess.microResolver(null); return; }
@@ -2159,9 +2285,16 @@ export function resumeFromStop() {
   resumeSession("stop");
   notify("phase");
 }
-export function endFromStop() {
+/* The red STOP asks WHY before it ends anything. "Something hurts" is a safety
+   stop: the record says so, nothing is paid, and the day does not count. "I
+   just need to stop" is an ordinary early end — paid for the rounds she
+   trained, streak judged by the normal rule. Every red STOP used to be a pain
+   stop, so a bathroom break or a doorbell cost her the whole day's XP and the
+   streak day with it. With no reason given it is still the safe reading. */
+export function endFromStop(reason = "pain") {
   sess.stopOverlay = false;
-  sess.painFlag = true;
+  sess.painFlag = reason !== "break";
+  logEvent("stop", { reason: sess.painFlag ? "pain" : "break", ex: sess.currentEx ? sess.currentEx.name : null });
   endEarly();
 }
 export function endEarly() {
@@ -2195,8 +2328,18 @@ function recordFormCheck(clean) {
   if (sess.cleanCheckMove) sess.formChecks.push({ name: sess.cleanCheckMove, clean });
   sess.cleanCheckMove = null;
 }
+/* A landing check is a form check with a memory: each grade is kept per move
+   for the grown-up watch-list, and a run of wobbly ones drives the tier-drop. */
+function noteLanding(clean) {
+  if (sess.checkKind !== "landing" || !sess.cleanCheckMove) return;
+  const rec = sess.landings[sess.cleanCheckMove] || { clean: 0, wobbly: 0 };
+  if (clean) { rec.clean += 1; sess.wobblyStreak = 0; }
+  else { rec.wobbly += 1; sess.wobblyStreak = (sess.wobblyStreak || 0) + 1; }
+  sess.landings[sess.cleanCheckMove] = rec;
+}
 export function pickClean() {
   if (!sess.pendingCleanCheck) return;
+  noteLanding(true);
   sess.cleanCount += 1; sess.lastWobbly = false;
   if (sess.formResolver) sess.formResolver(true);
   else { recordFormCheck(true); sess.pendingCleanCheck = false; }
@@ -2204,6 +2347,7 @@ export function pickClean() {
 }
 export function pickWobbly() {
   if (!sess.pendingCleanCheck) return;
+  noteLanding(false);
   sess.wobblyCount += 1; sess.lastWobbly = true;
   if (sess.formResolver) sess.formResolver(false);
   else { recordFormCheck(false); sess.pendingCleanCheck = false; }

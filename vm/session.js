@@ -6,7 +6,7 @@
 import { sess, refTime, screenRepsDetail, pausedByBackground, canGoBack } from "../engine.js";
 import { DAYS, CHEERS, INTENT_WORDS, MICRO_LOOP, BREATH_REHEARSAL, BLOCK_META, SESSION_QUIZ, exWork, videoSearchUrl } from "../data.js";
 import { SKILL_BLOCK, COPY } from "../sport.js";
-import { fmtMMSS, exercisePhotoUrl, plural } from "../util.js";
+import { fmtMMSS, exercisePhotoUrl, photoSources, plural } from "../util.js";
 import { loadSessions } from "../store.js";
 import { deriveSessionOutcome, outcomeOf, OUTCOME_VERSION, STREAK_WORK_FRACTION } from "../outcome.js";
 
@@ -304,6 +304,8 @@ export function buildSessionVM(state) {
     // so asking for a demo photo guaranteed the placeholder on every move.
     detailPhotoUrl: exercisePhotoUrl(de.name, "Demo"),
     detailPhotoFallbackUrl: exercisePhotoUrl(de.name, "Timer"),
+    // Demo first, the timer photo as its stand-in, each as WebP before PNG.
+    detailPhotoSources: [...photoSources(exercisePhotoUrl(de.name, "Demo")), ...photoSources(exercisePhotoUrl(de.name, "Timer"))],
     detailVideoUrl: videoSearchUrl(de),
     // Opening instructions PAUSES the run, and closing them asks for an
     // explicit Resume — the countdown is timestamp-based, so it used to keep
@@ -322,7 +324,13 @@ export function buildSessionVM(state) {
     canGoBack: canGoBack(),
     canSkipExercise,
     isFormCheck,
-    formCheckTitle: "How did that feel?",
+    checkKind: sess.checkKind || "form",
+    formCheckTitle: sess.checkKind === "landing" ? "Landing check" : "How did that feel?",
+    checkCleanLabel: sess.checkKind === "landing" ? "🧊 Clean & frozen" : "✓ Clean",
+    checkWobblyLabel: sess.checkKind === "landing" ? "〰️ A bit wobbly" : "😅 Wobbly",
+    checkNote: sess.checkKind === "landing"
+      ? "2 wobbly in a row = we drop a round. Quality over quantity."
+      : "Answer below — or just move on.",
 
     sessionDayTitle: day.title || "",
     elapsedDisplay: fmtMMSS(sess.elapsed),
@@ -351,6 +359,7 @@ export function buildSessionVM(state) {
     curExWatchFor: ex.parentWatch || "", curExFix: ex.redFlag || "",
     curExTransfer: ex.transfer || "",
     curExPhotoUrl: exercisePhotoUrl(ex.name || "rest", "Timer"),
+    curExPhotoSources: photoSources(exercisePhotoUrl(ex.name || "rest", "Timer")),
     exActualDisplay: fmtMMSS(curActual), exPlannedDisplay: fmtMMSS(curPlanned),
     exPacePct: Math.round((curPlanned > 0 ? Math.min(1, curActual / curPlanned) : 0) * 100),
     paceColor, overNudge: !!(exOver && timerIsReps),
@@ -377,9 +386,11 @@ export function buildSessionVM(state) {
     // and she has to know which one she is answering for.
     showCleanCheck: phase === "formcheck" && !!sess.pendingCleanCheck,
     cleanCheckMove: sess.cleanCheckMove || "",
-    cleanCheckQuestion: sess.cleanCheckMove
-      ? "Were your " + sess.cleanCheckMove + " reps clean?"
-      : "Were your reps clean?",
+    cleanCheckQuestion: sess.checkKind === "landing"
+      ? (sess.cleanCheckMove ? sess.cleanCheckMove + " — " : "") + "how did those landings freeze?"
+      : sess.cleanCheckMove
+        ? "Were your " + sess.cleanCheckMove + " reps clean?"
+        : "Were your reps clean?",
     wobblyBanner: !!sess.lastWobbly && !isResting && !isPrompt,
     doneLabel: explore ? "Next move ▶" : isResting ? "⏭ Skip Rest" : isFormCheck ? "Move on →" : "✓ Done — Next",
 
