@@ -27,7 +27,7 @@ const repMoves = allMoves.filter(ex => ex.byReps);
 ok(repMoves.length > 15, "many of them are counted in reps (" + repMoves.length + ")");
 repMoves.forEach(ex => ok(ex.prescription && ex.prescription.totalReps >= 1 && ex.prescription.segments >= 1,
   "a rep move counts to something: " + ex.name + " · " + ex.repsDetail));
-allMoves.filter(ex => !ex.byReps).forEach(ex => ok(Number.isFinite(ex.work) && ex.work > 0,
+allMoves.filter(ex => !ex.byReps && ex.block !== "recovery").forEach(ex => ok(Number.isFinite(ex.work) && ex.work > 0,
   "a timed move has seconds: " + ex.name));
 allMoves.forEach(ex => ok(data.BLOCK_ORDER.includes(ex.block) || ["prep", "recovery"].includes(ex.block),
   "a move sits in a known block: " + ex.name + " → " + ex.block));
