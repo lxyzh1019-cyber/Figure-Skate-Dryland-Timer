@@ -5,7 +5,7 @@
    BUMP `version` ON EVERY RELEASE — it is what retires the old cache. */
 self.SW_APP = {
   cachePrefix: "skate-",
-  version: "v1",
+  version: "v2",
   /* The files that are this app's own, on top of the core shell. */
   shell: [
     "./css/fonts.css",

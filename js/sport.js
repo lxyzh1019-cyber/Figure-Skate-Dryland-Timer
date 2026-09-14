@@ -99,5 +99,7 @@ export const COPY = {
 /* Session mechanics that only one sport uses. The landing check after every
    gated jump, and the jump-fatigue tier-drop it feeds, are this app's. */
 export const FEATURES = {
-  landingCheck: true
+  landingCheck: true,
+  /* No WebP twins shipped yet: the screens ask for the PNGs alone. */
+  webp: false
 };

@@ -79,7 +79,10 @@ exactly as in the swim app.
 - **Session** — the coach counts reps as they are done, shows SET / SIDE / REP
   chips so a muted device is still followable, pauses when the iPad is put
   down, keeps the photo beside the timer, asks before skipping, offers
-  "◀ Back a move", spot-checks 2–3 moves and grades every landing.
+  "◀ Back a move", spot-checks 2–3 moves and grades every landing. A tap
+  during the coach's announcement starts the move; the red STOP asks whether
+  something hurts before it costs her anything — a plain "just stopping" is
+  paid for the rounds she trained.
 - **Session Complete** — one of nine honest states (complete, partial,
   recovery held, safety stop, nothing logged, …), mood, reflection, Coach's Quiz.
 - **Progress** — streak, a period board (4 weeks / month / quarter) with
@@ -128,7 +131,9 @@ process under the default timezone and America/New_York and reports every
 failure: the core's action-layer, invariants, integrity, landing-rule and
 offline-shell suites against this app's content, and `test/smoke.mjs`, which
 checks what only this app can get wrong — its plan, ranks, prizes, demo links
-and readiness copy.
+and readiness copy. On a pull request CI also runs
+`core/tools/release-check.mjs`: a precached shell file that changed without a
+bump of `version` in `sw.js` fails the build.
 
 ## Data
 
