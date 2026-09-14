@@ -125,7 +125,7 @@ ok(!data.needsSetup({ name: "Dead Bug" }), "a floor move does not");
    through sport.js. A journey written by the earlier draw ledger carries its
    high-water level across. */
 localStorage.clear();
-localStorage.setItem("skate_sessions_v2", JSON.stringify([{ dayKey: "wednesday", isoDate: "2026-08-20T20:00:00.000Z", completedFully: true, roundsDone: 3, xpEarned: 375, xpVersion: 4, durationSecs: 1500 }]));
+localStorage.setItem("skate_sessions_v2", JSON.stringify([{ dayKey: "wednesday", isoDate: "2026-08-20T20:00:00.000Z", completedFully: true, roundsDone: 3, xpEarned: 375, xpVersion: 4, cleanLandings: 3, durationSecs: 1500 }]));
 localStorage.setItem("skate_journey_v1", JSON.stringify({ xp: 4600, sessionXp: 4600, prizesWon: [{ label: "Movie night", when: 1700000000000 }], drawsEarned: 9, drawLevel: 18, pendingDraws: 0 }));
 store.migrate();
 ok(store.loadSessions().length === 1 && store.loadSessions()[0].xpEarned === 375, "sessions logged before the shared core keep the XP they were stamped with");
@@ -154,7 +154,9 @@ ok(r3.step === "bodyArea", "sore answer routes to body check");
 rvm.setZoneSev(r3, 4, 3);
 ok(!rvm.mayStartFromReadiness(r3), "severity 3 may not start without a grown-up");
 let html = rscreen.readinessScreen(rvm.buildReadinessVM(r3, true));
-ok(/rGrownupOk/.test(html) && /hit the ice/.test(html), "sev3 gate rendered, in this app's words");
+ok(/rGrownupOk/.test(html), "sev3 gate rendered");
+ok(/hit the ice/.test(rscreen.readinessScreen(rvm.buildReadinessVM(rvm.newReadinessFlow("monday", false), true))),
+   "the check-in opens in this app's words");
 rvm.confirmGrownup(r3);
 ok(rvm.mayStartFromReadiness(r3), "and may once a grown-up has confirmed");
 const r2 = rvm.newReadinessFlow("monday", false);
