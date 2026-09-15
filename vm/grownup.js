@@ -10,7 +10,7 @@ import { redeemedPrizesForReview } from "../store.js";
 import { ATHLETE_DEFAULT, CSV_FILE_PREFIX } from "../sport.js";
 import { gateUnlocked, GATE_REASON } from "../gate.js";
 import { passkeySupported, hasPasskey } from "../passkey.js";
-import { settings, loadSessions, loadEvents, loadQuiz, loadGate, GATE_WEEKS_REQUIRED, loadLadderRungs, loadTracker, getCurrentTrackerWeek, activeEngagement, activePrizePool, profileList, activeProfileId, quizBankStatus, quizPaidToday, quizXpToday, QXP_DAILY_CAP, lastWalletTrim, loadJourney, levelFromXp, countsAsTrained as countsAsTrainedLocal, outcomeOf,
+import { settings, loadSessions, loadEvents, loadQuiz, loadGate, GATE_WEEKS_REQUIRED, GATE_MOVE, loadLadderRungs, loadTracker, getCurrentTrackerWeek, activeEngagement, activePrizePool, profileList, activeProfileId, quizBankStatus, quizPaidToday, quizXpToday, QXP_DAILY_CAP, lastWalletTrim, loadJourney, levelFromXp, countsAsTrained as countsAsTrainedLocal, outcomeOf,
          sessionRounds as sessionRoundsDone, sessionRoundsPlanned, plannedRoundsAcrossDays,
          monthKeyOf, formVerdicts, latestFormVerdicts, loadReadinessLog,
          settledXpInRange } from "../store.js";
@@ -94,8 +94,34 @@ export function buildGrownupVM(state) {
   // so a body that reported Red and was sent out Green flagged nothing.
   const yellowRed = sessions.filter(s => ["yellow", "red"].includes(bodyLight(s)));
   const raised = sessions.filter(wasRaised);
+  /* HOW WELL THE DOSES WERE HELD, for the person who was not in the room.
+
+     The engine has always known that a thirty-second hold ended at twelve
+     seconds is not a thirty-second hold — it files the row as `partial` — and
+     nothing has ever said so out loud to a grown-up. A whole session of moves
+     at forty percent of their time reads, everywhere else, exactly like a
+     session she completed. So it is a flag: not a failure, and not something
+     that costs her XP or a streak day, but the thing worth a quiet word before
+     the next session. Bands and wording are paceReport's, in js/outcome.js, so
+     the kid's screen and this one cannot describe the same evening differently. */
+  const paceDays = safetyRows.map(r => ({ row: r, pace: outcomeOf(r).pace }))
+    .filter(x => x.pace && x.pace.shortCount > 0);
+  const shortMoveCount = paceDays.reduce((a, x) => a + x.pace.shortCount, 0);
+  const paceWorstDay = paceDays.reduce((w, x) =>
+    !w || x.pace.counts.red > w.pace.counts.red ? x : w, null);
+
   const flags = [
     ...stops.map(s => ({ icon: "🛑", rowStyle: alertRow("stop"), text: "Stopped for pain during “" + (s.dayTitle || "session") + "” (" + dstr(s.isoDate) + ")." })),
+    ...(shortMoveCount ? [{
+      icon: paceWorstDay && paceWorstDay.pace.counts.red ? "⚠️" : "🟡",
+      rowStyle: alertRow(paceWorstDay && paceWorstDay.pace.counts.red ? "stop" : "sun"),
+      text: shortMoveCount + " move" + (shortMoveCount === 1 ? "" : "s") + " came in under three quarters of their dose"
+        + (paceWorstDay && paceWorstDay.pace.worst && paceWorstDay.pace.worst.name
+            ? " — worst was " + paceWorstDay.pace.worst.name
+              + " at " + Math.round((paceWorstDay.pace.worst.ratio || 0) * 100) + "% on " + dstr(paceWorstDay.row.isoDate)
+            : "")
+        + ". Still real training and still paid — worth watching, not correcting mid-set."
+    }] : []),
     ...(earlyEnds.length ? [{ icon: "⏱", rowStyle: alertRow("sun"), text: earlyEnds.length + " session" + (earlyEnds.length === 1 ? "" : "s") + " ended early — " + earlyEnds.map(s => dstr(s.isoDate)).join(", ") + "." }] : []),
     ...(yellowRed.length ? [{ icon: "💛", rowStyle: alertRow("sun"), text: yellowRed.length + " yellow/red-light day" + (yellowRed.length === 1 ? "" : "s") + " — her body check asked for a lighter session." }] : []),
     ...(raised.length ? [{ icon: "🔓", rowStyle: alertRow("sun"), text: raised.length + " session" + (raised.length === 1 ? "" : "s") + " where a grown-up raised the light above the body check — " + raised.map(s => bodyLight(s) + "→" + ranLight(s) + " (" + dstr(s.isoDate) + ")").join(", ") + "." }] : [])
@@ -723,6 +749,11 @@ export function buildGrownupVM(state) {
         name: ex.name, dose: ex.dose || "", cue: ex.cue || "",
         parentWatch: ex.parentWatch || "", fix: ex.redFlag || "", transfer: ex.transfer || "",
         photoUrl: exercisePhotoUrl(ex.name, "Demo"),
+        /* Not one "- Demo Image" file exists in either app, and this card had
+           no fallback — so every card in the library showed the placeholder.
+           The session's detail overlay has always chained Demo → Timer; the
+           library asks for the same chain. */
+        photoFallbackUrl: exercisePhotoUrl(ex.name, "Timer"),
         videoUrl: videoSearchUrl(ex)
       });
     });
@@ -865,12 +896,13 @@ export function buildGrownupVM(state) {
     })(),
 
     coaching: {
-      gate, gateLabel: gate.unlocked ? "UNLOCKED — jumps allowed beyond Drop-and-Stick" : "LOCKED — all jumps stay at Drop-and-Stick",
+      gate, gateLabel: gate.unlocked ? "UNLOCKED — jumps allowed beyond " + GATE_MOVE : "LOCKED — all jumps stay at " + GATE_MOVE,
       // Says what is actually counted, and counts what it says. The number used
-      // to tick up whenever Drop-and-Stick merely wasn't skipped — no clean
-      // self-check, no separate weeks, nothing the sentence promised.
+      // to tick up whenever the floor move merely wasn't skipped — no clean
+      // self-check, no separate weeks, nothing the sentence promised. (It also
+      // named a swim move to a skater: see GATE_MOVE in core/store.js.)
       gateProgress: (gate.cleanWeeks || []).length + " of " + GATE_WEEKS_REQUIRED
-        + " weeks with a clean Drop-and-Stick logged"
+        + " weeks with a clean " + GATE_MOVE + " logged"
         + (gate.unlocked ? "" : " — a week counts when she does the move AND self-checks it clean, and a grown-up hasn't flagged it."),
       ladderRows, trackerWeek, tracker, prFields,
       engagement, engagementSystems: ENGAGEMENT_SYSTEMS

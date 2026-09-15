@@ -8,7 +8,8 @@
      notify("tick")  → targeted per-second DOM writes only
    ============================================================ */
 
-import { deriveSessionOutcome, mainRoundsFromLedger, mainRoundReport, OUTCOME_VERSION } from "./outcome.js";
+import { deriveSessionOutcome, mainRoundsFromLedger, mainRoundReport, OUTCOME_VERSION,
+         mergeLedgerRows, logicalRowId, workoutDate, paceReport } from "./outcome.js";
 import { DAYS, BLOCK_ORDER, BLOCK_LABEL, LIGHT_ROUNDS, LIGHT_SESSION_POLICY, SIDE_SWITCH_BUFFER, INTENT_WORDS, MICRO_LOOP, BREATH_REHEARSAL, MANTRA,
          exWork, exRepsDetail, exPrescription, prescriptionSegments, repSeconds,
          needsSetup, SETUP_SECONDS,
@@ -16,11 +17,10 @@ import { DAYS, BLOCK_ORDER, BLOCK_LABEL, LIGHT_ROUNDS, LIGHT_SESSION_POLICY, SID
 import { settings, configuredExerciseRest, configuredRoundRest, configuredSectionRest, saveSession, logEvent,
          loadDayProgress, saveDayProgress, clearDayProgress, gateLocked, creditValgusWeek, addSkipRecord,
          addXp, pendingDrawCount, claimSessionXp, athleteId, noteSessionXpAwarded, patchSession, sessionKey,
-         XP_VERSION, flaggedMoves, isAbnormalCheck, stampReadinessOutcome } from "./store.js";
+         XP_VERSION, flaggedMoves, isAbnormalCheck, stampReadinessOutcome, loadSessions } from "./store.js";
 import { speak, speakIfIdle, speakAndWait, interruptSpeech, cancelSpeech, nextEncouragement, beep, endBeep, playCue, ensureAudio, voiceOn, speakSafety } from "./audio.js";
-import { fsAddSession } from "./firebase.js";
 import { APP_ID, DAY_LOAD_FIELD, FEATURES } from "./sport.js";
-import { recoveryDoseSecs, refTime, edmontonISO } from "./util.js";
+import { recoveryDoseSecs, refTime, edmontonISO, todayISODate, plural } from "./util.js";
 
 // Moves that deserve a longer "get ready" lead-in before they start. Kept in
 // sync with the names that actually appear in the 2026.2 content (js/data.js);
@@ -47,6 +47,7 @@ function blankSession() {
     abort: false, skipExercise: false, forceDone: false, forceDoneAt: 0,
     byRepsResolver: null, intentResolver: null, microResolver: null,
     announceResolver: null, lastTapAt: 0,
+    savedEntry: false, saveFailed: false,
     currentEx: null, skipped: [], perExercise: [], justSkipped: false,
     phase: "greeting",           // greeting|getready|work|reps|sideswitch|rest|roundRest|sectionRest|intent|microloop|breath|done
     circuits: [], ci: 0, ei: 0, round: 1, exDone: 0,
@@ -85,7 +86,7 @@ function blankSession() {
        two. Minted when a plan starts, carried on the day's progress record, and
        written onto every session row and event the workout produces. */
     workoutInstanceId: null,
-    savedEntry: null, savedOutcome: null, saveFailed: false,
+    savedOutcome: null,
     blocksCompleted: 0, expectedByRound: {},
     repsCounted: 0, repsTarget: 0, repNow: 0, segmentsDone: 0, segmentsPlanned: 0,
     sideLabel: "", segmentLabel: "",
@@ -114,7 +115,16 @@ function blankSession() {
     dayKey: null, light: "green", practice: false, spa: false, recovery: false,
     endedEarly: false, xpEarned: 0, leveledUp: false,
     mood: null, wentWell: null, nextTime: null, quizPick: null, quizXp: 0,
-    savedEntry: false, saveFailed: false, savedKey: null, fsId: null
+    /* Every key the runner ever writes is declared HERE, because exitSession
+       resets with Object.assign and an assign cannot remove what it does not
+       mention. `quizCapped` leaking into the next session is what made a fresh
+       finish screen say "that's today's quiz XP maxed out" about a quiz she
+       had not taken yet. (`savedEntry` and `saveFailed` were also declared
+       twice in this literal, once as null and once as false, so the "nothing
+       saved" sentinel had two spellings.) */
+    quizCapped: false, saySafetyStop: false,
+    suggestedLight: null, readinessDetail: null, dayIso: null,
+    savedKey: null, fsId: null
   };
 }
 
@@ -190,6 +200,14 @@ function applyTierDrop(circuit, rounds, steps, s, moveName, round) {
   sess.expectedWork = Math.max(sess.dayExpectedWork, countExpectedWork(sess.circuits));
   sess.expectedByRound = countExpectedByRound(sess.circuits);
   logEvent("tier_drop", { move: moveName, round, rounds: sess.dayRoundsPlanned });
+}
+
+/* lowerLight where either side may be missing — two sources for the same fact,
+   and a fact only one of them holds is still the fact. */
+export function lowerOrNull(a, b) {
+  if (!a) return b || null;
+  if (!b) return a || null;
+  return lowerLight(a, b);
 }
 
 export function lowerLight(a, b) {
@@ -594,11 +612,18 @@ async function runOneRep(ex, p, n, stopped) {
    the exercise" — advance() routes it to the countdown, not the resolver. */
 async function segmentBreak(seg) {
   setPhase("sideswitch");
+  /* Stamped before the line is spoken, like the rests: she is switching sides
+     while the coach says so, and a tap then means "I'm round, go". Without it
+     the countdown only honoured a tap made after IT started, so a tap during
+     the line — or in the beat after it — was thrown away as stale and the five
+     seconds ran on. Every side, direction and set of every rep move passes
+     through here. */
+  const switchSince = Date.now();
   const line = seg.transition === "side"      ? "Nice. Switch sides — five to reset."
              : seg.transition === "direction" ? "Nice. Other direction — five to reset."
              :                                  "Nice. Next set — five to reset.";
   await speakAndWait(line);
-  return countdown(SIDE_SWITCH_BUFFER);
+  return countdown(SIDE_SWITCH_BUFFER, { since: switchSince });
 }
 
 /* A prescribed range ("2–3 clean reps", "8–10/side") counts the LOW number —
@@ -769,9 +794,16 @@ async function announce(msg) {
   const skipped = new Promise(resolve => {
     sess.announceResolver = () => { cut = true; resolve(); };
   });
+  // The screen repaints on phase changes, and an announcement is not one — so
+  // the ring went on saying "Done" while a tap meant "go". Both edges are
+  // announced, because the button's label is read off this resolver.
+  notify("phase");
   await Promise.race([speakAndWait(msg), skipped]);
   sess.announceResolver = null;
+  notify("phase");
   if (cut) cancelSpeech();
+  // Whether she cut it short, so a caller can drop the beat that follows.
+  return cut;
 }
 
 /* What comes after the step she is on — read off the step list, which is
@@ -1044,7 +1076,20 @@ function readDayProgress() {
    against the whole day instead of against its own leftovers. */
 function bankMove(row) {
   if (!ownsDayProgress()) return;
-  if (!row || row.status !== "done") return;
+  if (!row) return;
+  /* A RECORD EXISTS THE MOMENT SHE ATTEMPTS A MOVE, not the moment she finishes
+     one. This returned here unless the row was `done`, so an evening where she
+     went through the whole workout a beat short of every clock — every row
+     `partial`, which is real work that saves and pays — wrote NO day-progress
+     record at all. The day then had nothing to resume from, and the card, which
+     was reading that record, had nothing to say about a workout she had just
+     spent half an hour on. The locked light, the workout id, the day the bout
+     began and the rounds behind her all went with it.
+
+     A partial move is still NOT banked: it is not finished, it is offered
+     again, and it earns its credit again — the rule below is unchanged. What
+     changes is that attempting it is enough to open the record. */
+  if (row.status !== "done" && row.status !== "partial") return;
   const block = row.block;
   /* PREP IS THE ONE BLOCK DELIBERATELY NOT BANKED, and not because it is
      unimportant — it is the movement prep that runs immediately before main.
@@ -1058,10 +1103,12 @@ function bankMove(row) {
      displayed, so nothing reads as over 100%. */
   if (!block || block === "prep") return;
   const prog = readDayProgress();
-  const list = prog.moves[block] || (prog.moves[block] = []);
-  if (list.includes(row.name)) return;      // a resume must not re-bank a name
-  list.push(row.name);
-  prog.bankedCredit = Number(prog.bankedCredit) + 1;
+  if (row.status === "done") {
+    const list = prog.moves[block] || (prog.moves[block] = []);
+    if (list.includes(row.name)) return;    // a resume must not re-bank a name
+    list.push(row.name);
+    prog.bankedCredit = Number(prog.bankedCredit) + 1;
+  }
   prog.light = sess.light;
   saveDayProgress(sess.dayKey, prog);
 }
@@ -1243,20 +1290,208 @@ export function buildSteps(circuits) {
    Resolves the light exactly as a start does: a spa day is recovery, a locked
    light on the day's progress record can only ever LOWER the one asked for
    (see startSession), and a care session reads no progress at all. */
+/* ============================================================
+   WHAT THE DAY HAS ACTUALLY DONE, ASKED OF THE TRAINING LOG
+
+   THE STORES, AND WHICH ONE ANSWERS WHAT.
+
+   There are two, they are both right, and reading them as if they were
+   interchangeable is the single defect behind almost everything this change
+   repairs.
+
+     · The TRAINING LOG (js/store.js, `sessions_v2`) is permanent, mirrored to
+       the cloud, and in every backup. It is merged across every sitting of a
+       day. It is what XP, the streak, the week strip and every report are
+       derived from. It cannot know about a sitting that is still running,
+       because a row is only written at finalize().
+
+     · The DAY-PROGRESS record (LS_DAYPROG) is local, never mirrored, expires at
+       midnight and is deleted when the day completes. It is written LIVE, move
+       by move. Its one irreplaceable job is crash safety: if the tablet sleeps
+       in the middle of round two, the log holds nothing and this holds
+       everything up to the last finished move.
+
+   The Today card was reading the SECOND one to tell a child what she had done.
+   So "+360 XP earned" (from the log, which had merged both her sittings and
+   could prove three main rounds) sat directly above "Still open: Warm-up,
+   Coordination, Main Circuit, Skate-Skill" (from a record that had expired, or
+   had never been written because nothing she did that evening cleared the
+   `done` floor). Two true sentences from two different sources, printed side by
+   side, contradicting each other on the one screen she reads.
+
+   So: THE LOG IS THE REPORTING AUTHORITY. The day-progress record may only ever
+   subtract work from the next plan — never put a claim on a screen. This
+   function is the log's answer, and planResume below now starts from it.
+
+   Only TODAY's fragments count, which is the No-Debt rule stated directly
+   rather than borrowed from a cache's expiry: a partial never carries into a
+   new day. Dated by workoutDate, so a bout that crossed midnight belongs to the
+   day it began — the same key the XP budget uses. */
+export function dayFragmentsFromLog(dayKey, isoDate = null) {
+  const iso = isoDate || todayISODate();
+  return loadSessions().filter(s => s && !s.practice && s.dayKey === dayKey
+    && s.sessionType !== "recovery" && s.sessionType !== "spa"
+    && workoutDate([s]) === iso);
+}
+
+/* The light the day is LOCKED to, recovered from the log rather than trusted
+   from the local cache. `lockedLight` was only ever "the lowest light any
+   sitting ran under", and every sitting saves its own `lightResult`, so the
+   fact was always in the log — it simply had nowhere to be read from. */
+export function lockedLightFromLog(frags) {
+  return (frags || []).reduce((lo, s) => {
+    const l = s.lightResult || s.light || null;
+    if (!l) return lo;
+    return lo ? lowerLight(lo, l) : l;
+  }, null);
+}
+
+/* And the day's round cap after a tier drop, likewise: `dayRoundsPlanned` is
+   saved on every row (see finalize), and the cap is the smallest one the day
+   ever declared. */
+export function roundsCapFromLog(frags) {
+  let cap = Infinity;
+  (frags || []).forEach(s => {
+    const n = Number(s && s.dayRoundsPlanned);
+    if (Number.isFinite(n) && n > 0) cap = Math.min(cap, n);
+  });
+  return cap;
+}
+
+/* THE ONE READING every screen asks for: the day's plan, and what the merged
+   ledger can prove about it, side by side.
+
+   `planned` counts PERFORMANCES — a main move in round two is a different unit
+   of work from the same move in round one, which is exactly how expectedWork
+   and the streak already count. `movements` counts DISTINCT movements, once
+   each however many rounds they run, which is what the day card has always
+   shown a kid. Both are returned, named for what they are, because the card
+   used to print one of them beside a minute total computed from the other. */
+export function dayPlanState(dayKey, opts = {}) {
+  const frags = opts.fragments || dayFragmentsFromLog(dayKey, opts.isoDate || null);
+  const day = DAYS[dayKey] || {};
+  const fallbackLight = day.spa ? "recovery" : (day.defaultLight || "green");
+  /* The light the day was actually TRAINED under, not the weekday's default.
+     planStats has always priced every card as green, so a Red day — a third the
+     size — was shown the green plan's minutes and move count and then told it
+     had skipped the difference. */
+  const light = lockedLightFromLog(frags) || fallbackLight;
+  const cap = roundsCapFromLog(frags);
+  const rounds = Math.min(roundsForLight(light), cap);
+  const circuits = assembleCircuits(dayKey, light,
+    Number.isFinite(rounds) && rounds < roundsForLight(light) ? { mainRounds: rounds } : {});
+
+  const rows = mergeLedgerRows(frags.reduce((a, s) => a.concat(s.ledger || []), []));
+  const byId = new Map();
+  rows.forEach(r => byId.set(logicalRowId(r), r));
+
+  const blocks = [];
+  const owed = [];
+  let planned = 0, done = 0;
+  const seen = new Set(), didMove = new Set();
+  circuits.forEach(c => {
+    const base = Number.isFinite(Number(c.roundBase)) ? Number(c.roundBase) : 1;
+    let bPlanned = 0, bDone = 0, bSkipped = 0, bSecs = 0;
+    for (let r = 1; r <= c.rounds; r++) {
+      c.exercises.forEach(ex => {
+        if (ex.rounds && r > ex.rounds) return;
+        const round = base + r - 1;
+        const id = logicalRowId({ block: c.block, round, name: ex.name });
+        const row = byId.get(id);
+        planned++; bPlanned++; bSecs += refTime(ex);
+        seen.add(ex.name);
+        if (row && row.status === "done") { done++; bDone++; didMove.add(ex.name); }
+        else {
+          if (row && row.status === "skipped") bSkipped++;
+          owed.push({ block: c.block, circuit: c.name, round, name: ex.name, ex });
+        }
+      });
+    }
+    blocks.push({
+      block: c.block, name: c.name, rounds: c.rounds,
+      perRound: c.exercises.length,
+      planned: bPlanned, done: bDone, skipped: bSkipped,
+      mins: Math.max(1, Math.round(bSecs / 60))
+    });
+  });
+
+  return {
+    light, circuits, blocks, owed, rows,
+    planned, done,
+    movements: seen.size,
+    movementsDone: didMove.size,
+    pace: paceReport(rows),
+    hasRecord: frags.length > 0,
+    fragments: frags
+  };
+}
+
 export function planResume(dayKey, light = "green") {
   const day = DAYS[dayKey] || {};
   const resolvedLight = day.spa ? "recovery" : light;
   const care = !!day.spa || resolvedLight === "recovery";
   const prog = care ? null : loadDayProgress(dayKey);
-  const lockedLight = prog && prog.lockedLight;
+  /* THE LOG FIRST, THE RECORD AS A SUPPLEMENT.
+
+     This used to read the day-progress record and nothing else, so everything
+     the record could not see was offered to her again: a day whose work was
+     already saved but whose record had expired, been cleared on completion, or
+     never been written at all (bankMove banks only `done` rows) came back as
+     the WHOLE workout, from move one, under a button that said "Finish
+     remaining moves".
+
+     So what the day owes starts from the training log, which is permanent and
+     merged across every sitting. The record is still read, and still matters —
+     it is the only thing that knows about a sitting that never reached
+     finalize(), which is what a crash mid-round leaves behind. But it can only
+     ever SUBTRACT work from the plan, never add a claim: every value below
+     takes whichever source proves MORE work done, so neither can lose what the
+     other saw. See dayPlanState above for why the two stores exist at all. */
+  const logFrags = care ? [] : dayFragmentsFromLog(dayKey);
+  const logRows = mergeLedgerRows(logFrags.reduce((a, r) => a.concat(r.ledger || []), []));
+  const logDone = logRows.filter(r => r && r.status === "done");
+  const logRounds = care ? 0 : mainRoundsFromLedger(logRows, null, OUTCOME_VERSION);
+
+  const lockedLight = lowerOrNull(prog && prog.lockedLight, lockedLightFromLog(logFrags));
   const finalLight = lockedLight ? lowerLight(lockedLight, resolvedLight) : resolvedLight;
-  const skipBlocks = (prog && prog.done) || [];
-  const bankedRounds = (prog && Number(prog.mainRoundsCompleted)) || 0;
+
+  const bankedRounds = Math.max((prog && Number(prog.mainRoundsCompleted)) || 0, logRounds || 0);
+
+  /* Moves finished today, by block, from both sources. The log's are keyed on
+     the block the runner actually ran them in (see recordExercise), which is
+     the same key bankMove writes, so the two sets are directly unionable. */
+  const bankedMoves = {};
+  Object.entries((prog && prog.moves) || {}).forEach(([b, list]) => {
+    bankedMoves[b] = [...(list || [])];
+  });
+  logDone.forEach(r => {
+    const b = r.block;
+    if (!b || b === "prep") return;          // prep is re-run every sitting, by design
+    // A main move only counts as banked once its whole round is behind us;
+    // `mainPartialRound` below handles the round still in progress.
+    if (b === "main" && Number(r.round) <= bankedRounds) return;
+    if (!bankedMoves[b]) bankedMoves[b] = [];
+    if (!bankedMoves[b].includes(r.name)) bankedMoves[b].push(r.name);
+  });
+
+  /* Blocks fully retired: the record's list, plus any block the log can prove
+     every planned instance of. Computed against the day's own ask under the
+     final light, never against the weekday's default. */
+  const skipBlocks = [...((prog && prog.done) || [])];
+  if (!care) {
+    const st = dayPlanState(dayKey, { fragments: logFrags });
+    st.blocks.forEach(b => {
+      if (b.block === "prep" || b.block === "main") return;
+      if (b.planned > 0 && b.done >= b.planned && !skipBlocks.includes(b.block)) skipBlocks.push(b.block);
+    });
+  }
+
   // A tier-drop earlier today lowered what the day asks for; like the locked
   // light, the cap is only ever written downward.
-  const roundsCap = prog && Number.isFinite(Number(prog.roundsCap)) ? Number(prog.roundsCap) : Infinity;
+  const roundsCap = Math.min(
+    prog && Number.isFinite(Number(prog.roundsCap)) ? Number(prog.roundsCap) : Infinity,
+    roundsCapFromLog(logFrags));
   const mainOwed = care ? 0 : Math.max(0, Math.min(roundsForLight(finalLight), roundsCap) - bankedRounds);
-  const bankedMoves = (prog && prog.moves) || {};
   const circuits = care
     ? assembleCircuits(dayKey, finalLight, { skip: [] })
     : assembleCircuits(dayKey, finalLight, {
@@ -1393,8 +1628,13 @@ export async function startSession({ dayKey, light = "green", mode = null, sugge
       resultSource: readiness.resultSource || null
     } : null
   });
-  // What actually ran, back onto the check that suggested it.
-  stampReadinessOutcome(resolvedLight, resolvedSuggestion !== resolvedLight);
+  /* What actually RAN, back onto the check that suggested it — plan.light, not
+     the light this sitting was started with. A Red morning picked up in the
+     evening under a Green check runs Red (planResume holds a workout at the
+     light it started under), and stamping `resolvedLight` told the readiness
+     log the day finished Green and blamed a grown-up for an override nobody
+     made. */
+  stampReadinessOutcome(plan.light, resolvedSuggestion !== plan.light);
 
   const bankedRounds = plan.bankedRounds;
   const mainOwed = plan.mainOwed;
@@ -1468,27 +1708,39 @@ export async function startSession({ dayKey, light = "green", mode = null, sugge
     red: "RED, 1 round", recovery: "recovery only" }[sess.light] || "";
   const firstEx = circuits[0].exercises[0].name;
 
+  /* THE OPENING IS HERS TO CUT. The mantra, the light and the first move's
+     name ran as an un-interruptible speakAndWait: eleven to thirteen seconds
+     with a real voice, during which the Done ring and every other control sat
+     on screen doing nothing at all. A kid who has heard the mantra fifty times
+     could not get past it, and "the start button does nothing" is exactly how
+     that reads. Spoken through announce(), a tap means "I know this one, go" —
+     the same thing it means on every move. */
   setPhase("greeting");
   playCue("work");
-  if (sess.spa || sess.recovery) {
-    await speakAndWait(sess.spa ? "Spa Sunday. Easy recovery, slow and gentle."
-      : "Recovery today. No workout — just easy, gentle care. Well done for checking in honestly.");
-  } else {
-    await speakAndWait("Say it out loud with me, loud and proud: " + dayMantra + " " +
+  const greetCut = await announce(sess.spa || sess.recovery
+    ? (sess.spa ? "Spa Sunday. Easy recovery, slow and gentle."
+       : "Recovery today. No workout — just easy, gentle care. Well done for checking in honestly.")
+    : "Say it out loud with me, loud and proud: " + dayMantra + " " +
       "Your light today is " + lightLabel + ". Starting with " + firstEx + ".");
-  }
-  const r1 = await sleep(1500);
+  // The beat after the greeting is there to let it land. She just said she
+  // doesn't need it.
+  const r1 = await sleep(greetCut ? 150 : 1500);
   if (r1 === "abort") return finalize(false);
 
   sess.skipExercise = false;
   startElapsed();
 
   setPhase("getready");
+  /* Stamped BEFORE the lead-in is spoken, so a tap during the line — or in the
+     beat between it and the clock — is a decision about this lead-in and not a
+     stale flag to be thrown away. The line itself goes through announce() for
+     the same reason the move names do. */
+  const leadSince = Date.now();
   const firstLead = 5 + setupSecs(circuits[0].exercises[0]);
-  await speakAndWait(firstLead > 5
+  await announce(firstLead > 5
     ? `${firstLead} seconds to the first block — grab what you need for ${firstEx}.`
     : "Five seconds to the first block.");
-  const rGo = await countdown(firstLead);
+  const rGo = await countdown(firstLead, { since: leadSince });
   if (rGo === "abort") return finalize(false);
 
   let preAnnounced = false;
@@ -1550,10 +1802,13 @@ export async function startSession({ dayKey, light = "green", mode = null, sugge
         if (r3 === "back") { back(); continue; }
         if (r3 !== "skip") {
           setPhase("sideswitch");
+          // Same as segmentBreak: the tap belongs to the switch, not to the
+          // clock that starts once the coach has finished saying so.
+          const switchSince = Date.now();
           await speakAndWait("Nice. Switch sides — five to reset.");
           if (sess.abort) return finalize(false);
           if (wentBack()) { back(); continue; }
-          const r4 = await countdown(SIDE_SWITCH_BUFFER);
+          const r4 = await countdown(SIDE_SWITCH_BUFFER, { since: switchSince });
           if (r4 === "abort") return finalize(false);
           if (r4 === "back") { back(); continue; }
           if (r4 !== "skip") {
@@ -1912,6 +2167,9 @@ export function finalize(completed) {
   sess.confirmEnd = false;
   cancelSpeech();
   stopElapsed();
+  // Now that everything else has been silenced, the one line that must be
+  // heard. See endEarly.
+  if (sess.saySafetyStop) { sess.saySafetyStop = false; speakSafety("Session stopped."); }
 
   syncClock();
   const elapsedSecs = sess.elapsed;
@@ -2070,7 +2328,18 @@ export function finalize(completed) {
   // Cloud mirror — keep the doc ID so mood/reflection can patch it later.
   // Opt-out via Grown-up settings (privacy): when off, data stays on-device only.
   if (settings.cloudMirror !== false) {
-    fsAddSession(entry).then(id => { sess.fsId = id; flushCloudPatch(id); });
+    /* Imported HERE, not at the top of this file. The service worker states
+       that core/firebase.js is never precached because it is only ever pulled
+       in when the mirror is used (core/sw-core.js) — but a static import made
+       it part of every boot, so an offline launch after a release had bumped
+       the cache could fail to load the engine at all: a blank page, the one
+       thing the worker exists to prevent. The failure is swallowed for the
+       same reason every other mirror call swallows it — an offline device
+       keeps its session locally and the next boot sync carries it up. */
+    import("./firebase.js")
+      .then(m => m.fsAddSession(entry))
+      .then(id => { sess.fsId = id; flushCloudPatch(id); })
+      .catch(() => {});
     // XP moved, so the shared journey did too — publish it rather than making
     // the other device wait until it is next opened.
     import("./sync.js").then(m => m.publishJourney()).catch(() => {});
@@ -2198,12 +2467,19 @@ export function resumeSession(reason = PAUSE_USER) {
    all — the reason set would still be holding it, and the app would look
    broken to a ten-year-old who had done nothing wrong.
 
-   Overlay holds ("instructions", "video") are deliberately NOT released here:
-   their overlay is still open in front of her, and closing it is what says she
-   is done reading. */
+   RESUME MEANS RESUME — every hold, not the two this button happened to name.
+   An overlay hold ("instructions", "video") used to be left in place, on the
+   reasoning that its overlay is still open in front of her. Two of those holds
+   outlive their overlay: the ✕ on the move card closes the card and keeps the
+   hold, and "Watch the move" takes its hold with no overlay on screen at all.
+   In both cases the only control that released it went away with the card, so
+   every later tap of this button did nothing, Done walked on to the next phase
+   with the clock still stopped, and the session could only be ended — the
+   defect the owner reported. This button is the one Resume on the workout
+   screen; it has to mean it however many reasons are stacked behind it. */
 export function togglePause() {
   if (sess.paused) {
-    resumeSession(PAUSE_HIDDEN);
+    [...pauseReasons()].forEach(r => resumeSession(r));
     resumeSession(PAUSE_USER);
   } else pauseSession(PAUSE_USER);
 }
@@ -2235,9 +2511,19 @@ export function advance() {
   if (sess.phase === "intent" && sess.intentResolver) { sess.intentResolver(null); return; }
   if (sess.phase === "microloop" && sess.microResolver) { sess.microResolver(null); return; }
   if (["work", "rest", "roundRest", "sectionRest", "sideswitch", "getready", "greeting", "breath"].includes(sess.phase)) {
-    sess.forceDone = true;   // running countdown/sleep resolves as "done" within 1s
+    /* THE TAP WAITS FOR THE CLOCK, because the clock is what she is tapping at.
+       A rest stamps `since` at the moment its phase begins (see the rest
+       phases below) precisely so a tap during "Rest. Next: ..." counts — but
+       the flag the countdown reads used to be wiped 1.2 s later, and with a
+       real voice the announcement runs 1.5-4 s before the countdown that would
+       have read it even starts. Every such tap was silently dropped: Done and
+       Skip Rest did nothing exactly when a kid uses them most, at the top of
+       the rest. Nothing needs a timer to expire this flag — the next countdown
+       or sleep either consumes it (its `since` is older than the tap) or clears
+       it as stale (its `since` is newer), which is what keeps a tap during a
+       move's announcement meaning "go" rather than "done". */
+    sess.forceDone = true;   // the next countdown/sleep that can honour it, will
     sess.forceDoneAt = Date.now();
-    setTimeout(() => { sess.forceDone = false; }, 1200);
   }
 }
 
@@ -2310,16 +2596,18 @@ export function endEarly() {
   if (sess.intentResolver) sess.intentResolver(null);
   if (sess.microResolver) sess.microResolver(null);
   if (sess.formResolver) sess.formResolver(null);
-  // A stop confirmation is a SAFETY line: it is spoken even with the coach
-  // muted, because "I stopped because it hurt" is the one thing she must hear
-  // acknowledged.
-  //
-  // It is spoken ONCE, by speakSafety, and nothing may follow it. The line used
-  // to be repeated through interruptSpeech, whose speech.cancel() killed the
-  // safety utterance a moment after it started — so with the coach voice ON the
-  // one cue that must never be lost was the one cue that was. speakSafety
-  // already cancels whatever was mid-sentence before it speaks.
-  speakSafety("Session stopped.");
+  /* A stop confirmation is a SAFETY line: it is spoken even with the coach
+     muted, because "I stopped because it hurt" is the one thing she must hear
+     acknowledged.
+
+     It is spoken ONCE, and nothing may follow it — which is why it is not
+     spoken HERE. Saying it here put it in the queue a moment before the runner
+     reached its next await, saw the abort and called finalize, whose first act
+     is cancelSpeech(): the app killed its own safety cue on every stop, and no
+     test could see it because the harness stubs speech to instant. It is
+     raised as a request instead, and finalize speaks it once the cancelling is
+     done. */
+  sess.saySafetyStop = true;
 }
 
 export function pickIntentWord(word) { if (sess.intentResolver) sess.intentResolver(word); }
@@ -2371,7 +2659,9 @@ let _pendingCloudPatch = null;
 
 export function mirrorSessionPatch(patch) {
   if (settings.cloudMirror === false || !patch) return;
-  if (sess.fsId) { import("./firebase.js").then(m => m.fsUpdateSession(sess.fsId, patch)); return; }
+  // Offline, or with the module evicted, this rejects — and an unhandled
+  // rejection from a mood tap is noise in a console a parent might be reading.
+  if (sess.fsId) { import("./firebase.js").then(m => m.fsUpdateSession(sess.fsId, patch)).catch(() => {}); return; }
   _pendingCloudPatch = { ...(_pendingCloudPatch || {}), ...patch };
 }
 
@@ -2379,7 +2669,7 @@ function flushCloudPatch(id) {
   if (!id || !_pendingCloudPatch) return;
   const patch = _pendingCloudPatch;
   _pendingCloudPatch = null;
-  import("./firebase.js").then(m => m.fsUpdateSession(id, patch));
+  import("./firebase.js").then(m => m.fsUpdateSession(id, patch)).catch(() => {});
 }
 
 /* Complete-screen interactions: patch the saved record + Firestore mirror. */
@@ -2404,6 +2694,15 @@ export function setQuizPick(i) { sess.quizPick = i; notify("phase"); }
 
 /* Full reset before Today re-renders (guards double-running timers). */
 export function exitSession() {
+  // Tell the runner to stand down BEFORE the state it is walking is replaced:
+  // a loop still parked on a countdown would otherwise wake up and keep
+  // stepping through the fresh, empty session object.
+  sess.abort = true;
+  if (sess.byRepsResolver) sess.byRepsResolver("abort");
+  if (sess.intentResolver) sess.intentResolver(null);
+  if (sess.microResolver) sess.microResolver(null);
+  if (sess.formResolver) sess.formResolver(null);
+  if (sess.holdResolver) sess.holdResolver("abort");
   stopElapsed();
   cancelSpeech();
   _pendingCloudPatch = null;

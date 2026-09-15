@@ -138,6 +138,24 @@ export function buildSessionVM(state) {
       : `You got ${donePercent}% of today done${skippedPhrase ? ", and " + skippedPhrase : ""}. Everything you DID do is saved — the moves, the minutes and the XP for them. Today didn't reach the streak${Number.isFinite(streakShortBy) && streakShortBy > 0 ? ` — about ${plural(streakShortBy, "more move")} would do it` : ""}. Come back later today and finish the rest; it still counts for today. 💛`;
   const completionNote = completionState === "partial" ? partialNote : null;
 
+  /* HOW WELL SHE HELD IT, which is a different question from how much of it
+     there was, and one the finish screen has never asked. A thirty-second hold
+     let go at twelve seconds and one held the whole way both left the screen
+     saying "done". The bands come off the same ledger everything else here
+     reads — see paceReport in js/outcome.js — and they change no XP and no
+     streak day: this is a coaching line, not a verdict. */
+  const pace = liveOutcome.pace || null;
+  const paceCounts = pace ? pace.counts : null;
+  const paceNote = !pace || !pace.graded ? null
+    : pace.shortCount === 0
+      ? (paceCounts.amber
+          ? `Every move was there. ${plural(paceCounts.green, "hold")} full, ${paceCounts.amber} nearly — good, steady work.`
+          : "Every move held its full time. That's the whole dose. 💪")
+      : `${plural(pace.shortCount, "move")} came in short today`
+        + (pace.worst && pace.worst.name && Number.isFinite(pace.worst.ratio)
+            ? ` — ${pace.worst.name} at ${Math.round(pace.worst.ratio * 100)}% of its hold.` : ".")
+        + " Holding the whole time is what makes it count in the water.";
+
   /* A DAY SHE CAME BACK AND FINISHED reads differently from one done in a
      single go, and should: coming back is the harder thing. bankedCredit is
      only ever above zero on a resumed sitting. */
@@ -202,7 +220,14 @@ export function buildSessionVM(state) {
   const blockBadgeVariant = bvMap[circuit.block] || "aqua";
   const blockLabel = ({ warmup: "Warm-Up 🔥", coordination: "Coordination ⚡", main: "Main Circuit 💪",
     prep: "Prep Pair 🎯", finisher: "Finisher 🏁", [SKILL_BLOCK]: COPY.skillBlockLabel + " " + BLOCK_META[SKILL_BLOCK].emoji, recovery: "Recovery ❄️" })[circuit.block] || circuit.name || "";
-  const roundLabelText = circuit.block === "main" && circuit.rounds > 1 ? ("Round " + sess.round + " of " + circuit.rounds) : "";
+  /* THE ROUND NUMBER AND THE ROUND COUNT MUST BE ABOUT THE SAME THING.
+     sess.round is the round of the DAY (a resume's first round is round two);
+     circuit.rounds is only what THIS SITTING owes. Put together they read
+     "Round 3 of 2" on a resumed day, and the dots below indexed off the same
+     mismatch, so the last round had no active dot at all. The day's own ask is
+     what every other number on this screen uses (see dayRoundsAsked). */
+  const roundsShown = Math.max(Number(sess.dayRoundsPlanned) || 0, circuit.rounds || 0);
+  const roundLabelText = circuit.block === "main" && roundsShown > 1 ? ("Round " + sess.round + " of " + roundsShown) : "";
 
   const stageTitle =
     phase === "greeting" ? "Ready?" :
@@ -223,13 +248,19 @@ export function buildSessionVM(state) {
   // Per-section progress + whole-session pacing. exDone counts every
   // completed exercise in every round, so the bar actually reaches 100%
   // (exStatus keys are per-exercise and top out below rounds × exercises).
-  const totalExCount = circuits.reduce((acc, c) => acc + c.exercises.length * c.rounds, 0);
+  /* Counted the way the steps were BUILT (see buildSteps): a move capped to
+     fewer rounds than its circuit contributes only the rounds it actually
+     runs, so the denominator matches the exDone that climbs toward it. It used
+     to assume every move ran every round, and the bar could never fill on a
+     day that capped one. */
+  const totalExCount = circuits.reduce((acc, c) =>
+    acc + c.exercises.reduce((n, ex) => n + Math.min(c.rounds, Number(ex.rounds) || c.rounds), 0), 0);
   const doneCount = sess.exDone || 0;
   const secNames = { warmup: "Warm-Up", coordination: "Coordination", main: "Main", prep: "Prep", finisher: "Finisher", [SKILL_BLOCK]: COPY.skillBlockLabel, recovery: "Recovery" };
   const progressLabel = (secNames[circuit.block] || "") + " · " + Math.min(sess.ei + 1, circuit.exercises.length) + " of " + circuit.exercises.length;
   const sessionTimePct = Math.min(100, Math.round(sess.elapsed / Math.max(1, sess.plannedSecs) * 100));
-  const roundLine = (circuit.rounds || 1) > 1 ? ((circuit.name || "") + " · Round " + sess.round + " of " + circuit.rounds) : "";
-  const roundDots = (circuit.rounds || 1) > 1 ? Array.from({ length: circuit.rounds }, (_, i) => ({
+  const roundLine = (roundsShown || 1) > 1 ? ((circuit.name || "") + " · Round " + sess.round + " of " + roundsShown) : "";
+  const roundDots = (roundsShown || 1) > 1 ? Array.from({ length: roundsShown }, (_, i) => ({
     style: "width:10px;height:10px;border-radius:50%;flex-shrink:0;" + (i < sess.round - 1 ? "background:var(--mint);" : (i === sess.round - 1 ? "background:var(--aqua);" : "background:var(--surface-2);border:1.5px solid var(--hairline);box-sizing:border-box;"))
   })) : [];
 
@@ -334,6 +365,9 @@ export function buildSessionVM(state) {
 
     sessionDayTitle: day.title || "",
     elapsedDisplay: fmtMMSS(sess.elapsed),
+    paceNote,
+    paceBand: (pace && pace.band) || "",
+    paceCounts,
     sessionPlannedDisplay: Math.max(1, Math.round(sess.plannedSecs / 60)) + " min",
     sessionTimePct, roundLine, roundDots,
     progressLabel, progressValue: Math.min(doneCount, Math.max(1, totalExCount)), progressMax: Math.max(1, totalExCount),
@@ -392,7 +426,17 @@ export function buildSessionVM(state) {
         ? "Were your " + sess.cleanCheckMove + " reps clean?"
         : "Were your reps clean?",
     wobblyBanner: !!sess.lastWobbly && !isResting && !isPrompt,
-    doneLabel: explore ? "Next move ▶" : isResting ? "⏭ Skip Rest" : isFormCheck ? "Move on →" : "✓ Done — Next",
+    /* THE BUTTON SAYS WHAT THE TAP WILL DO. While the coach is announcing a
+       move, a tap means "I know this one, go" and starts the clock — it does
+       not end the move. The button said "✓ Done — Next" throughout, so the
+       first tap looked like it had been ignored and the second one, landing on
+       a move that had only just started, looked like it had skipped something.
+       Same button, same action, honest label. */
+    doneLabel: explore ? "Next move ▶"
+      : isResting ? "⏭ Skip Rest"
+      : isFormCheck ? "Move on →"
+      : sess.announceResolver ? "▶ Go"
+      : "✓ Done — Next",
 
     // prompts
     intentWords: INTENT_WORDS, microQ: MICRO_LOOP.q, microOpts: ["the hips", "the arms", "the knees"],
