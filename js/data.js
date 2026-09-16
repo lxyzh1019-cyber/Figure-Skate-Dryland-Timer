@@ -62,13 +62,13 @@ export const ENCOURAGEMENTS_BY_STYLE = {
 };
 
 /* ------------------------------------------------------------
-   HOW-TO / VALIDATED COACHING CHANNELS — each block routes to ONE
-   trusted channel covering that kind of work. The demo link is a
-   broad YouTube search with the channel NAME appended, so it always
-   returns real videos while biasing toward the validated channel.
+   HOW-TO / VALIDATED COACHING CHANNELS — a reference list, not a
+   mechanism. Nothing appends these names. Where a move's best demo
+   comes from one of these channels, the name is written INTO that
+   move's `search` string by hand, the way the swim app does it.
    ------------------------------------------------------------ */
 export const COACH_CHANNELS = {
-  skate:    { label: "Figure-skating off-ice", name: "iSk8 Mom Maja", url: "https://www.youtube.com/@iSk8MomMaja" },
+  skate:    { label: "Figure-skating off-ice", name: "FLEXAFIT by Signe Ronka", url: "https://www.youtube.com/@FLEXAFIT" },
   mobility: { label: "Mobility & warm-up",     name: "Tom Merrick",   url: "https://www.youtube.com/@TomMerrick" },
   speed:    { label: "Speed & coordination",   name: "ALTIS",         url: "https://www.youtube.com/@ALTIS" },
   strength: { label: "Strength & core",        name: "ATHLEAN-X",     url: "https://www.youtube.com/@athleanx" }
@@ -80,17 +80,19 @@ export const BLOCK_CHANNEL = {
   skateskill: "skate"
 };
 export const channelForBlock = b => COACH_CHANNELS[BLOCK_CHANNEL[b]] || COACH_CHANNELS.strength;
-/* There used to be a second URL builder here (`yt(q, ch)`) that appended the
-   channel name, alongside videoSearchUrl() which did not. Nothing ever called
-   it, so the channel bias this file documents was never actually applied and
-   every demo link went out as a bare keyword search. One builder now —
-   videoSearchUrl below — and it does the appending. */
+/* Appending a channel name to EVERY query made the results worse, not better.
+   The name this file used to append for skate-skill work was not a findable
+   YouTube channel, so those eight drills searched a phrase matching nothing
+   and the ranking collapsed. Sport context belongs IN the search string
+   ("off ice ... figure skating"), never glued on as a channel — and a move
+   with a precise standard name ranks best on that name alone. One builder,
+   no appending, same as the swim app. */
 
 export const EXERCISE_HOWTO = {
   // — skate-skill drills —
   "Axis Micro": {
     text: "Stand tall in front of a mirror, crown of the head stacked over the skating foot. Hold your arm carriage and run the 4 self-checks OUT LOUD: Am I stacked? Did I lean right? Was my checkout quiet? Am I holding without gripping?",
-    search: "releve balance port de bras posture drill"
+    search: "figure skating off ice balance and posture drill"
   },
   "Spin Board Backspin Hold": {
     text: "On the spinner board, set your backspin position: crown up, free leg checked, arms pulled in tight. Hold 10+ rotations. You can't change feet on the board. Dizzy for more than 30–45 seconds → STOP.",
@@ -102,19 +104,19 @@ export const EXERCISE_HOWTO = {
   },
   "Turn-and-Stick Single-Leg Landing": {
     text: "Small jump with a ¼ or ½ turn, land on ONE foot and freeze for 2 full seconds — knee over toe, free leg checked, arms in landing position. If you can't freeze it, make the turn smaller.",
-    search: "off ice single leg jump landing hold"
+    search: "figure skating off ice single leg jump landing hold"
   },
   "Active Split Slide": {
     text: "Slide slowly toward YOUR end-range split with hips square, using sliders or a smooth floor. Active flexibility only — never a passive over-split, never partner-pressed. Post-session only.",
-    search: "active split flexibility drill safe progression"
+    search: "active split flexibility drill safe progression figure skating"
   },
   "Active Hamstring Lengthening": {
     text: "Lie on your back, raise one straight leg as high as YOUR muscles can hold it — no hands pulling. Hold 3 seconds, lower with control. The strength holds the flexibility.",
-    search: "active straight leg raise hamstring exercise"
+    search: "active straight leg raise hamstring exercise tutorial"
   },
   "Half-Kneeling Hip-Flexor Hold": {
     text: "Half-kneel, tuck the pelvis (posterior tilt), grow tall through the crown. You should feel the front of the kneeling-side hip lengthen — this serves the spiral and layback line.",
-    search: "half kneeling hip flexor stretch posterior tilt"
+    search: "half kneeling hip flexor stretch posterior tilt figure skating"
   },
   // — jumps & landings (the heart of the plan) —
   "Box Jump → Stick": {
@@ -135,7 +137,7 @@ export const EXERCISE_HOWTO = {
   },
   "Band Arm-Pull-In": {
     text: "Hold a light band out wide, then snap the arms into your rotation position — fast pull, FROZEN finish. This is your air-position speed, trained on the floor.",
-    search: "off ice rotation arm pull in drill"
+    search: "figure skating off ice rotation arm pull in drill"
   },
   "Eccentric Step-Down": {
     text: "Stand on a low step on one leg. Lower the free heel to the floor over a slow 4-count — knee tracking over the toe the whole way. This builds the landing leg.",
@@ -160,7 +162,7 @@ export const EXERCISE_HOWTO = {
   },
   "Pallof Press": {
     text: "Hold a band at your chest, press straight out and hold 2 seconds while the band tries to twist you. Hips square, no rotation. Anti-rotation = quiet checkouts.",
-    search: "pallof press anti rotation exercise", channel: "The Prehab Guys"
+    search: "pallof press anti rotation exercise The Prehab Guys"
   },
   "Glute Bridge": {
     text: "Lie on your back, feet flat, drive the hips up and SQUEEZE at the top 2 seconds — don't arch the low back. The hip is the motor for every jump.",
@@ -168,15 +170,15 @@ export const EXERCISE_HOWTO = {
   },
   "Dead Bug": {
     text: "Low back glued to the floor. Extend opposite arm and leg while exhaling slowly. If the back lifts, make the range smaller.",
-    search: "dead bug exercise correct form", channel: "The Prehab Guys"
+    search: "dead bug exercise correct form The Prehab Guys"
   },
   "Bird Dog": {
     text: "From all fours, reach opposite arm and leg LONG — length, not lift. Flat back, no low-back arch, no hip rotation.",
-    search: "bird dog exercise correct form", channel: "The Prehab Guys"
+    search: "bird dog exercise correct form The Prehab Guys"
   },
   "Superman": {
     text: "Lie face-down, lift arms and legs into a long line — thoracic extension, length not crunch. Hold, breathe, lower.",
-    search: "superman exercise back extension correct form", channel: "ATHLEAN-X"
+    search: "superman exercise back extension correct form"
   },
   "Copenhagen Plank": {
     text: "Side plank with the top foot on a low bench, bottom leg lifted. Adductors actively working — this is edge control, not just hanging. Short holds, switch sides.",
@@ -192,7 +194,7 @@ export const EXERCISE_HOWTO = {
   },
   "Scap Pull-Up + Dead Hang": {
     text: "Hang from the bar, slide the shoulders DOWN away from the ears (no elbow bend), then relax into a dead hang and decompress.",
-    search: "scapular pull up dead hang exercise"
+    search: "scapular pull up dead hang exercise figure skater shoulder"
   },
   // — prep pair —
   "Monster Walk": {
@@ -205,23 +207,23 @@ export const EXERCISE_HOWTO = {
   },
   "Band External Rotation": {
     text: "Elbow pinned to your side, rotate the forearm out slowly against the band. Builds shoulder durability for carriage and pull work.",
-    search: "band external rotation shoulder exercise", channel: "The Prehab Guys"
+    search: "band external rotation shoulder exercise The Prehab Guys"
   },
   "Side-Lying ER": {
     text: "Lie on your side, elbow on ribs, rotate a light weight up slowly. Second cuff angle — light and slow beats heavy and fast.",
-    search: "side lying external rotation shoulder exercise", channel: "The Prehab Guys"
+    search: "side lying external rotation shoulder exercise The Prehab Guys"
   },
   // — warm-up / mobility (biased toward clean mobility demos) —
   "Jump Rope": { search: "jump rope basic bounce technique tutorial" },
-  "Band Pass-Through": { search: "resistance band pass through shoulder mobility drill", channel: "Tom Merrick" },
+  "Band Pass-Through": { search: "resistance band pass through shoulder mobility drill Tom Merrick" },
   "Cat-Camel": { search: "cat camel spine mobility exercise tutorial" },
-  "90/90 Hip Switch": { search: "90 90 hip switch mobility drill", channel: "Tom Merrick" },
+  "90/90 Hip Switch": { search: "90 90 hip switch mobility drill Tom Merrick" },
   "Leg Swings": { search: "leg swings dynamic warm up drill tutorial" },
   "Wall Slides": { search: "wall slides shoulder mobility exercise tutorial" },
   "Knee-to-Wall Ankle": { search: "knee to wall ankle mobility drill tutorial" },
   "Half-Kneeling Ankle Rock": { search: "half kneeling ankle dorsiflexion rock mobility drill" },
   "Calf Raise": { search: "full range calf raise exercise tutorial" },
-  "Hip CARs": { search: "hip CARs controlled articular rotations tutorial", channel: "Tom Merrick" },
+  "Hip CARs": { search: "hip CARs controlled articular rotations tutorial Tom Merrick" },
   // — coordination / running mechanics —
   "A-March": { search: "A march running drill technique" },
   "A-Skip": { search: "A skip running drill technique" },
@@ -242,14 +244,8 @@ export const EXERCISE_HOWTO = {
 export function videoSearchQuery(ex) {
   if (!ex || !ex.name) return "";
   const howto = EXERCISE_HOWTO[ex.name];
-  const base = (howto && howto.search) || ((ex.searchableName || ex.name) + " exercise tutorial correct form");
-  // Bias toward a validated channel. A bare keyword string is why the skate
-  // drills returned unrelated videos: nothing on YouTube is called "Axis
-  // Micro", so "releve balance port de bras" alone lands in general ballet.
-  // Naming a channel pins it to a real source. A move whose best source isn't
-  // its block's default declares `channel`; everything else takes the block's.
-  const channel = (howto && howto.channel) || channelForBlock(ex.block).name;
-  return base + " " + channel;
+  if (howto && howto.search) return howto.search;
+  return (ex.searchableName || ex.name) + " exercise tutorial correct form";
 }
 export function videoSearchUrl(ex) {
   const q = videoSearchQuery(ex);
@@ -315,7 +311,7 @@ const SKATESKILL_A = () => [
   X({ name: "Axis Micro", block: "skateskill", driver: "time", work: 60, dose: "~2 min + 4 self-checks",
       reset: "Crown over the skating foot.",
       cue: "Mirror balance + arm carriage. Run the 4 self-checks OUT LOUD: stacked? leaned right? quiet checkout? holding without gripping?",
-      skateTransfer: "Axis / alignment", searchableName: "releve balance port de bras ballet" }),
+      skateTransfer: "Axis / alignment", searchableName: "figure skating off ice balance and posture" }),
   X({ name: "Spin Board Backspin Hold", prescription: { sets: 3, reps: 10 }, block: "skateskill", driver: "reps", repsDetail: "10+ rotations ×3", dose: "10+ rot ×3", estSecs: 90,
       reset: "Crown up, free leg checked.",
       cue: "Backward one-foot / scratch spin on the board. You can't change feet on the board. Dizzy >30–45s → STOP.",
@@ -347,13 +343,13 @@ const SKATESKILL_B = () => [
   X({ name: "Axis Micro", block: "skateskill", driver: "time", work: 40, dose: "4 self-checks + short layback",
       reset: "Crown over the skating foot.",
       cue: "Self-checks KEPT on split days (the drift instrument). 4 yes/no out loud. Add a short layback hold on-ramp ×2.",
-      skateTransfer: "Axis / alignment", searchableName: "releve balance port de bras ballet" })
+      skateTransfer: "Axis / alignment", searchableName: "figure skating off ice balance and posture" })
 ];
 const SKATESKILL_SAT = () => [
   X({ name: "Axis Micro", block: "skateskill", driver: "time", work: 60, dose: "~3 min + 4 self-checks",
       reset: "Crown over the skating foot.",
       cue: "Short mirror Axis Micro + 4 self-checks out loud.",
-      skateTransfer: "Axis / alignment", searchableName: "releve balance port de bras ballet" }),
+      skateTransfer: "Axis / alignment", searchableName: "figure skating off ice balance and posture" }),
   X({ name: "Active Split Slide", block: "skateskill", driver: "time", work: 40, eachSide: true, dose: "2×20s/side",
       reset: "Own end-range only.",
       cue: "Cooldown flexibility — active end-range, post-session only.",
