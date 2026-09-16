@@ -87,15 +87,44 @@ ok(bank26.filter(([, k]) => k === "story" || k === "fact").length === store.rank
 const sq = svm.sessionQuizFor("monday");
 ok(sq && sq.opts.some(o => o.ok) && /ice|skat|landing|spin|axis/i.test(sq.q + sq.why), "the Coach's Quiz asks about skating and has a correct answer");
 
-/* --- every demo link names exactly one validated channel ------------------- */
-const CHANNEL_NAMES = Object.values(data.COACH_CHANNELS).map(c => c.name).concat(["The Prehab Guys"]);
-const channelCount = q => CHANNEL_NAMES.filter(n => q.toLowerCase().includes(n.toLowerCase())).length;
-const wrongChannels = allMoves.filter(ex => channelCount(data.videoSearchQuery(ex)) !== 1);
-ok(wrongChannels.length === 0, "every demo search names exactly one channel — wrong: "
-   + wrongChannels.map(ex => ex.name + " -> " + data.videoSearchQuery(ex)).join(" | "));
-ok(/iSk8 Mom Maja$/.test(data.videoSearchQuery({ name: "Axis Micro", block: "skateskill" })), "a skate-skill drill searches the figure-skating channel");
-ok(/Tom Merrick$/.test(data.videoSearchQuery({ name: "Calves — foam roller", block: "recovery" })), "recovery work searches the mobility channel");
+/* --- demo links: one hand-written search per move, nothing appended --------
+   The builder used to glue a channel name onto every query, and the name it
+   used for skate-skill work was not a findable YouTube channel — those drills
+   searched a phrase matching nothing and the ranking collapsed. The contract
+   is now the swim app's: every move carries its own hand-written search,
+   source bias and sport context are typed INTO the phrase, and the builder
+   appends nothing. Each phrase below was checked against live results. */
+const demoQ = ex => data.videoSearchQuery(ex);
+const listing = list => [...new Set(list.map(ex => ex.name + " -> " + demoQ(ex)))].join(" | ");
+
+const noHowto = allMoves.filter(ex => !(data.EXERCISE_HOWTO[ex.name] || {}).search);
+ok(noHowto.length === 0, "every move has a hand-written demo search — missing: " + listing(noHowto));
+
+const modified = allMoves.filter(ex => demoQ(ex) !== data.EXERCISE_HOWTO[ex.name].search);
+ok(modified.length === 0, "the builder returns the hand-written phrase unmodified — changed: " + listing(modified));
+
+/* Sport context is a DISAMBIGUATOR, not a decoration, so this is a named list
+   rather than a blanket rule over the block: "off ice" alone reads as hockey
+   on YouTube, while a move with a precise standard name ("active straight leg
+   raise") ranks best on that name and drifts into journal results if a sport
+   word is bolted on. Each of these was verified to need one. */
+const NAMES_THE_SPORT = ["Axis Micro", "Active Split Slide", "Half-Kneeling Hip-Flexor Hold",
+  "Scap Pull-Up + Dead Hang", "Spin Board Backspin Hold", "Spin Board Layback Hold",
+  "Turn-and-Stick Single-Leg Landing", "Rotational Jump w/ Frozen Landing", "Band Arm-Pull-In"];
+const generic = NAMES_THE_SPORT.filter(n => !/figure skat|off ice|spinner/i.test(demoQ({ name: n })));
+ok(generic.length === 0, "every skating-specific drill names the sport — generic: " + generic.join(" | "));
+
+const axis = demoQ({ name: "Axis Micro", block: "skateskill" });
+ok(/figure skat/i.test(axis) && !/port de bras|releve|ballet/i.test(axis),
+   "the drill with no YouTube name of its own searches skating, not ballet: " + axis);
+
+ok(!/iSk8 Mom Maja/i.test(JSON.stringify(data.COACH_CHANNELS) + JSON.stringify(data.EXERCISE_HOWTO)),
+   "the channel that does not exist is gone from the file");
+
 ok(data.videoSearchUrl({ name: "Bird Dog", block: "main" }).startsWith("https://www.youtube.com/results?search_query="), "the demo link is a YouTube search URL");
+ok(data.videoSearchUrl({ name: "No Such Move" }) === "https://www.youtube.com/results?search_query="
+   + encodeURIComponent("No Such Move exercise tutorial correct form"),
+   "an unknown move still builds the generic fallback search");
 
 /* --- circuits: a jump day builds skate-skill + prep, main repeats by light --- */
 localStorage.clear(); store.migrate(); store.saveGate({ unlocked: true, cleanWeeks: [] });
