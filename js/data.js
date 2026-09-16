@@ -222,7 +222,7 @@ export const EXERCISE_HOWTO = {
   "Wall Slides": { search: "wall slides shoulder mobility exercise tutorial" },
   "Knee-to-Wall Ankle": { search: "knee to wall ankle mobility drill tutorial" },
   "Half-Kneeling Ankle Rock": { search: "half kneeling ankle dorsiflexion rock mobility drill" },
-  "Calf Raise": { search: "full range calf raise exercise tutorial" },
+  "Calf Raise": { search: "calf raise off a step heel drops below how to proper form" },
   "Hip CARs": { search: "hip CARs controlled articular rotations tutorial Tom Merrick" },
   // — coordination / running mechanics —
   "A-March": { search: "A march running drill technique" },
