@@ -293,9 +293,31 @@ export const TOP7 = [
   "Spin Board Backspin Hold", "Turn-and-Stick Single-Leg Landing"
 ];
 
-export const MICRO_LOOP = { q: "Where does a clean landing freeze?", a: "knee over toe" };
+/* The one question the coach asks out loud at the end of the skill block. The
+   options used to be hardcoded in shared core/ as the swimmer's three — so the
+   right answer to THIS question was never on screen and every attempt scored
+   wrong, and the coach answered "It's the hips" to a question about landings.
+   They live here now, beside the answer; the smoke test enforces that `a` is
+   one of `opts`. */
+export const MICRO_LOOP = {
+  q: "Where does a clean landing freeze?",
+  a: "knee over toe",
+  opts: ["knee over toe", "knee inside the toe", "flat on the heel"],
+  yes: "Yes — knee over toe!",
+  no: "It freezes with the knee over the toe."
+};
 export const BREATH_REHEARSAL =
   "Axis self-check out loud: Am I stacked? Did I lean right? Was my checkout quiet? Did I hold without gripping?";
+/* Same rehearsal, written to be heard rather than read. The engine used to
+   speak the swimmer's breathing line here; each app now says its own. */
+export const BREATH_SAY =
+  "Axis self-check. Am I stacked? Did I lean? Was my checkout quiet? Did I hold without gripping?";
+
+/* The two reflection chip sets on the finish screen. These lived in shared
+   core/ with swimming words in them — "Point my toes", "Breathe out loud" —
+   which this app then offered to a skater. They are skating words now. */
+export const REFLECT_WELL = ["Quiet landings", "Strong holds", "Clean edges", "Staying focused"];
+export const REFLECT_NEXT = ["Slow down", "Stand taller", "Knee over toe", "Keep core tight"];
 
 /* Shared finisher + skate-skill block builders */
 const FINISHER = () => [
@@ -919,19 +941,305 @@ export function rankForLevel(level) {
   return rank;
 }
 
-export const COACH_VOICE_ITEMS = [
-  "Count your time", "Tell you the next exercise", "Remind you to breathe",
-  "Warn about common mistakes", "Prompt a self-check"
-];
-
 /* ------------------------------------------------------------
    READINESS CHECK (4-Q + body map).
    ------------------------------------------------------------ */
+/* ------------------------------------------------------------
+   KID COACHING — the watch-out and the fix, in her words.
+
+   The Quiz Deck asks "what should you watch out for?" and "if this feels wrong,
+   what's the fix?" and used to answer from `parentWatch` and `redFlag` — notes
+   written for a grown-up watching from the side. Two problems came out of that.
+
+   The wrong answers on a card are drawn from OTHER moves' text, and four moves
+   here shared the same watch-out word for word: "Left-knee valgus" on Eccentric
+   Step-Down, Turn-and-Stick, Box Jump and Low Box Step-Up. Put two of those on
+   one card and more than one option is genuinely correct, so a right answer gets
+   marked wrong. The fixes had the same problem — "Reduce range." twice, "Reduce
+   the turn." twice, "Slow down" twice.
+
+   Every line here names the move's OWN body part and shape, so no two of them
+   can be mistaken for each other, and reads as something a coach would say to an
+   eleven-year-old rather than about her. `parentWatch` / `redFlag` stay exactly
+   as they are for the grown-up's Form Check tab — this is the kid-facing pair.
+   ------------------------------------------------------------ */
+export const KID_COACHING = {
+  "Eccentric Step-Down": { watch: "Your standing knee drifting inward while you lower",
+                           fix: "Step down from a lower box and keep the knee tracking over the toe" },
+  "Turn-and-Stick Single-Leg Landing": { watch: "Landing and then hopping, instead of freezing on the spot",
+                           fix: "Turn a smaller amount, until you can freeze the landing for two full seconds" },
+  "Box Jump → Stick":    { watch: "Landing soft and then shuffling your feet to catch yourself",
+                           fix: "Use a lower box and freeze the landing before you step down" },
+  "Low Box Step-Up Drive": { watch: "Pushing off the back foot instead of driving from the top leg",
+                           fix: "Lower the box and let only the top leg do the work" },
+  "SL-RDL":              { watch: "Your back rounding as your chest comes down",
+                           fix: "Come down less far and keep your chest flat like a tabletop" },
+  "Dead Bug":            { watch: "Your low back peeling up off the floor as you reach out",
+                           fix: "Reach a shorter way out, until your low back stays glued down" },
+  "Bird Dog":            { watch: "Your low back sagging into an arch as you reach",
+                           fix: "Lead the reach from your upper back and reach less far" },
+  "Active Split Slide":  { cue: "Slide to your own end-range, hips square.",
+                           watch: "Your pelvis twisting to let you slide further",
+                           fix: "Slide less far and keep both hip bones facing the same way" },
+  "Monster Walk":        { cue: "Band on, knees pushed OUT over the toes.",
+                           watch: "Your knees collapsing inward between steps",
+                           fix: "Take smaller steps and keep the band tight the whole way" },
+  "Side Plank Reach":    { watch: "Your bottom hip sagging down toward the floor",
+                           fix: "Push your bottom hip up to the ceiling and reach less far" },
+  "Push-up":             { watch: "Your hips sagging so your middle makes a banana shape",
+                           fix: "Put your hands on something higher until your body stays in one line" },
+  "Suitcase Carry":      { watch: "Your whole trunk tipping toward the weight",
+                           fix: "Carry something lighter and walk tall with both shoulders level" },
+  "Pallof Press":        { watch: "Your hips turning toward the band as your arms press out",
+                           fix: "Widen your feet and keep both hips facing straight ahead" },
+  "Glute Bridge":        { watch: "Your low back arching to push your hips higher",
+                           fix: "Lift a little lower and finish the last bit with your glutes, not your back" },
+  "Band External Rotation": { watch: "Your elbow floating away from your ribs",
+                           fix: "Pin your elbow to your ribs and turn slower" },
+  "Side-Lying ER":       { watch: "Rushing the turn, or using a weight you have to throw",
+                           fix: "Go lighter and take two whole seconds each way" },
+  "Skater Jump":         { cue: "Full push, land soft, then freeze.",
+                           watch: "Wobbling after the first second instead of holding still",
+                           fix: "Jump a shorter distance and hold each landing for a full two seconds" },
+  "Rotational Jump w/ Frozen Landing": { watch: "Your free leg flailing out to find balance",
+                           fix: "Turn a smaller amount and pull the free leg tight before you land" },
+  "Band Arm-Pull-In":    { watch: "Your arms drifting loose at the finish",
+                           fix: "Finish with the arms locked tight to your chest and hold it" },
+  "Resisted Band March": { watch: "Your trunk leaning back against the band",
+                           fix: "Walk taller with your ribs down, and take shorter steps" },
+  "Pull-Up (heavy)":     { cue: "Shoulders down first, no kipping.",
+                           watch: "Your legs swinging and your shoulders shrugging up",
+                           fix: "Hang dead still first, then pull — no swing, no shrug" },
+  "Lateral Bound → Stick": { watch: "Bouncing straight into the next bound without stopping",
+                           fix: "Land, freeze, count one — then go" },
+
+  /* Moves the grown-up notes never covered, so the deck could never ask about
+     them. A watch-out and a fix each is what makes them askable at all. */
+  /* Short cue forms for the quiz card only — see movePool in core/store.js. */
+  "Active Hamstring Lengthening": { cue: "Hold the leg up with your own muscles, no hands." },
+  "A-Skip":              { cue: "Same as A-March, with a skip rhythm." },
+
+  "Copenhagen Plank":    { watch: "Your bottom hip dropping toward the floor",
+                           fix: "Bend the top knee onto the bench and keep your body in one line" },
+  "Spin Board Backspin Hold": { cue: "Backward one-foot spin, weight over one spot.",
+                           watch: "Your weight sliding back toward your heel",
+                           fix: "Find the spot just behind the ball of your foot and stay over it" },
+  "Spin Board Layback Hold": { cue: "Hold it upright first, then a small layback line.",
+                           watch: "Your head dropping back before your upper back opens",
+                           fix: "Open from the upper back first and let the head follow last" },
+  "Scap Pull-Up + Dead Hang": { watch: "Bending your elbows instead of sliding your shoulders down",
+                           fix: "Keep your arms dead straight and move only your shoulder blades" },
+  "Calf Raise":          { watch: "Your ankles rolling out toward your little toes",
+                           fix: "Press up through your big toe and come down slowly" },
+  "Knee-to-Wall Ankle":  { watch: "Your heel lifting as your knee reaches for the wall",
+                           fix: "Move closer only while your heel stays stuck to the floor" },
+  "Axis Micro":          { cue: "Four axis self-checks, said out loud.",
+                           watch: "Your ribs flaring so your middle bends instead of stacking",
+                           fix: "Pull your ribs down and stack your head over your hips" },
+  "Jump Rope":           { watch: "Loud, flat landings on your whole foot",
+                           fix: "Stay on the balls of your feet and make every landing quiet" },
+  "Cat-Camel":           { watch: "Moving your whole back at once instead of bit by bit",
+                           fix: "Move one part of your spine at a time, slowly" },
+  "Band Pass-Through":   { watch: "Your shoulders shrugging up to get the band over",
+                           fix: "Widen your hands and keep your shoulders down the whole way round" },
+  "Wall Slides":         { watch: "Your low back arching off the wall as your arms go up",
+                           fix: "Press your ribs to the wall and go only as high as they stay there" },
+  "90/90 Hip Switch":    { watch: "Slumping backwards as your knees swap over",
+                           fix: "Sit tall, lean on your hands less, and let your knees lead the switch" },
+  "A-March":             { watch: "Your foot landing out in front of your body",
+                           fix: "Put your foot down underneath your hip, toe pulled up" },
+  "Carioca":             { watch: "Your shoulders turning along with your hips",
+                           fix: "Keep your chest facing forward and turn only your hips" },
+  "Superman":            { watch: "Your neck craning up and your arms flapping fast",
+                           fix: "Lift lower, look at the floor, and hold the shape still" },
+  "Half-Kneeling Ankle Rock": { watch: "Your heel lifting as you rock the knee forward",
+                           fix: "Rock a shorter way, with the heel pinned to the floor" },
+  "Lateral Shuffle → Stick": { watch: "Standing tall between shuffles instead of staying low",
+                           fix: "Stay low the whole way and freeze the last step" }
+};
+
+/* ------------------------------------------------------------
+   TRAINING PRINCIPLES — attitude, efficiency, and why it works.
+
+   Everything else the app asks about is a move or a rank: what a cue is, which
+   chapter taught what. Nothing ever asked her about training itself — whether a
+   bad-sleep day is worth training, whether ten sloppy reps beat six clean ones,
+   or why the same moves keep coming back week after week.
+
+   That last one is the point of this set. Results come from repeating the SAME
+   movement, not a similar one. A different exercise that works the same muscles
+   builds a different skill, and swapping it in restarts the learning — which is
+   the single thing a kid bored of week six most needs to hear, and the single
+   thing she is most likely to get wrong on her own.
+
+   Authored, not generated: a principle has no sibling move to borrow a wrong
+   answer from. Every wrong option here is something an eleven-year-old actually
+   believes, so the card cannot be solved by spotting the silly one.
+
+   `tier: 2` waits until the `after` question is mastered — see questionPrereq
+   in core/store.js.
+   ------------------------------------------------------------ */
+export const TRAINING_QS = [
+  { id: "honest", kind: "attitude", tier: 1,
+    q: "You slept badly and you feel flat. What does the Body Check want to hear?",
+    why: "Honest answers are the only thing Coach can pick a day from. A smaller day done properly still builds you — a big day faked doesn't.",
+    opts: [
+      { t: "The truth — then train the day Coach gives me", ok: true },
+      { t: "That I feel great, so I still get the full session", ok: false },
+      { t: "Nothing — skip today and do double tomorrow", ok: false } ] },
+
+  { id: "wrongrep", kind: "attitude", tier: 2, after: "honest",
+    q: "You graded a landing wobbly and the app wrote it down. What is that worth?",
+    why: "A landing you missed and noticed is worth more than one you got right by luck — it tells you exactly what to fix on the next one.",
+    opts: [
+      { t: "It tells me which part to fix on the next landing", ok: true },
+      { t: "Nothing — wobbly landings don't count", ok: false },
+      { t: "It cancels out the landings I froze clean", ok: false } ] },
+
+  { id: "showup", kind: "attitude", tier: 1,
+    q: "Which week makes a stronger skater?",
+    why: "Four ordinary sessions beat one heroic one. Your body changes from what you do most weeks, not from your best day.",
+    opts: [
+      { t: "Four ordinary sessions I actually finished", ok: true },
+      { t: "One huge session and three days off", ok: false },
+      { t: "Whichever week felt hardest", ok: false } ] },
+
+  { id: "clean6", kind: "efficiency", tier: 1,
+    q: "Ten sloppy jumps or six frozen landings — which one builds the axel?",
+    why: "Your body learns the shape you repeat. Sloppy reps are still practice; they just teach the sloppy shape.",
+    opts: [
+      { t: "Six frozen landings", ok: true },
+      { t: "Ten sloppy jumps — more reps is more work", ok: false },
+      { t: "Neither — only ice time builds jumps", ok: false } ] },
+
+  { id: "twowobbly", kind: "efficiency", tier: 2, after: "clean6",
+    q: "Two wobbly landings in a row and Coach drops a round. Why not push through?",
+    why: "Two in a row means your landing leg is done. Every jump after that teaches a wobbly landing — and that is the exact shape you'd take to the ice.",
+    opts: [
+      { t: "Tired legs would only practise the wobble", ok: true },
+      { t: "Pushing through is how you get tougher", ok: false },
+      { t: "The app is being careful because I might get bored", ok: false } ] },
+
+  { id: "rest", kind: "efficiency", tier: 2, after: "clean6",
+    q: "Why is the rest between rounds part of the workout?",
+    why: "Rest is what buys the next round its quality. Skip it and round three teaches your body a tired, messy shape.",
+    opts: [
+      { t: "It's what lets the next round be as clean as the first", ok: true },
+      { t: "It's a break so the session isn't boring", ok: false },
+      { t: "It's there to stretch the session out to 30 minutes", ok: false } ] },
+
+  { id: "sameagain", kind: "results", tier: 1,
+    q: "Why do the same moves keep coming back every week?",
+    why: "A movement only becomes automatic when you repeat THE SAME movement. Variety feels fun; repetition is what actually changes you.",
+    opts: [
+      { t: "Repeating the same movement is what makes it automatic", ok: true },
+      { t: "So the app doesn't have to think up new ones", ok: false },
+      { t: "Because they're the easiest ones to set up at home", ok: false } ] },
+
+  { id: "swapit", kind: "results", tier: 2, after: "sameagain",
+    q: "A different exercise works the same muscles. Can you swap it in?",
+    why: "Your body learns the exact movement you practise, not the muscle group. A similar exercise builds a similar skill — not the same one — and the swap starts the learning over.",
+    opts: [
+      { t: "No — a similar movement builds a similar skill, not the same one", ok: true },
+      { t: "Yes — same muscles means the same result", ok: false },
+      { t: "Yes, as long as the new one is harder", ok: false } ] },
+
+  { id: "comeback", kind: "attitude", tier: 1,
+    q: "You missed two sessions because you were sick. What happens now?",
+    why: "Missed days are gone, not owed. Picking up at the day your body is on today is what gets you back fastest — doubling up just buys a worse week.",
+    opts: [
+      { t: "Pick up at the day Coach gives me today", ok: true },
+      { t: "Add the two I missed on top of this week", ok: false },
+      { t: "Start the whole plan again from week one", ok: false } ] },
+
+  { id: "helpask", kind: "attitude", tier: 2, after: "honest",
+    q: "Something hurts and you can't tell whether it's the bad kind. What's the rule?",
+    why: "Sore that settles in a minute is training. Anything that changes how you move is a grown-up's call, not yours — that's the whole point of the Body Check.",
+    opts: [
+      { t: "Tell a grown-up before I train it — they decide, not me", ok: true },
+      { t: "Train around it and see whether it goes away", ok: false },
+      { t: "Stop training altogether until it's completely gone", ok: false } ] },
+
+  { id: "compare", kind: "attitude", tier: 1,
+    q: "Someone at your rink is landing a jump you aren't. What should that change about your training?",
+    why: "Your plan is built on what your body can do now. Copying someone else's week is how you end up doing their training badly instead of yours well.",
+    opts: [
+      { t: "Nothing — my plan is built on what my body can do now", ok: true },
+      { t: "I should copy whatever they're doing", ok: false },
+      { t: "I should push harder than my plan says", ok: false } ] },
+
+  { id: "warmup", kind: "efficiency", tier: 1,
+    q: "Why does every session start with the same warm-up?",
+    why: "The warm-up isn't filler before the real work — it's what makes the real work worth doing. Cold, your shapes are worse, so you'd be practising worse shapes.",
+    opts: [
+      { t: "It gets me ready to make good shapes, so the main set counts", ok: true },
+      { t: "It uses up time before the hard part starts", ok: false },
+      { t: "It's the part that actually makes me stronger", ok: false } ] },
+
+  { id: "halfrange", kind: "efficiency", tier: 2, after: "clean6",
+    q: "You can freeze a landing properly 6 times, but the plan says 10. What do you do?",
+    why: "Quality sets the number. Four rough landings on the end don't add four reps of training — they add four reps of the wrong shape.",
+    opts: [
+      { t: "Do the ones I can do properly and say so honestly", ok: true },
+      { t: "Do all 10, however they come out", ok: false },
+      { t: "Do 6 and tell the app it was 10", ok: false } ] },
+
+  { id: "tempo", kind: "efficiency", tier: 2, after: "clean6",
+    q: "Why does Coach count the seconds instead of letting you go at your own speed?",
+    why: "The speed IS part of the movement. A slow step-down and a fast one are two different exercises, so rushing it means practising something the plan never asked for.",
+    opts: [
+      { t: "The speed is part of the exercise — faster is a different exercise", ok: true },
+      { t: "So the session always finishes at the same time", ok: false },
+      { t: "To make it harder than it really needs to be", ok: false } ] },
+
+  { id: "missweek", kind: "results", tier: 1,
+    q: "You skip a whole week. What does that actually cost?",
+    why: "A movement fades when you stop repeating it. Missing one rep costs a rep; missing a week costs some of what the weeks before it built.",
+    opts: [
+      { t: "Some of what the repeating had already built", ok: true },
+      { t: "Nothing, as long as I train twice as hard afterwards", ok: false },
+      { t: "Only the XP I would have earned that week", ok: false } ] },
+
+  { id: "automatic", kind: "results", tier: 2, after: "sameagain",
+    q: "How do you know a movement has actually become automatic?",
+    why: "Automatic is about attention, not effort. When the shape holds while you're thinking about something else, it's yours.",
+    opts: [
+      { t: "I can do it right without thinking about the cue", ok: true },
+      { t: "It doesn't feel hard any more", ok: false },
+      { t: "I can do more reps than I used to", ok: false } ] },
+
+  { id: "harder", kind: "results", tier: 2, after: "sameagain",
+    q: "You want to make a move harder. Which one is still the SAME movement?",
+    why: "Same shape, more challenge — that's progress. Change the shape and you haven't made it harder, you've started a different skill.",
+    opts: [
+      { t: "The same shape, done slower and with more weight", ok: true },
+      { t: "A new exercise that works the same muscles", ok: false },
+      { t: "The same muscles, but on a machine instead", ok: false } ] },
+
+  { id: "gotboring", kind: "results", tier: 2, after: "sameagain",
+    q: "Six weeks of Eccentric Step-Down and it feels easy now. What should change?",
+    why: "Same movement, more challenge — slower, lower, heavier. Trading it for a new exercise throws away six weeks of learning and starts a different skill from zero.",
+    opts: [
+      { t: "Keep the same move and make it harder — slower, lower, more load", ok: true },
+      { t: "Swap it for a new exercise so it stays interesting", ok: false },
+      { t: "Drop it — easy means I've finished learning it", ok: false } ] }
+];
+
+/* The pain question is LAST, and that ordering is load-bearing.
+
+   It used to be first here, and answering "a bit sore" jumps straight to the
+   body map — so on a sore morning the other three were never asked and the
+   general readiness score was never computed at all. The body map's severity
+   then produced the light on its own: a skater sleeping badly, flat and out of
+   energy, with one merely tired ankle, was handed a Yellow day. Asking pain
+   last costs no extra taps and means both signals always exist, so the light
+   can be the more cautious of the two. Nothing reads this list positionally —
+   every consumer is by `id`. */
 export const READINESS_QS = [
-  { id: "q_pain",  text: "Any aches or sore spots today?", isPain: true, yesLabel: "😊 All good", noLabel: "😣 A bit sore" },
   { id: "q_sleep", text: "How well did you sleep last night?", yesLabel: "😴 Good", noLabel: "🥱 Not great" },
   { id: "q_light", text: "How do your muscles feel from your last skate?", yesLabel: "💪 Fresh", noLabel: "😮‍💨 Tired" },
-  { id: "q_ready", text: "What's your energy like right now?", yesLabel: "⚡ Full", noLabel: "💤 Low" }
+  { id: "q_ready", text: "What's your energy like right now?", yesLabel: "⚡ Full", noLabel: "💤 Low" },
+  { id: "q_pain",  text: "Any aches or sore spots today?", isPain: true, yesLabel: "😊 All good", noLabel: "😣 A bit sore" }
 ];
 
 // Anatomically distinct front vs. back regions — only true shared joints
@@ -994,29 +1302,113 @@ export const POSES = {
 
 /* Coach's Quiz — the questions the finish screen asks, connecting today's
    land work to the ice. Rotated by core/vm/session.js sessionQuizFor(). */
+/* ------------------------------------------------------------
+   THE COACH'S QUIZ — one card at the end of every session.
+
+   This bank had six questions and every wrong answer was a joke: "To pose for a
+   photo", "Warmer skates", "Louder toe picks". The right answer was always the
+   only real coaching sentence, so she could score six out of six knowing
+   nothing at all — which is exactly why the quiz stopped meaning anything to
+   her. A wrong answer here is now something TRUE of a different move, or
+   something a skater her age genuinely believes. You have to know which one
+   applies.
+
+   Eighteen of them now, not six, so the end-of-session card stops coming back
+   round every few days.
+
+   `tier: 2` questions are application — you felt this, so what do you change —
+   and stay closed until the `after` question is mastered. Ids are the XP ledger
+   keys ("coach|<id>"), so the original six keep theirs and nothing she has
+   already learned gets charged for twice.
+   ------------------------------------------------------------ */
 export const SESSION_QUIZ = [
-  { id: "freeze", q: "Why do we land and FREEZE for 2 seconds on every jump?", why: "A landing you can hold is a landing you own — the freeze teaches your leg the checkout.", opts: [
-    { t: "To pose for a photo", ok: false },
-    { t: "A frozen landing means your landing leg is really in control", ok: true },
-    { t: "Because the timer says so", ok: false } ] },
-  { id: "boxjump", q: "Box jumps make your legs stronger. Where does that power show up on the ice?", why: "Every jump takeoff is leg power — land power becomes ice height.", opts: [
+  { id: "freeze", tier: 1, q: "Why do we land and FREEZE for 2 seconds on every jump?", why: "A landing you can hold is a landing you own — the freeze teaches your leg the checkout.", opts: [
+    { t: "A frozen landing means the landing leg is really in control", ok: true },
+    { t: "It gives the next jump time to build up height", ok: false },
+    { t: "It stops you getting dizzy between jumps", ok: false } ] },
+
+  { id: "boxjump", tier: 1, q: "Box jumps make your legs stronger. Where does that power show up on the ice?", why: "Every jump takeoff is leg power — land power becomes ice height.", opts: [
     { t: "Higher, stronger jump takeoffs", ok: true },
-    { t: "Warmer skates", ok: false },
-    { t: "Louder toe picks", ok: false } ] },
-  { id: "clean", q: "Why does Coach say “slow and clean beats fast and sloppy”?", why: "Your body learns the shape you practice — so practice the good one.", opts: [
-    { t: "Because slow is easier", ok: false },
+    { t: "A quieter, steadier landing leg", ok: false },
+    { t: "A tighter spin once you're already turning", ok: false } ] },
+
+  { id: "clean", tier: 1, q: "Why does Coach say \u201cslow and clean beats fast and sloppy\u201d?", why: "Your body learns the shape you practise — so practise the good one.", opts: [
     { t: "Clean shapes on land become clean landings on the ice", ok: true },
-    { t: "So the timer lasts longer", ok: false } ] },
-  { id: "core", q: "Why do we brace our core (like a strong tube) during land work?", why: "A braced core keeps your axis stacked, so spins stay centred and landings stay quiet.", opts: [
-    { t: "So you can hold your breath longer", ok: false },
+    { t: "Slow reps use up more energy, so they count for more", ok: false },
+    { t: "Going slowly is how you avoid getting out of breath", ok: false } ] },
+
+  { id: "core", tier: 1, q: "Why do we brace our core (like a strong tube) during land work?", why: "A braced core keeps your axis stacked, so spins stay centred and landings stay quiet.", opts: [
     { t: "A stiff middle keeps your axis tall for spins and landings", ok: true },
-    { t: "To look tough", ok: false } ] },
-  { id: "balance", q: "Balance moves (like Eccentric Step-Down) — what do they build for skating?", why: "A steady knee over the toe is the landing leg every jump comes home to.", opts: [
+    { t: "It opens the hips so your edges can go deeper", ok: false },
+    { t: "It trains you to hold your breath through a long programme", ok: false } ] },
+
+  { id: "balance", tier: 1, q: "Balance moves (like Eccentric Step-Down) — what do they build for skating?", why: "A steady knee over the toe is the landing leg every jump comes home to.", opts: [
     { t: "A landing leg that stays steady, knee over toe", ok: true },
-    { t: "Bigger ice sprays", ok: false },
-    { t: "Faster blinking", ok: false } ] },
-  { id: "crown", q: "Why do we keep the crown of the head UP in spins and landings?", why: "A tall crown stacks your axis — lean the head and the whole spin drifts.", opts: [
-    { t: "It keeps your helmet on", ok: false },
+    { t: "More height on the takeoff of every jump", ok: false },
+    { t: "A faster rotation once you're in the air", ok: false } ] },
+
+  { id: "crown", tier: 1, q: "Why do we keep the crown of the head UP in spins and landings?", why: "A tall crown stacks your axis — lean the head and the whole spin drifts.", opts: [
     { t: "A tall crown keeps your axis stacked so spins stay centred", ok: true },
-    { t: "To see the ceiling", ok: false } ] }
+    { t: "Looking up is what stops you feeling dizzy", ok: false },
+    { t: "It keeps your weight back over the heel of the blade", ok: false } ] },
+
+  { id: "eccentric", tier: 1, q: "Eccentric Step-Down is done SLOWLY on the way down. Why the slow part?", why: "A landing is a controlled fall. The slow lowering is the exact job your leg does the instant you hit the ice.", opts: [
+    { t: "Lowering slowly is the same job as absorbing a landing", ok: true },
+    { t: "Slow means you can go lower than you otherwise could", ok: false },
+    { t: "Slow is easier, so you can do more of them", ok: false } ] },
+
+  { id: "skater", tier: 1, q: "Skater Jump — side to side, and you stick every landing. What is it for?", why: "Jumps land sideways, not straight ahead. Sticking a side landing is the skill the ice actually asks for.", opts: [
+    { t: "Landing under control when you're travelling sideways", ok: true },
+    { t: "Getting your feet to move faster through footwork", ok: false },
+    { t: "Building the height you need for a double", ok: false } ] },
+
+  { id: "pullup", tier: 1, q: "Pull-Up (heavy) — no swinging, no kipping. What does the \u201cclean\u201d part build?", why: "A pull you control is upper body you can hold still in the air. A swing borrows from your legs and teaches your arms nothing.", opts: [
+    { t: "An upper body you can hold still and tight in the air", ok: true },
+    { t: "Grip strength for holding the boards", ok: false },
+    { t: "Bigger arms, so the pull-in is faster", ok: false } ] },
+
+  { id: "spinboard", tier: 1, q: "Spin Board Backspin Hold — what is the board actually training?", why: "The board takes the ice out of it, so the only thing left to practise is where your weight sits and how still you stay.", opts: [
+    { t: "Finding the spot on the foot the spin stays centred over", ok: true },
+    { t: "Getting used to being dizzy so it stops bothering you", ok: false },
+    { t: "Spinning faster by pulling the arms in harder", ok: false } ] },
+
+  { id: "copenhagen", tier: 1, q: "Copenhagen Plank works the inside of the leg. Why does a skater want that?", why: "Every edge pushes sideways. The inside of the leg is what holds the knee over the toe when it does.", opts: [
+    { t: "It holds the knee over the toe when you push on an edge", ok: true },
+    { t: "It makes the free leg easier to lift behind you", ok: false },
+    { t: "It stops your ankles rolling inside the boot", ok: false } ] },
+
+  { id: "hinge", tier: 1, q: "Hip Hinge — flat back, hips travel backwards. What is that protecting?", why: "The hips are built to bend under load. The lower back is not.", opts: [
+    { t: "Your lower back — the hips do the bending, not the spine", ok: true },
+    { t: "Your knees, by keeping them completely straight", ok: false },
+    { t: "Your shoulders, by keeping them pulled down", ok: false } ] },
+
+  { id: "fixlanding", tier: 2, after: "freeze", q: "Your landings keep travelling instead of stopping. Which land move goes after that?", why: "Fix the checkout where you can hold it still, then take it to the ice.", opts: [
+    { t: "Turn-and-Stick — the same landing, held", ok: true },
+    { t: "Box Jump — you need a stronger takeoff", ok: false },
+    { t: "Spin Board — your axis must be off", ok: false } ] },
+
+  { id: "kneein", tier: 2, after: "balance", q: "Your knee dives inward as you land. What does that mean and what changes?", why: "Knee over toe, every time. A knee that dives in is the landing leg giving up — go lower and slower until it stops.", opts: [
+    { t: "The landing leg is losing control — go lower, slower, knee over toe", ok: true },
+    { t: "It's normal on a hard landing; keep going", ok: false },
+    { t: "You're landing too softly and need more height", ok: false } ] },
+
+  { id: "roundthree", tier: 2, after: "clean", q: "Round three, and your form has gone. What's the right call?", why: "The shape is the point of the round. A round trained sloppy is practice at being sloppy.", opts: [
+    { t: "Slow down and hold the shape — a clean round is what counts", ok: true },
+    { t: "Push harder, the last round is where the gains are", ok: false },
+    { t: "Skip ahead and come back to it at the end", ok: false } ] },
+
+  { id: "spindrift", tier: 2, after: "crown", q: "Your spin travels across the ice instead of staying in one spot. What's the first thing to check?", why: "A head that leans takes the axis with it, and a leaning axis travels. Crown up first, then look at the foot.", opts: [
+    { t: "Whether the head is leaning — a tipped axis travels", ok: true },
+    { t: "Whether you're pulling the arms in fast enough", ok: false },
+    { t: "Whether the entry edge was deep enough", ok: false } ] },
+
+  { id: "bracewhen", tier: 2, after: "core", q: "Why brace your middle BEFORE the hard part, not during it?", why: "A middle braced late has already bent, and the power leaked out through the bend.", opts: [
+    { t: "Brace late and it has already bent — the power leaked", ok: true },
+    { t: "Bracing after means you get one more breath in first", ok: false },
+    { t: "It makes no difference as long as you brace at some point", ok: false } ] },
+
+  { id: "tiredlegs", tier: 2, after: "eccentric", q: "Two wobbly landings in a row and Coach takes a round away. What is that protecting?", why: "Tired legs can only practise the wobble. Stopping the round protects the shape you take to the ice tomorrow.", opts: [
+    { t: "The shape — tired legs would only rehearse the wobble", ok: true },
+    { t: "Your energy, so there's some left for the next block", ok: false },
+    { t: "The timer, so the session still finishes on time", ok: false } ] }
 ];
