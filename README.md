@@ -106,6 +106,17 @@ Identical to the swim app's, from the same file (`core/store.js`,
   again the same day.
 - **Quiz**: only the day's first deck pays; each question pays at most once
   ever (+5 first attempt, +25 first correct); 30 XP a day across both quizzes.
+  The bank asks about every move three ways (cue / watch-out / fix), about every
+  unlocked rank two ways, and **about training itself** — attitude, efficiency,
+  and why results come from repeating the same movement rather than a similar
+  one. Every wrong answer is either true of a different move or something a
+  skater her age actually believes, never the silly option; the generator
+  refuses to put two answers that say the same thing on one card, or to let the
+  right answer give itself away by being the longest. **Two tiers**: recognition
+  first, application (that felt wrong — so what do you change?) only once the
+  tier-1 question it builds on is mastered. **One card is about today**, built
+  from the session she just trained; it renews daily, so it pays a flat +5 once
+  a day inside the same ceiling rather than from the finite ledger.
 - **Streak**: 75 % of the final light's dose; a finished recovery day holds it.
 - **Levels**: `500 + (n−1)×30` to level 8, `1000 + (n−9)×45` to 17,
   `1500 + (n−18)×50` after — frozen, running to level 50 (Winter Sovereign).
