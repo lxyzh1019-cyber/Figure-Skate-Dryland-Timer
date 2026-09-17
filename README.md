@@ -107,9 +107,13 @@ Identical to the swim app's, from the same file (`core/store.js`,
 - **Quiz**: only the day's first deck pays; each question pays at most once
   ever (+5 first attempt, +25 first correct); 30 XP a day across both quizzes.
   The bank asks about every move three ways (cue / watch-out / fix), about every
-  unlocked rank two ways, and **about training itself** — attitude, efficiency,
-  and why results come from repeating the same movement rather than a similar
-  one. Every wrong answer is either true of a different move or something a
+  unlocked rank two ways, and **about training itself** — eighteen questions on
+  attitude, efficiency, and why results come from repeating the same movement
+  rather than a similar one. Those reach her rather than waiting to be found:
+  one Quiz Deck slot is reserved for one, and they are in the end-of-session
+  rotation too, so roughly two land a training week with the first inside three
+  sessions. A principle keeps the same ledger key in both places, so it is never
+  paid for twice. Every wrong answer is either true of a different move or something a
   skater her age actually believes, never the silly option; the generator
   refuses to put two answers that say the same thing on one card, or to let the
   right answer give itself away by being the longest. **Two tiers**: recognition
