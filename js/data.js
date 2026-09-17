@@ -293,9 +293,31 @@ export const TOP7 = [
   "Spin Board Backspin Hold", "Turn-and-Stick Single-Leg Landing"
 ];
 
-export const MICRO_LOOP = { q: "Where does a clean landing freeze?", a: "knee over toe" };
+/* The one question the coach asks out loud at the end of the skill block. The
+   options used to be hardcoded in shared core/ as the swimmer's three — so the
+   right answer to THIS question was never on screen and every attempt scored
+   wrong, and the coach answered "It's the hips" to a question about landings.
+   They live here now, beside the answer; the smoke test enforces that `a` is
+   one of `opts`. */
+export const MICRO_LOOP = {
+  q: "Where does a clean landing freeze?",
+  a: "knee over toe",
+  opts: ["knee over toe", "knee inside the toe", "flat on the heel"],
+  yes: "Yes — knee over toe!",
+  no: "It freezes with the knee over the toe."
+};
 export const BREATH_REHEARSAL =
   "Axis self-check out loud: Am I stacked? Did I lean right? Was my checkout quiet? Did I hold without gripping?";
+/* Same rehearsal, written to be heard rather than read. The engine used to
+   speak the swimmer's breathing line here; each app now says its own. */
+export const BREATH_SAY =
+  "Axis self-check. Am I stacked? Did I lean? Was my checkout quiet? Did I hold without gripping?";
+
+/* The two reflection chip sets on the finish screen. These lived in shared
+   core/ with swimming words in them — "Point my toes", "Breathe out loud" —
+   which this app then offered to a skater. They are skating words now. */
+export const REFLECT_WELL = ["Quiet landings", "Strong holds", "Clean edges", "Staying focused"];
+export const REFLECT_NEXT = ["Slow down", "Stand taller", "Knee over toe", "Keep core tight"];
 
 /* Shared finisher + skate-skill block builders */
 const FINISHER = () => [
@@ -919,19 +941,24 @@ export function rankForLevel(level) {
   return rank;
 }
 
-export const COACH_VOICE_ITEMS = [
-  "Count your time", "Tell you the next exercise", "Remind you to breathe",
-  "Warn about common mistakes", "Prompt a self-check"
-];
-
 /* ------------------------------------------------------------
    READINESS CHECK (4-Q + body map).
    ------------------------------------------------------------ */
+/* The pain question is LAST, and that ordering is load-bearing.
+
+   It used to be first here, and answering "a bit sore" jumps straight to the
+   body map — so on a sore morning the other three were never asked and the
+   general readiness score was never computed at all. The body map's severity
+   then produced the light on its own: a skater sleeping badly, flat and out of
+   energy, with one merely tired ankle, was handed a Yellow day. Asking pain
+   last costs no extra taps and means both signals always exist, so the light
+   can be the more cautious of the two. Nothing reads this list positionally —
+   every consumer is by `id`. */
 export const READINESS_QS = [
-  { id: "q_pain",  text: "Any aches or sore spots today?", isPain: true, yesLabel: "😊 All good", noLabel: "😣 A bit sore" },
   { id: "q_sleep", text: "How well did you sleep last night?", yesLabel: "😴 Good", noLabel: "🥱 Not great" },
   { id: "q_light", text: "How do your muscles feel from your last skate?", yesLabel: "💪 Fresh", noLabel: "😮‍💨 Tired" },
-  { id: "q_ready", text: "What's your energy like right now?", yesLabel: "⚡ Full", noLabel: "💤 Low" }
+  { id: "q_ready", text: "What's your energy like right now?", yesLabel: "⚡ Full", noLabel: "💤 Low" },
+  { id: "q_pain",  text: "Any aches or sore spots today?", isPain: true, yesLabel: "😊 All good", noLabel: "😣 A bit sore" }
 ];
 
 // Anatomically distinct front vs. back regions — only true shared joints
