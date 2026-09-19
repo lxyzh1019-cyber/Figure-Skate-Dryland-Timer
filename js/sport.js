@@ -84,7 +84,7 @@ export const COPY = {
   sessionQuizIntro: "How does today's work help you skate?",
   transferHeading:  "⛸️ On-ice transfer",
   transferBuilds:   "⛸️ Builds:",
-  transferMove:     "⛸️ ice:",
+  transferMove:     "⛸️ Ice:",
   transferIcon:     "⛸️",
   skillBlockLabel:  "Skate-Skill",
   storyTitle:       "Your ice story",
