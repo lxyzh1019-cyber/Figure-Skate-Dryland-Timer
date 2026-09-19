@@ -102,8 +102,17 @@ Identical to the swim app's, from the same file (`core/store.js`,
 - **Training**: a session pays a flat rate for the rounds actually trained —
   0 rounds 90, 1 round 180, 2 rounds 270, 3 rounds 360; nothing for recovery
   or a pain stop. A short round is paid the fraction she did. **A day pays for
-  a day**: two sittings share one ceiling, and a move she skipped is offered
-  again the same day.
+  a day**: the day is priced once, not each sitting — showing up is paid once,
+  each main round that counts is paid once off the merged ledger, and the total
+  is capped by the day's ask. A move she skipped is offered again the same day.
+  Days written before outcome version 6 keep their per-sitting settlement.
+  **Complete is one field** (`dayComplete`): every move attempted, nothing
+  skipped, none under half its dose, every planned main round counted — the
+  same door that earns the streak and pays the full day, so the week strip, the
+  day card, the log, the Grown-up boards and the finish screen cannot disagree.
+  A move counts (✓) at 80 % of its time or all of its reps, reads ½ when short,
+  ⏭ when skipped or under 3 s; the day card and the finish screen show that
+  verdict per move with the reason, under a one-line legend.
 - **Quiz**: only the day's first deck pays; each question pays at most once
   ever (+5 first attempt, +25 first correct); 30 XP a day across both quizzes.
   The bank asks about every move three ways (cue / watch-out / fix), about every
@@ -121,7 +130,12 @@ Identical to the swim app's, from the same file (`core/store.js`,
   tier-1 question it builds on is mastered. **One card is about today**, built
   from the session she just trained; it renews daily, so it pays a flat +5 once
   a day inside the same ceiling rather than from the finite ledger.
-- **Streak**: 75 % of the final light's dose; a finished recovery day holds it.
+- **Streak**: 75 % of the final light's dose, or the whole plan attempted with
+  nothing skipped. It follows the plan's schedule from 2026-09-18: a scheduled
+  training weekday with neither a counting day nor a finished recovery breaks
+  it, Sunday is never a gap, and a finished-recovery day holds the run and
+  counts in its length. Days before the cutover keep the old two-day-gap
+  reading, so nothing already earned dropped.
 - **Levels**: `500 + (n−1)×30` to level 8, `1000 + (n−9)×45` to 17,
   `1500 + (n−18)×50` after — frozen, running to level 50 (Winter Sovereign).
 - **Prizes**: one envelope per level reached, derived from the high-water
@@ -144,7 +158,8 @@ npm test                      # every suite, in two timezones
 `npm test` runs `core/test/run.mjs`, which runs every suite in its own
 process under the default timezone and America/New_York and reports every
 failure: the core's action-layer, invariants, integrity, landing-rule and
-offline-shell suites against this app's content, and `test/smoke.mjs`, which
+offline-shell suites against this app's content, the day-record suite, and
+`test/smoke.mjs`, which
 checks what only this app can get wrong — its plan, ranks, prizes, demo links
 and readiness copy. On a pull request CI also runs
 `core/tools/release-check.mjs`: a precached shell file that changed without a
@@ -152,6 +167,25 @@ bump of `version` in `sw.js` fails the build.
 
 ## Data
 
+- **One day record, and every screen a view of it.** `dayRecords()` in
+  `core/outcome.js` settles each training day once: its sittings are grouped by
+  the weekday the day was for and the date it began (a session across midnight,
+  or a Monday caught up on Wednesday, is one day everywhere), never by a
+  device-local id, so a morning on the iPad and an afternoon on the phone are
+  one workout. Its rows are the merged log plus work banked live but never
+  saved; its ask is what the day was started under, lowered only by a
+  jump-landing tier drop; its minutes are summed in seconds and rounded once;
+  movements are reported in both units, distinct moves and performances; a pain
+  stop is a sitting's fact, not the day's verdict when she comes back and
+  finishes; the override flag is set only when an adult changed the light. The
+  finish screen, Today, Progress, the Grown-up Zone, the Body Check result and
+  the CSV read that record and nothing else — `core/test/invariants.mjs`
+  asserts no screen computes a day-level fact on its own, and
+  `core/test/dayrecords.mjs` drives fourteen days through the real engine.
+- **The day's progress record keeps proof, not a count.** Each finished move is
+  banked by name with its seconds, refreshed by a thirty-second heartbeat, and
+  stamped onto the next saved row (`bankedRows`, `bankedSecs`) — so a sitting
+  the iPad lost mid-way still counts by name. "I need to start over" clears it.
 - Browser `localStorage`, namespaced `skate*` / `skate_*`. Keys are unchanged
   from the previous version, so existing history and progress carry over; a
   journey written by the earlier draw ledger carries its high-water level
