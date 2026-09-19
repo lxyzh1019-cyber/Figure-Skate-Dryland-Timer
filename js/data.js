@@ -430,8 +430,8 @@ export const DAYS = {
       warmup: [
         X({ name: "Jump Rope", block: "warmup", driver: "time", work: 75, dose: "60–90s", cue: "Off the toes, quiet, tall." }),
         X({ name: "Cat-Camel", block: "warmup", driver: "reps", repsDetail: "8 cycles", dose: "8 cycles", estSecs: 35, cue: "Move segment by segment." }),
-        X({ name: "Half-Kneeling Ankle Rock", prescription: { reps: 8, sides: 2 }, block: "warmup", driver: "reps", repsDetail: "8/side (+2 R)", dose: "8/side", estSecs: 45, cue: "Heel nailed down — both ankles, right a touch deeper." }),
-        X({ name: "Leg Swings", block: "warmup", driver: "reps", repsDetail: "8/dir/leg", dose: "8/dir/leg", estSecs: 75, cue: "Relaxed, build range." })
+        X({ name: "Half-Kneeling Ankle Rock", prescription: { reps: 8, sides: 2, sideReps: [8, 10] }, block: "warmup", driver: "reps", note: "the extra two are for the stiffer right ankle", estSecs: 45, cue: "Heel nailed down — both ankles, right a touch deeper." }),
+        X({ name: "Leg Swings", block: "warmup", driver: "reps", prescription: { reps: 8, sides: 2, dirs: 2, sideWord: "leg" }, estSecs: 75, cue: "Relaxed, build range." })
       ],
       coordination: [
         X({ name: "A-March", block: "coordination", driver: "time", work: 60, dose: "10m", cue: "Knee up, toe up, foot down under hip." }),
@@ -479,7 +479,7 @@ export const DAYS = {
         X({ name: "Band Pass-Through", block: "warmup", driver: "reps", repsDetail: "8–10", dose: "8–10", estSecs: 30, cue: "Wide, no shrug." }),
         X({ name: "Wall Slides", block: "warmup", driver: "reps", repsDetail: "8", dose: "8", estSecs: 30, cue: "Back on wall, ribs down." }),
         X({ name: "90/90 Hip Switch", block: "warmup", driver: "reps", repsDetail: "6/side", dose: "6/side", estSecs: 40, cue: "Knees lead." }),
-        X({ name: "Half-Kneeling Ankle Rock", prescription: { reps: 8, sides: 2 }, block: "warmup", driver: "reps", repsDetail: "8/side (+2 R)", dose: "8/side", estSecs: 45, cue: "Heel down, both sides, right deeper." })
+        X({ name: "Half-Kneeling Ankle Rock", prescription: { reps: 8, sides: 2, sideReps: [8, 10] }, block: "warmup", driver: "reps", note: "the extra two are for the stiffer right ankle", estSecs: 45, cue: "Heel down, both sides, right deeper." })
       ],
       coordination: [
         X({ name: "Carioca", block: "coordination", driver: "time", work: 60, eachSide: true, dose: "10m/side", cue: "Hip over hip — trunk-hip separation." }),
@@ -527,7 +527,7 @@ export const DAYS = {
         X({ name: "Jump Rope", block: "warmup", driver: "time", work: 90, dose: "90s", cue: "Reactive, quiet." }),
         X({ name: "Calf Raise", prescription: { reps: 12 }, block: "warmup", driver: "reps", repsDetail: "12 · full range", dose: "12", estSecs: 40, cue: "Heel below the step." }),
         X({ name: "Leg Swings", block: "warmup", driver: "reps", repsDetail: "6–8/side", dose: "6–8/side", estSecs: 35, cue: "Open the hips (+ 90/90)." }),
-        X({ name: "Half-Kneeling Ankle Rock", prescription: { reps: 8, sides: 2 }, block: "warmup", driver: "reps", repsDetail: "8/side (+2 R)", dose: "8/side", estSecs: 45, cue: "Heel down, both sides, right deeper." })
+        X({ name: "Half-Kneeling Ankle Rock", prescription: { reps: 8, sides: 2, sideReps: [8, 10] }, block: "warmup", driver: "reps", note: "the extra two are for the stiffer right ankle", estSecs: 45, cue: "Heel down, both sides, right deeper." })
       ],
       coordination: [
         X({ name: "A-Skip", block: "coordination", driver: "time", work: 60, dose: "10m", cue: "Light, rhythmic — primes the jumps." })
@@ -585,8 +585,8 @@ export const DAYS = {
       warmup: [
         X({ name: "Knee-to-Wall Ankle", prescription: { reps: 8, sides: 2 }, block: "warmup", driver: "reps", repsDetail: "8/side both", dose: "8/side", estSecs: 40, cue: "Heel flat, knee past toes." }),
         X({ name: "Cat-Camel", block: "warmup", driver: "reps", repsDetail: "8 cycles", dose: "8 cycles", estSecs: 35, cue: "Segment by segment." }),
-        X({ name: "Leg Swings", block: "warmup", driver: "reps", repsDetail: "8/dir/leg", dose: "8/dir/leg", estSecs: 75, cue: "Relaxed, build range." }),
-        X({ name: "Half-Kneeling Ankle Rock", prescription: { reps: 8, sides: 2 }, block: "warmup", driver: "reps", repsDetail: "8/side (+2 R)", dose: "8/side", estSecs: 45, cue: "Heel down, both sides, right deeper." })
+        X({ name: "Leg Swings", block: "warmup", driver: "reps", prescription: { reps: 8, sides: 2, dirs: 2, sideWord: "leg" }, estSecs: 75, cue: "Relaxed, build range." }),
+        X({ name: "Half-Kneeling Ankle Rock", prescription: { reps: 8, sides: 2, sideReps: [8, 10] }, block: "warmup", driver: "reps", note: "the extra two are for the stiffer right ankle", estSecs: 45, cue: "Heel down, both sides, right deeper." })
       ],
       coordination: [
         X({ name: "Lateral Shuffle → Stick", block: "coordination", driver: "time", work: 60, eachSide: true, dose: "8m/side", cue: "Low, dead stop." }),
@@ -642,7 +642,7 @@ export const DAYS = {
         X({ name: "Jump Rope", block: "warmup", driver: "time", work: 75, dose: "60–90s", cue: "Off the toes, quiet." }),
         X({ name: "Band Pass-Through", block: "warmup", driver: "reps", repsDetail: "8–10", dose: "8–10", estSecs: 30, cue: "Wide, no shrug." }),
         X({ name: "90/90 Hip Switch", block: "warmup", driver: "reps", repsDetail: "6/side", dose: "6/side", estSecs: 40, cue: "Knees lead." }),
-        X({ name: "Half-Kneeling Ankle Rock", prescription: { reps: 8, sides: 2 }, block: "warmup", driver: "reps", repsDetail: "8/side (+2 R)", dose: "8/side", estSecs: 45, cue: "Heel down, both sides, right deeper." })
+        X({ name: "Half-Kneeling Ankle Rock", prescription: { reps: 8, sides: 2, sideReps: [8, 10] }, block: "warmup", driver: "reps", note: "the extra two are for the stiffer right ankle", estSecs: 45, cue: "Heel down, both sides, right deeper." })
       ],
       coordination: [
         X({ name: "Skip for Height", block: "coordination", driver: "time", work: 60, dose: "8m", cue: "Knee + opposite arm drive." }),
@@ -689,8 +689,8 @@ export const DAYS = {
       warmup: [
         X({ name: "Jump Rope", block: "warmup", driver: "time", work: 90, dose: "90s", cue: "Reactive, quiet." }),
         X({ name: "Calf Raise", prescription: { reps: 12 }, block: "warmup", driver: "reps", repsDetail: "12 · full range", dose: "12", estSecs: 40, cue: "Heel below the step." }),
-        X({ name: "Leg Swings", block: "warmup", driver: "reps", repsDetail: "8/dir/leg", dose: "8/dir/leg", estSecs: 75, cue: "Open the hips." }),
-        X({ name: "Half-Kneeling Ankle Rock", prescription: { reps: 8, sides: 2 }, block: "warmup", driver: "reps", repsDetail: "8/side (+2 R)", dose: "8/side", estSecs: 45, cue: "Heel down, both sides, right deeper." })
+        X({ name: "Leg Swings", block: "warmup", driver: "reps", prescription: { reps: 8, sides: 2, dirs: 2, sideWord: "leg" }, estSecs: 75, cue: "Open the hips." }),
+        X({ name: "Half-Kneeling Ankle Rock", prescription: { reps: 8, sides: 2, sideReps: [8, 10] }, block: "warmup", driver: "reps", note: "the extra two are for the stiffer right ankle", estSecs: 45, cue: "Heel down, both sides, right deeper." })
       ],
       coordination: [
         X({ name: "Skip for Height", block: "coordination", driver: "time", work: 60, dose: "8m", cue: "Explosive — primes the jumps." })
