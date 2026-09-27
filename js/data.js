@@ -379,7 +379,7 @@ const SKATESKILL_SAT = () => [
 ];
 
 const SCAP_HANG = () => [
-  X({ name: "Scap Pull-Up + Dead Hang", block: "skateskill", driver: "time", work: 30, dose: "30s",
+  X({ name: "Scap Pull-Up + Dead Hang", leadInSeconds: 5, block: "skateskill", driver: "time", work: 30, dose: "30s",
       reset: "Hang tall, shoulders ready.", cue: "Shoulders slide DOWN, hang and decompress.",
       skateTransfer: "Shoulder control / decompression", searchableName: "scapular pull up dead hang" })
 ];
@@ -559,7 +559,7 @@ export const DAYS = {
             reset: "Whole-foot drive.", cue: "Drive through the whole foot, opposite knee up.",
             parentWatch: "Left knee caves inward", fix: "Lower box / stop.",
             skateTransfer: "Single-leg drive power", searchableName: "box step up drive knee" }),
-        X({ name: "Pull-Up (heavy)", prescription: { reps: 3, tempo: [4, 0, 1], keepGoingSeconds: 60 }, block: "finisher", driver: "reps",
+        X({ name: "Pull-Up (heavy)", leadInSeconds: 5, prescription: { reps: 3, tempo: [4, 0, 1], keepGoingSeconds: 60 }, block: "finisher", driver: "reps",
             reset: "Depress shoulders first.", cue: "Shoulders down first. No failure, no kip.",
             parentWatch: "Swing / shrug", fix: "Dead-hang only.",
             skateTransfer: "Pulling strength", searchableName: "strict pull up eccentric lower" })
@@ -722,7 +722,7 @@ export const DAYS = {
             reset: "Whole-foot drive.", cue: "Drive through the whole foot.",
             parentWatch: "Left knee caves inward", fix: "Lower box / stop.",
             skateTransfer: "Single-leg drive power", searchableName: "box step up drive knee" }),
-        X({ name: "Pull-Up (heavy)", prescription: { reps: 3, tempo: [4, 0, 1], keepGoingSeconds: 60 }, block: "finisher", driver: "reps",
+        X({ name: "Pull-Up (heavy)", leadInSeconds: 5, prescription: { reps: 3, tempo: [4, 0, 1], keepGoingSeconds: 60 }, block: "finisher", driver: "reps",
             reset: "Depress shoulders first.", cue: "No failure, no kip.",
             parentWatch: "Swing / shrug", fix: "Dead-hang only.",
             skateTransfer: "Pulling strength", searchableName: "strict pull up eccentric lower" }),
