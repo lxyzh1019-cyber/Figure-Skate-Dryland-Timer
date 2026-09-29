@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit -q -m 'Refresh hz-claude-config stub files *)",
+      "Bash(git push *)"
+    ]
+  }
+}
