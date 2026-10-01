@@ -1,4 +1,4 @@
-# FEATURES — Skate with Grace (Figure Skate Dryland Timer) — manifest v1 (partial) — confirmed 2026-09-24, updated 2026-09-27 (R3)
+# FEATURES — Skate with Grace (Figure Skate Dryland Timer) — manifest v1 (partial) — confirmed 2026-09-24, updated 2026-09-30 (R4 PR 1)
 
 Locked features of the current version. Every edit is checked against this list and ends with a regression table. Update this file in the same change that alters a feature. Over-list rather than under-list.
 
@@ -21,6 +21,14 @@ Locked features of the current version. Every edit is checked against this list 
 ## Today screen
 - "Review what you did": per-move round dots (✓ / ½ / ⏭ / —) with a legend.
 - "Review what you did": every short round of a move has its own reason line; each round dot's label carries that round's reason.
+
+## Design tokens and colour slots
+- Rule: screens read slots with fallbacks equal to the previous look; core stays byte-identical; skate fills its own slot values.
+- Slots in `css/tokens/colors.css` (SEMANTIC ALIASES): `--hero-from` #EAA7B8 · `--hero-to` #E698AC · `--hero-text` ink · `--hero-chip` white 55% · `--journey-via` #F7D3DC · `--journey-to` #FBEBD6 · `--btn-primary-bg` aqua-deep · `--btn-primary-edge` aqua-ink · `--btn-primary-text` #FFFFFF · `--btn-stop-bg` stop-deep · `--btn-stop-edge` stop-ink · `--btn-grape-bg` grape-ink.
+- Text-on tokens: `--text-on-coral`, `--text-on-mint` = `var(--ink)` (large text only: 4.2 / 4.4); `--text-on-aqua` stays #FFFFFF; `--action-text`, `--go-text` unchanged (white). No screen in `core/` or `js/` reads them yet (grep 2026-09-30).
+- `--border-card-color` (was the dead colour alias `--border-card`; `--border-card: 3px` in `spacing.css` is the live width and is unchanged).
+- `.candy` (unused by screens) falls back to `--action-edge` for its 3D edge (was the non-existent `--action-deep`).
+- Design reference lives in the swim repo (`docs/DESIGN.md`).
 
 ## Rules / special cases
 - Grown-up gate is deny-by-default: any action not in `UNGATED_ACTIONS` (or allowed by `CHILD_MAY`) asks for the PIN.
