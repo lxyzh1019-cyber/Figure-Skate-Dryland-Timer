@@ -100,17 +100,17 @@
   --text-body:      var(--ink);
   --text-muted:     var(--ink-soft);
   --text-faint:     var(--ink-faint);
-  --text-on-aqua:   #FFFFFF;
-  --text-on-coral:  #FFFFFF;
+  --text-on-aqua:   #FFFFFF;          /* stays white: ink would be 2.5 on skate aqua */
+  --text-on-coral:  var(--ink);      /* was #FFFFFF; ink 4.2 — large text only (buttons 20px+ bold) */
   --text-on-sun:    var(--sun-ink);
-  --text-on-mint:   #FFFFFF;
+  --text-on-mint:   var(--ink);      /* was #FFFFFF; ink 4.4 — large text only (Done/Start 20–24px bold) */
   --text-on-grape:  #FFFFFF;
 
   /* Surfaces */
   --surface-app:    var(--bg);
   --surface-card:   var(--surface);
   --surface-inset:  var(--surface-2);
-  --border-card:    var(--hairline);
+  --border-card-color: var(--hairline);  /* was --border-card (dead: spacing.css's 3px won) */
 
   /* Primary action (rose candy button) */
   --action-bg:      var(--aqua);
@@ -137,4 +137,24 @@
   --quality-good:   var(--mint);     /* clean rep */
   --quality-watch:  var(--coral);    /* form watch-out */
   --quality-stop:   var(--stop);     /* hard stop / pain rule */
+
+  /* Skate redesign colour slots — screens read these with a fallback
+     equal to the previous look, e.g. var(--hero-text, #fff). */
+  /* Hero card (Today day card, Body Check panel) */
+  --hero-from:        #EAA7B8;                    /* = skate aqua-light */
+  --hero-to:          #E698AC;
+  --hero-text:        var(--ink);                 /* 4.8–5.4 */
+  --hero-chip:        rgba(255, 255, 255, 0.55);
+  /* Journey map gradient (after hero-from / hero-to) */
+  --journey-via:      #F7D3DC;
+  --journey-to:       #FBEBD6;
+  /* Primary kid button */
+  --btn-primary-bg:   var(--aqua-deep);
+  --btn-primary-edge: var(--aqua-ink);
+  --btn-primary-text: #FFFFFF;                    /* 5.7 */
+  /* STOP button */
+  --btn-stop-bg:      var(--stop-deep);           /* white 5.4 */
+  --btn-stop-edge:    var(--stop-ink);
+  /* Recovery (grape) button */
+  --btn-grape-bg:     var(--grape-ink);           /* white 8.7 */
 }
