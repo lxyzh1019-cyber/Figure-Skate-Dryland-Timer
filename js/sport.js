@@ -103,3 +103,9 @@ export const FEATURES = {
   /* No WebP twins shipped yet: the screens ask for the PNGs alone. */
   webp: false
 };
+
+/* The hero decoration: a picture behind the coloured hero cards (Today, the
+   journey, Body Check, the timer's left panel, the Progress level card). The
+   grown-up switch in Settings is labelled with HERO_DECOR_LABEL. */
+export const HERO_DECOR_SRC = "./assets/hero-snow.webp";
+export const HERO_DECOR_LABEL = "Snowflakes";
