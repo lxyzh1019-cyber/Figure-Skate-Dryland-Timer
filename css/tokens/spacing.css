@@ -32,11 +32,14 @@
   /* ============================================================
      SHADOWS — soft, colored, NEVER harsh black.
      "Candy" buttons use a solid bottom EDGE (3D press feel).
+     Tinted with THIS app's ink (ink #4A3A41; pulse rose #C25671), never another app's.
      ============================================================ */
-  --shadow-soft:  0 6px 18px rgba(20, 59, 74, 0.10);   /* resting card */
-  --shadow-lift:  0 14px 30px rgba(20, 59, 74, 0.16);  /* hover / raised */
-  --shadow-pop:   0 18px 44px rgba(20, 59, 74, 0.20);  /* modal / mascot */
-  --shadow-inset: inset 0 2px 6px rgba(20, 59, 74, 0.08);
+  --shadow-soft:  0 6px 18px rgba(74, 58, 65, 0.10);   /* resting card */
+  --shadow-lift:  0 14px 30px rgba(74, 58, 65, 0.16);  /* hover / raised */
+  --shadow-pop:   0 18px 44px rgba(74, 58, 65, 0.20);  /* modal / mascot */
+  --shadow-inset: inset 0 2px 6px rgba(74, 58, 65, 0.08);
+  --shadow-frame: 0 18px 44px rgba(74, 58, 65, 0.16);  /* the big screen card (phone too) */
+  --scrim:        rgba(74, 58, 65, 0.55);              /* pop-up backdrop */
 
   /* Candy-button bottom edges (use the matching color's *-deep) */
   --edge-depth:   4px;   /* @kind spacing */
@@ -72,8 +75,8 @@
    `pulse-ring` (core/screens/session.js) and nothing defined that, so the
    last-three-seconds pulse never played in either app. */
 @keyframes pulse-ring {
-  0%   { box-shadow: 0 0 0 0 rgba(20, 184, 212, 0.40); }
-  100% { box-shadow: 0 0 0 18px rgba(20, 184, 212, 0); }
+  0%   { box-shadow: 0 0 0 0 rgba(194, 86, 113, 0.40); }
+  100% { box-shadow: 0 0 0 18px rgba(194, 86, 113, 0); }
 }
 
 @media (prefers-reduced-motion: reduce) {
