@@ -7,7 +7,7 @@ Single working record for this repository. Updated by the main session at the en
 ## Where we are
 - Plan: Back a move keeps done moves — Plan v1 (approved 2026-10-08), file `plans/i-want-to-have-virtual-quasar.md`.
 - Branch `claude/back-keeps-done` in both repos (skate and swim). No pull requests yet.
-- Next stage: Stage 1 of 5 (failing tests) in progress, then Stage 2 of 5 — Change Back, the redo path and Skip/Done on full moves (both apps).
+- Next stage: Stage 1 of 5 done (failing tests in both repos, uncommitted); Stage 2 of 5 in progress — Change Back, the redo path and Skip/Done on full moves (both apps).
 - Restart line: `Continue Back a move keeps done moves on branch claude/back-keeps-done; next: Stage 2 of 5 — Change Back, the redo path and Skip/Done on full moves (both apps) · proof: new tests pass, full suite passes in both apps, scripted run shows A ✓ B ✓ back on C.`
 
 ## Approved baseline
@@ -129,8 +129,8 @@ Structural option (not approved, not done): a test that renders every screen, co
 | RD-5 Merge both PRs | BLOCKED — merging is the user's step (approved plan: no merge by Claude); CI was still running when the PRs opened | swim #79, skate #52 open and mergeable 2026-10-04 |
 | RD-6 Live site serves the new version | BLOCKED — waits on RD-5 (merge) | not started; check sw.js swim v33 / skate v29 after merge |
 | RD-7 Sunday recovery on the device (finish, Today, Progress, Grown-up) | BLOCKED — waits on RD-6 and the user's iPad | not started |
-| Back a move keeps done moves · Stage 1 of 5 — Find the exact lines and write failing tests first (both apps) · proof: new tests fail on today's code, with the count written in the record | PARTIAL — plan mode off 2026-10-08; opus-worker writing core/test/back.mjs in both repos | opus-worker confirmed every map line in core/engine.js and core/outcome.js; no tests written |
-| Back a move keeps done moves · Stage 2 of 5 — Change Back, the redo path and Skip/Done on full moves (both apps) · proof: new tests pass, full suite passes in both apps, scripted run shows A ✓ B ✓ back on C | QUEUED — after Stage 1 | |
+| Back a move keeps done moves · Stage 1 of 5 — Find the exact lines and write failing tests first (both apps) · proof: new tests fail on today's code, with the count written in the record | COMPLETE | 2026-10-08 opus-worker: new core/test/back.mjs (byte-identical both repos) fails on today's code — 15 failing checks per app (case a 3, b 4, c 4, e 4; 13 pass, all setup checks pass); leadin.mjs 42 pass both apps; both timezones |
+| Back a move keeps done moves · Stage 2 of 5 — Change Back, the redo path and Skip/Done on full moves (both apps) · proof: new tests pass, full suite passes in both apps, scripted run shows A ✓ B ✓ back on C | PARTIAL — opus-worker started 2026-10-08 | |
 | Back a move keeps done moves · Stage 3 of 5 — Record, feature list and pull requests · proof: regression table with no missing items; reviewer verdict before the pull requests | QUEUED — after Stage 2 | |
 | Back a move keeps done moves · Stage 4 of 5 — Reviewer check before the pull requests (Check) | QUEUED — after Stage 3 | |
 | Back a move keeps done moves · Stage 5 of 5 — Merge both pull requests and try the story on the iPad (Check) | QUEUED — after Stage 4 | |
