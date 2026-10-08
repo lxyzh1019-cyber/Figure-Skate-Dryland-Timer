@@ -34,7 +34,7 @@ Single working record for this repository. Updated by the main session at the en
 ## Design decisions
 - [agreed] [in v1] after a redo, skip moves done in full and return to where she was — search: back to where she was
 - [agreed] [in v1] a full result is never replaced by a skip or short try — search: keep the best result
-- [open] a stop during a redo keeps that move's old result (worker choice; reviewer: fits keep the best result; recommended yes) — search: stop during a redo
+- [agreed] [in v1] a stop during a redo keeps that move's old result (user answer 2026-10-08: "Keep the old result") — search: stop during a redo
 
 ## Pending
 - none
@@ -62,6 +62,7 @@ Single working record for this repository. Updated by the main session at the en
 | 19 | R5 2026-10-01 | "Take a look at the new request, validate, and create the plan" (Splash-colour-prompt.md + Colour-combo-check.html: girls' colours, one button style, ripples/snow) | open | plan v1 → v2; 4 decisions answered (deep-rose chip, edge-colour ring, bright red with bigger words, make pulse show) |
 | 20 | R5 2026-10-01 | "only one PR, not 4" | done | plan v2: one build, exactly one PR per repo |
 | 21 | 2026-10-04 | Finished Sunday recovery shows as not done on every screen, and the finish screen says she "stopped partway" although she did every move | open — branch pushed, PR not opened | Plan v1; diagnosis: day record dropped care rows (0/0, dayComplete false), Today showed "Start Recovery", finish needed 100% of every clock; user: every screen looked wrong, she did every move; Today card must show a finished recovery day like any finished day |
+| 23 | 2026-10-08 | Decision: a stop during a redo keeps the old result | done | user chose the recommended option |
 | 22 | 2026-10-08 | Kid did A part, B full, on C; went back to finish A; then skipping B made B show ½ (1/2) — "how to solve this" | open | Plan v1 Back a move keeps done moves; cause: rewindTo erases every result after the target |
 
 ## Hotspot counter
