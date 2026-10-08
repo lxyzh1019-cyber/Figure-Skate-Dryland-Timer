@@ -7,7 +7,7 @@ Single working record for this repository. Updated by the main session at the en
 ## Where we are
 - Plan: Back a move keeps done moves — Plan v1 (approved 2026-10-08), file `plans/i-want-to-have-virtual-quasar.md`.
 - Branch `claude/back-keeps-done` in both repos (skate and swim). No pull requests yet.
-- Next stage: Stage 1 of 5 done (failing tests in both repos, uncommitted); Stage 2 of 5 in progress — Change Back, the redo path and Skip/Done on full moves (both apps).
+- Stages 1–2 done (commits skate b7b66ef, swim c6892eb); next: Stage 3 of 5 — reviewer before PR, then one PR per repo — Change Back, the redo path and Skip/Done on full moves (both apps).
 - Restart line: `Continue Back a move keeps done moves on branch claude/back-keeps-done; next: Stage 2 of 5 — Change Back, the redo path and Skip/Done on full moves (both apps) · proof: new tests pass, full suite passes in both apps, scripted run shows A ✓ B ✓ back on C.`
 
 ## Approved baseline
@@ -34,6 +34,7 @@ Single working record for this repository. Updated by the main session at the en
 ## Design decisions
 - [agreed] [in v1] after a redo, skip moves done in full and return to where she was — search: back to where she was
 - [agreed] [in v1] a full result is never replaced by a skip or short try — search: keep the best result
+- [open] a stop during a redo keeps that move's old result (worker choice; reviewer: fits keep the best result; recommended yes) — search: stop during a redo
 
 ## Pending
 - none
@@ -130,8 +131,8 @@ Structural option (not approved, not done): a test that renders every screen, co
 | RD-6 Live site serves the new version | BLOCKED — waits on RD-5 (merge) | not started; check sw.js swim v33 / skate v29 after merge |
 | RD-7 Sunday recovery on the device (finish, Today, Progress, Grown-up) | BLOCKED — waits on RD-6 and the user's iPad | not started |
 | Back a move keeps done moves · Stage 1 of 5 — Find the exact lines and write failing tests first (both apps) · proof: new tests fail on today's code, with the count written in the record | COMPLETE | 2026-10-08 opus-worker: new core/test/back.mjs (byte-identical both repos) fails on today's code — 15 failing checks per app (case a 3, b 4, c 4, e 4; 13 pass, all setup checks pass); leadin.mjs 42 pass both apps; both timezones |
-| Back a move keeps done moves · Stage 2 of 5 — Change Back, the redo path and Skip/Done on full moves (both apps) · proof: new tests pass, full suite passes in both apps, scripted run shows A ✓ B ✓ back on C | PARTIAL — opus-worker started 2026-10-08 | |
-| Back a move keeps done moves · Stage 3 of 5 — Record, feature list and pull requests · proof: regression table with no missing items; reviewer verdict before the pull requests | QUEUED — after Stage 2 | |
+| Back a move keeps done moves · Stage 2 of 5 — Change Back, the redo path and Skip/Done on full moves (both apps) · proof: new tests pass, full suite passes in both apps, scripted run shows A ✓ B ✓ back on C | COMPLETE | 2026-10-08 opus-worker after reviewer advice (6 problems + 1 misplaced test check, fixed in one pass): back.mjs 15 fail → 43/43 pass both apps, both TZs; full `npm test` green both repos (skate: smoke 317, actions 333, back 43, dayrecords 489, design 2947, invariants 596, session 327, shell 180 …; swim: smoke 1401, back 43, invariants 593, session 325, shell 260 …); main session reran back.mjs 43/43 both repos; core identical; scripted story both apps: on C A ½ B ✓ → Back ×2 → redo A → rest 'up next C' → lands on C with A ✓ B ✓, finish short list empty; commits skate b7b66ef, swim c6892eb | |
+| Back a move keeps done moves · Stage 3 of 5 — Record, feature list and pull requests · proof: regression table with no missing items; reviewer verdict before the pull requests | PARTIAL — feature line and regression table written; reviewer before PR running | |
 | Back a move keeps done moves · Stage 4 of 5 — Reviewer check before the pull requests (Check) | QUEUED — after Stage 3 | |
 | Back a move keeps done moves · Stage 5 of 5 — Merge both pull requests and try the story on the iPad (Check) | QUEUED — after Stage 4 | |
 
@@ -416,4 +417,15 @@ Structural option (not approved, not done): a test that renders every screen, co
 | `careComplete` verdict; care record rows and move counts; finish "N of M moves" line; Today finished-day card for care (COMPLETED / PARTLY DONE, Finish recovery); Progress care cells; Grown-up recovery chip in grape | ➕ added |
 | `RECOVERY_STREAK_FRACTION` (100% of every clock) and the separate `isSpaDay` paths on the done card | ⚠️ intentionally removed / merged (plan "Removes") |
 | Streak freeze rule | changed as approved — `streakJudged && careComplete` (an early-tapped weekday recovery now holds the streak) |
+| Missing | none found |
+
+## Regression table — Back a move keeps done moves (care-days manifest → + Back keeps done moves)
+| Feature | Status |
+|---|---|
+| Back only inside the same block before the round is counted; Back from a rest redoes that move; Back from an unfinished move restarts it; lead-in Back (leadin.mjs) | ✅ kept |
+| One ledger row per walked step; round commit, exStatus, exDone, skipped count, resume, XP, streak, Today / Progress / Grown-up rules, stored record shape | ✅ kept (all existing suites green unchanged, both apps) |
+| Moves passed going back keep their results and stay banked; redo returns to where she was, skipping done moves; a done result is never downgraded by Skip or early Done; a stop during a redo keeps the old result; move list shows passed moves during a redo | ➕ added |
+| "Going back erases every result after the target" | ⚠️ intentionally replaced (plan "Removes") |
+| `core/` byte-identical with the other repo | ✅ kept — `diff -rq --strip-trailing-cr core` empty |
+| sw.js version bump | ✅ skate v29 → v30, swim v33 → v34 |
 | Missing | none found |
