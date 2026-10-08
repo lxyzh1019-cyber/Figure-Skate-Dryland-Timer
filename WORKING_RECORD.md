@@ -7,8 +7,8 @@ Single working record for this repository. Updated by the main session at the en
 ## Where we are
 - Plan: Back a move keeps done moves — Plan v1 (approved 2026-10-08), file `plans/i-want-to-have-virtual-quasar.md`.
 - Branch `claude/back-keeps-done` in both repos (skate and swim). No pull requests yet.
-- Stages 1–2 done (commits skate b7b66ef, swim c6892eb); next: Stage 3 of 5 — reviewer before PR, then one PR per repo — Change Back, the redo path and Skip/Done on full moves (both apps).
-- Restart line: `Continue Back a move keeps done moves on branch claude/back-keeps-done; next: Stage 2 of 5 — Change Back, the redo path and Skip/Done on full moves (both apps) · proof: new tests pass, full suite passes in both apps, scripted run shows A ✓ B ✓ back on C.`
+- Stages 1–2 done (commits skate b7b66ef, swim c6892eb). Stage 3 of 5 (Record, feature list and pull requests): record and feature list written; the reviewer before PR found no code problems but blocked on one open decision (a stop during a redo keeps the old result) and this out-of-date line. Waiting on the user's answer, then one PR per repo.
+- Restart line: `Continue Back a move keeps done moves on branch claude/back-keeps-done; next: Stage 3 of 5 — Record, feature list and pull requests · proof: regression table with no missing items; reviewer verdict before the pull requests.`
 
 ## Approved baseline
 - Plan v2 approved 2026-09-24 (branch `claude/fervent-lamport-sstzde`):
