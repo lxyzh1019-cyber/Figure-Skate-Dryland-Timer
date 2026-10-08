@@ -6,9 +6,10 @@ Single working record for this repository. Updated by the main session at the en
 
 ## Where we are
 - Plan: Back a move keeps done moves — Plan v1 (approved 2026-10-08), file `plans/i-want-to-have-virtual-quasar.md`.
-- Branch `claude/back-keeps-done` in both repos (skate and swim). No pull requests yet.
-- Stages 1–2 done (commits skate b7b66ef, swim c6892eb). Stage 3 of 5 (Record, feature list and pull requests): record and feature list written; the reviewer before PR found no code problems but blocked on one open decision (a stop during a redo keeps the old result) and this out-of-date line. Waiting on the user's answer, then one PR per repo.
-- Restart line: `Continue Back a move keeps done moves on branch claude/back-keeps-done; next: Stage 3 of 5 — Record, feature list and pull requests · proof: regression table with no missing items; reviewer verdict before the pull requests.`
+- Branch `claude/back-keeps-done` in both repos. PRs ready for review: lxyzh1019-cyber/Figure-Skate-Dryland-Timer#55, lxyzh1019-cyber/Swimming-Dryland-Timer#80.
+- Reviewer before done (Back a move keeps done moves): pass — no code problems; record items fixed.
+- Stages 1–2 done (commits skate b7b66ef, swim c6892eb). Stage 3 of 5 (Record, feature list and pull requests): record and feature list written; the reviewer before PR found no code problems but blocked on one open decision (a stop during a redo keeps the old result) and this out-of-date line. User answered; PRs open: skate #55, swim #80. Next: Stage 5 (user merges, iPad check).
+- Restart line: `Continue Back a move keeps done moves on branch claude/back-keeps-done; next: Stage 5 of 5 — Merge both pull requests and try the story on the iPad (Check).`
 
 ## Approved baseline
 - Plan v2 approved 2026-09-24 (branch `claude/fervent-lamport-sstzde`):
@@ -133,9 +134,9 @@ Structural option (not approved, not done): a test that renders every screen, co
 | RD-7 Sunday recovery on the device (finish, Today, Progress, Grown-up) | BLOCKED — waits on RD-6 and the user's iPad | not started |
 | Back a move keeps done moves · Stage 1 of 5 — Find the exact lines and write failing tests first (both apps) · proof: new tests fail on today's code, with the count written in the record | COMPLETE | 2026-10-08 opus-worker: new core/test/back.mjs (byte-identical both repos) fails on today's code — 15 failing checks per app (case a 3, b 4, c 4, e 4; 13 pass, all setup checks pass); leadin.mjs 42 pass both apps; both timezones |
 | Back a move keeps done moves · Stage 2 of 5 — Change Back, the redo path and Skip/Done on full moves (both apps) · proof: new tests pass, full suite passes in both apps, scripted run shows A ✓ B ✓ back on C | COMPLETE | 2026-10-08 opus-worker after reviewer advice (6 problems + 1 misplaced test check, fixed in one pass): back.mjs 15 fail → 43/43 pass both apps, both TZs; full `npm test` green both repos (skate: smoke 317, actions 333, back 43, dayrecords 489, design 2947, invariants 596, session 327, shell 180 …; swim: smoke 1401, back 43, invariants 593, session 325, shell 260 …); main session reran back.mjs 43/43 both repos; core identical; scripted story both apps: on C A ½ B ✓ → Back ×2 → redo A → rest 'up next C' → lands on C with A ✓ B ✓, finish short list empty; commits skate b7b66ef, swim c6892eb | |
-| Back a move keeps done moves · Stage 3 of 5 — Record, feature list and pull requests · proof: regression table with no missing items; reviewer verdict before the pull requests | PARTIAL — feature line and regression table written; reviewer before PR running | |
-| Back a move keeps done moves · Stage 4 of 5 — Reviewer check before the pull requests (Check) | QUEUED — after Stage 3 | |
-| Back a move keeps done moves · Stage 5 of 5 — Merge both pull requests and try the story on the iPad (Check) | QUEUED — after Stage 4 | |
+| Back a move keeps done moves · Stage 3 of 5 — Record, feature list and pull requests · proof: regression table with no missing items; reviewer verdict before the pull requests | COMPLETE | regression table 'Back a move keeps done moves' (Missing: none) in both records; FEATURES.md line in both repos; reviewer verdict before PR: block on 2 record items (stale restart line; open stop-during-redo decision), both fixed — user answered 'Keep the old result'; PRs ready for review: lxyzh1019-cyber/Figure-Skate-Dryland-Timer#55, lxyzh1019-cyber/Swimming-Dryland-Timer#80 |
+| Back a move keeps done moves · Stage 4 of 5 — Reviewer check before the pull requests (Check) | COMPLETE | reviewer 2026-10-08: no code problems; all 6 earlier fixes verified at their lines; 2 record findings fixed before the PRs |
+| Back a move keeps done moves · Stage 5 of 5 — Merge both pull requests and try the story on the iPad (Check) | WAITING ON YOU — merge skate #55 and swim #80, then try the story on the iPad | |
 
 ## Checks and evidence
 - 2026-09-24 baseline `node core/test/run.mjs` → all suites green (before changes)
