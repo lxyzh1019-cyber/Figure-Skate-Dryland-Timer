@@ -4,6 +4,13 @@ Single working record for this repository. Updated by the main session at the en
 
 `core/` is shared byte-for-byte with Swimming-Dryland-Timer; every core change lands in both repos, and both records carry the same round.
 
+## Where we are
+- Plan: Back a move keeps done moves — Plan v1 (approved 2026-10-08), file `plans/i-want-to-have-virtual-quasar.md`.
+- Branch `claude/back-keeps-done` in both repos. PRs ready for review: lxyzh1019-cyber/Figure-Skate-Dryland-Timer#55, lxyzh1019-cyber/Swimming-Dryland-Timer#80.
+- Reviewer before done (Back a move keeps done moves): pass — no code problems; record items fixed.
+- Stages 1–2 done (commits skate b7b66ef, swim c6892eb). Stage 3 of 5 (Record, feature list and pull requests): record and feature list written; the reviewer before PR found no code problems but blocked on one open decision (a stop during a redo keeps the old result) and this out-of-date line. User answered; PRs open: skate #55, swim #80. Next: Stage 5 (user merges, iPad check).
+- Restart line: `Continue Back a move keeps done moves on branch claude/back-keeps-done; next: Stage 5 of 5 — Merge both pull requests and try the story on the iPad (Check).`
+
 ## Approved baseline
 - Plan v2 approved 2026-09-24 (branch `claude/fervent-lamport-sstzde`):
   - Coach's Quiz question pinned per session (`sessionQuizOf`), so a correct tap no longer swaps the question.
@@ -23,6 +30,13 @@ Single working record for this repository. Updated by the main session at the en
 - Plan v2 approved 2026-10-01 (R5, kids' colours + one button style + ripples/snow; plan file `plans/2026-10-01-plan-v1-colours-decor.md` in the swim repo; branch `claude/splash-colours-decor` in both repos): colour slots per the user's "Splash-colour-prompt.md" (hero-bg, journey-bg/-text, xp-bar, btn-primary/go/stop/neutral, ring-ready/work/rest -light/-fill/-ink, finish-bg) with fallbacks equal to today's look; one filled-button style (no border, 4px edge, radius-md, font-ui 900, 22px/64 main or 18px/56 rest, STOP 20px); corner, border and shadow tokens tinted per app (--shadow-frame, --scrim); no purple on kid screens (recovery excepted); hero decoration setting `heroDecorOn` (default on, gated toggle, decor layer z-index -1). User decisions 2026-10-01: skate --hero-chip rose-700 at 80%; selected outline = btn-primary-edge; bright red STOP 20px and the two small grown-up red buttons 19px bold; make the last-3-seconds pulse show (pre-existing bug, failing test first). Exactly one PR per repo (user: "only one PR, not 4"). Supersedes Pool calm (plan v4 R4), "Let's go"/"Back to Today" on sun (R4 PR 4/5) and STOP on stop-deep (R4 PR 7).
 
 - Plan v1 approved 2026-10-04 (care/recovery day record; plan file `plans/1-why-the-completion-rippling-valiant.md` in the swim repo; branch `claude/recovery-day-record` in both repos): one care-day verdict `careComplete` (every menu move has a row, none skipped, none under half its dose, not ended early) read by the finish screen, Today card, Progress table and Grown-up by-weekday row; the care day record keeps its rows and move counts against the recovery menu; Sunday and weekday recovery on one path. User choice: the streak freeze uses the same `careComplete` verdict (recommended option). Unchanged: XP (Sunday no-XP), `recovery` / `dayComplete` meanings, adherence, streak gap rules, training-day records, stored record shape.
+- Plan v1 approved 2026-10-08 in chat (Back a move keeps done moves; plan file `plans/i-want-to-have-virtual-quasar.md`; branch `claude/back-keeps-done` in both repos): going back drops only the target move's result; moves passed keep theirs; after the redo the runner skips moves done in full and returns to where she was; a full result is never replaced by Skip or an early Done. Plan check blocked the Approve button (no planner helper in this setup); user read the plan in chat and replied "approve".
+
+## Design decisions
+- [agreed] [in v1] after a redo, skip moves done in full and return to where she was — search: back to where she was
+- [agreed] [in v1] a full result is never replaced by a skip or short try — search: keep the best result
+- [agreed] [in v1] a stop during a redo keeps that move's old result (user answer 2026-10-08: "Keep the old result") — search: stop during a redo
+
 ## Pending
 - none
 
@@ -49,6 +63,8 @@ Single working record for this repository. Updated by the main session at the en
 | 19 | R5 2026-10-01 | "Take a look at the new request, validate, and create the plan" (Splash-colour-prompt.md + Colour-combo-check.html: girls' colours, one button style, ripples/snow) | open | plan v1 → v2; 4 decisions answered (deep-rose chip, edge-colour ring, bright red with bigger words, make pulse show) |
 | 20 | R5 2026-10-01 | "only one PR, not 4" | done | plan v2: one build, exactly one PR per repo |
 | 21 | 2026-10-04 | Finished Sunday recovery shows as not done on every screen, and the finish screen says she "stopped partway" although she did every move | open — branch pushed, PR not opened | Plan v1; diagnosis: day record dropped care rows (0/0, dayComplete false), Today showed "Start Recovery", finish needed 100% of every clock; user: every screen looked wrong, she did every move; Today card must show a finished recovery day like any finished day |
+| 23 | 2026-10-08 | Decision: a stop during a redo keeps the old result | done | user chose the recommended option |
+| 22 | 2026-10-08 | Kid did A part, B full, on C; went back to finish A; then skipping B made B show ½ (1/2) — "how to solve this" | open | Plan v1 Back a move keeps done moves; cause: rewindTo erases every result after the target |
 
 ## Hotspot counter
 | Area / feature | Fix rounds | Recurrences | Regressions caused | Workarounds/exceptions | Last symptom | Rewrite-vs-repair reviewed? |
@@ -62,6 +78,7 @@ Single working record for this repository. Updated by the main session at the en
 | Timer last-3-seconds pulse | 1 | 0 | 0 | 0 | pulse / red label never shown (tick only recolours the arc) | no — failing test first (R5) |
 | Kids' colours and button style (R5) | 0 | 0 | 0 | 0 | n/a — redesign round, not a fix | n/a |
 | Care/recovery day record | 1 | 0 | 0 | 0 | finished recovery read as not done (Today "Start Recovery", Progress "care / n/a", Grown-up "—"); early tap → "stopped partway" | no — first fix round; failing tests first (dayrecords CARE DAYS) |
+| Back a move / rewind | 1 | 0 | 0 | 0 | going back erased a full move; redo then saved it as ½ | no — first fix round; failing tests first |
 Rule: 3 fix rounds, or 2 recurrences, or a fix causing a nearby regression → no further patch until the comparison is presented.
 
 Structural option (not approved, not done): a test that renders every screen, collects every `data-action` a kid can reach during a session, and fails if any is gated without being named in an explicit "adult-only" list — so a new kid button cannot silently ship behind the PIN.
@@ -115,6 +132,11 @@ Structural option (not approved, not done): a test that renders every screen, co
 | RD-5 Merge both PRs | BLOCKED — merging is the user's step (approved plan: no merge by Claude); CI was still running when the PRs opened | swim #79, skate #52 open and mergeable 2026-10-04 |
 | RD-6 Live site serves the new version | BLOCKED — waits on RD-5 (merge) | not started; check sw.js swim v33 / skate v29 after merge |
 | RD-7 Sunday recovery on the device (finish, Today, Progress, Grown-up) | BLOCKED — waits on RD-6 and the user's iPad | not started |
+| Back a move keeps done moves · Stage 1 of 5 — Find the exact lines and write failing tests first (both apps) · proof: new tests fail on today's code, with the count written in the record | COMPLETE | 2026-10-08 opus-worker: new core/test/back.mjs (byte-identical both repos) fails on today's code — 15 failing checks per app (case a 3, b 4, c 4, e 4; 13 pass, all setup checks pass); leadin.mjs 42 pass both apps; both timezones |
+| Back a move keeps done moves · Stage 2 of 5 — Change Back, the redo path and Skip/Done on full moves (both apps) · proof: new tests pass, full suite passes in both apps, scripted run shows A ✓ B ✓ back on C | COMPLETE | 2026-10-08 opus-worker after reviewer advice (6 problems + 1 misplaced test check, fixed in one pass): back.mjs 15 fail → 43/43 pass both apps, both TZs; full `npm test` green both repos (skate: smoke 317, actions 333, back 43, dayrecords 489, design 2947, invariants 596, session 327, shell 180 …; swim: smoke 1401, back 43, invariants 593, session 325, shell 260 …); main session reran back.mjs 43/43 both repos; core identical; scripted story both apps: on C A ½ B ✓ → Back ×2 → redo A → rest 'up next C' → lands on C with A ✓ B ✓, finish short list empty; commits skate b7b66ef, swim c6892eb | |
+| Back a move keeps done moves · Stage 3 of 5 — Record, feature list and pull requests · proof: regression table with no missing items; reviewer verdict before the pull requests | COMPLETE | regression table 'Back a move keeps done moves' (Missing: none) in both records; FEATURES.md line in both repos; reviewer verdict before PR: block on 2 record items (stale restart line; open stop-during-redo decision), both fixed — user answered 'Keep the old result'; PRs ready for review: lxyzh1019-cyber/Figure-Skate-Dryland-Timer#55, lxyzh1019-cyber/Swimming-Dryland-Timer#80 |
+| Back a move keeps done moves · Stage 4 of 5 — Reviewer check before the pull requests (Check) | COMPLETE | reviewer 2026-10-08: no code problems; all 6 earlier fixes verified at their lines; 2 record findings fixed before the PRs |
+| Back a move keeps done moves · Stage 5 of 5 — Merge both pull requests and try the story on the iPad (Check) | WAITING ON YOU — merge skate #55 and swim #80, then try the story on the iPad | |
 
 ## Checks and evidence
 - 2026-09-24 baseline `node core/test/run.mjs` → all suites green (before changes)
@@ -397,4 +419,15 @@ Structural option (not approved, not done): a test that renders every screen, co
 | `careComplete` verdict; care record rows and move counts; finish "N of M moves" line; Today finished-day card for care (COMPLETED / PARTLY DONE, Finish recovery); Progress care cells; Grown-up recovery chip in grape | ➕ added |
 | `RECOVERY_STREAK_FRACTION` (100% of every clock) and the separate `isSpaDay` paths on the done card | ⚠️ intentionally removed / merged (plan "Removes") |
 | Streak freeze rule | changed as approved — `streakJudged && careComplete` (an early-tapped weekday recovery now holds the streak) |
+| Missing | none found |
+
+## Regression table — Back a move keeps done moves (care-days manifest → + Back keeps done moves)
+| Feature | Status |
+|---|---|
+| Back only inside the same block before the round is counted; Back from a rest redoes that move; Back from an unfinished move restarts it; lead-in Back (leadin.mjs) | ✅ kept |
+| One ledger row per walked step; round commit, exStatus, exDone, skipped count, resume, XP, streak, Today / Progress / Grown-up rules, stored record shape | ✅ kept (all existing suites green unchanged, both apps) |
+| Moves passed going back keep their results and stay banked; redo returns to where she was, skipping done moves; a done result is never downgraded by Skip or early Done; a stop during a redo keeps the old result; move list shows passed moves during a redo | ➕ added |
+| "Going back erases every result after the target" | ⚠️ intentionally replaced (plan "Removes") |
+| `core/` byte-identical with the other repo | ✅ kept — `diff -rq --strip-trailing-cr core` empty |
+| sw.js version bump | ✅ skate v29 → v30, swim v33 → v34 |
 | Missing | none found |
