@@ -3,8 +3,8 @@
 A no-build web app for figure-skating dryland training, in the **"Skate with
 Grace"** design system (rose/gold palette, Quicksand + Dancing Script) and
 loaded with the **Jenn Skating Dryland 2026.2** plan. It runs on the same
-engine as the sibling Swimming Dryland Timer — the *same files*, shared as a
-subtree — so a rule is one rule for both athletes, and only the plan, the
+engine as the sibling Swimming Dryland Timer — the *same files*, checked
+identical by CI — so a rule is one rule for both athletes, and only the plan, the
 ranks, the prizes and the artwork are this app's own.
 
 ## Shared core
@@ -23,8 +23,11 @@ both repositories. What makes this app *this* app is three things it owns:
   `manifest.webmanifest` and the two-line `sw.js` that configures the shared
   worker — the design system and the shell.
 
-A change to the rules is made once, in the swim repository's `core/`, and
-reaches this app with `git subtree pull --prefix=core <swim-repo> core`.
+A change to the rules is made once, in `core/`, and the same `core/` folder is
+copied to the sibling app in the same change: one pull request in each repo,
+on a branch with the same name. CI checks it: the "Shared core is the same in
+both apps" step compares this repo's `core/` with the sibling's branch of the
+same name (or its main) and fails on any difference.
 
 ## Plan content (2026.2)
 
@@ -211,7 +214,7 @@ bump of `version` in `sw.js` fails the build.
 
 ```
 index.html              # shell: loads css/ + core/main.js, registers sw.js
-core/                   # the shared engine (git subtree; do not edit here)
+core/                   # the shared engine (same in both repos; CI checks it)
 js/sport.js             # this app's identity: names, keys, images, copy, features
 js/data.js              # this app's content: DAYS, ranks/lore, quiz, readiness
 css/tokens/*.css        # Skate with Grace design tokens

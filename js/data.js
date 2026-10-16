@@ -79,7 +79,6 @@ export const BLOCK_CHANNEL = {
   main: "strength", prep: "strength", finisher: "strength",
   skateskill: "skate"
 };
-export const channelForBlock = b => COACH_CHANNELS[BLOCK_CHANNEL[b]] || COACH_CHANNELS.strength;
 /* Appending a channel name to EVERY query made the results worse, not better.
    The name this file used to append for skate-skill work was not a findable
    YouTube channel, so those eight drills searched a phrase matching nothing
@@ -750,17 +749,17 @@ export const DAYS = {
     equipment: ["Foam roller", "Massage gun (parent-operated)", "Mat"],
     safety: "Foam roll slow (2–3 cm/sec), pause 20s on tender spots. NEVER roll the lower-back spine or neck — parent-guided. Massage gun is PARENT-OPERATED only, lowest speed, big muscles only — never on bones, joints, spine, neck, or growth plates.",
     recovery: [
-      { name: "Calves — foam roller", block: "recovery", dose: "60s/side", why: "Jump rope + landing volume lands here." },
-      { name: "Quads — roller or gun", block: "recovery", dose: "60s/side", why: "Power days (Wed/Sat)." },
-      { name: "Glutes — foam roller", block: "recovery", dose: "45s/side", why: "Drive + landing absorption." },
-      { name: "Lats / upper back — roller, arms overhead", block: "recovery", dose: "60s", why: "Pull work + overhead range." },
-      { name: "Touch-up — massage gun (parent)", block: "recovery", dose: "30–45s/muscle", why: "Lowest speed, comfort not pain. No spine/neck." }
+      { name: "Calves — foam roller", block: "recovery", area: 15, dose: "60s/side", why: "Jump rope + landing volume lands here." },
+      { name: "Quads — roller or gun", block: "recovery", area: 8, dose: "60s/side", why: "Power days (Wed/Sat)." },
+      { name: "Glutes — foam roller", block: "recovery", area: 13, dose: "45s/side", why: "Drive + landing absorption." },
+      { name: "Lats / upper back — roller, arms overhead", block: "recovery", area: 11, dose: "60s", why: "Pull work + overhead range." },
+      { name: "Touch-up — massage gun (parent)", block: "recovery", work: 120, dose: "30–45s/muscle", why: "Lowest speed, comfort not pain. No spine/neck." }
     ],
     recoveryHolds: [
-      X({ name: "Hip CARs", prescription: { reps: 3, sides: 2, dirs: 2 }, block: "skateskill", driver: "reps", repsDetail: "3/dir each side", dose: "3/dir", cue: "Gentle, controlled rotations." }),
-      X({ name: "Superman", block: "skateskill", driver: "time", work: 24, dose: "3×8s", cue: "Thoracic extension — length, not crunch.", searchableName: "superman thoracic extension hold" }),
-      X({ name: "Active Split Slide", block: "skateskill", driver: "time", work: 60, eachSide: true, dose: "30s/side", note: "about 3 slides of 20–30s each side", cue: "Own end-range, hips square — never passive over-split.", searchableName: "active split flexibility drill" }),
-      X({ name: "Half-Kneeling Hip-Flexor Hold", block: "skateskill", driver: "time", work: 60, eachSide: true, dose: "30s/side", cue: "Posterior tilt, tall — spiral + layback line.", searchableName: "half kneeling hip flexor stretch" })
+      X({ name: "Hip CARs", area: 7, prescription: { reps: 3, sides: 2, dirs: 2 }, block: "skateskill", driver: "reps", repsDetail: "3/dir each side", dose: "3/dir", cue: "Gentle, controlled rotations." }),
+      X({ name: "Superman", area: 11, prescription: { reps: 3, holdSeconds: 8 }, block: "skateskill", driver: "reps", repsDetail: "3×8s", dose: "3×8s", cue: "Thoracic extension — length, not crunch.", searchableName: "superman thoracic extension hold" }),
+      X({ name: "Active Split Slide", area: 14, block: "skateskill", driver: "time", work: 60, eachSide: true, dose: "30s/side", note: "about 3 slides of 20–30s each side", cue: "Own end-range, hips square — never passive over-split.", searchableName: "active split flexibility drill" }),
+      X({ name: "Half-Kneeling Hip-Flexor Hold", area: 7, block: "skateskill", driver: "time", work: 60, eachSide: true, dose: "30s/side", cue: "Posterior tilt, tall — spiral + layback line.", searchableName: "half kneeling hip flexor stretch" })
     ],
     blocks: { warmup: [], coordination: [], main: [], finisher: [], skateskill: [] },
     prepMenu: []
@@ -935,11 +934,6 @@ export const PRIZE_POOL = [
 ];
 
 /* Rank for a given level — highest ladder entry at or below the level. */
-export function rankForLevel(level) {
-  let rank = LADDER[0];
-  for (const r of LADDER) if (level >= r.level) rank = r;
-  return rank;
-}
 
 /* ------------------------------------------------------------
    READINESS CHECK (4-Q + body map).
