@@ -164,3 +164,13 @@ One care-day verdict, read by every screen; Sunday (spa) and a weekday whose lig
 - CI: "Shared core is the same in both apps" compares `core/` with the sibling repo's branch of the same name, or its main.
 - Tests: `core/test/tight.mjs` (37 checks, both apps); `core/test/design.mjs` draws the card in three layouts.
 - Sunday plan (skate): Superman is 3 counted 8s holds (was one 24s timer); massage-gun touch-up 2:00 (30s × 4 muscles, was 30s); Sunday about 13 min (range 10–14 unchanged).
+
+## Rules round (2026-10-17, claude.ai chat review + build)
+- LEFT / RIGHT: every two-sided move starts on the left. The coach says "Left side first… Switch to the right side"; the ring shows LEFT SIDE / RIGHT SIDE (counted moves: LEFT LEG / RIGHT ARM, or the move's own side names). Replaces FIRST / SECOND. The ring also shows the side as a big word under the clock or count: "LEFT", "RIGHT", "LEFT LEG". It uses the app's label style (UI font, 900, `--ls-loud` tracking), the same as TIMED / REST, only bigger.
+- Recovery COACH TIP is a how-to `cue` (e.g. "Roll ankle to knee, slow. Stop on tight spots, breathe."); the planner's `why` note is no longer shown as a tip. Jargon tips rewritten in plain words.
+- No-Debt (D13): only today's card trains. A missed day shows MISSED ("No debt — a missed day is never made up"), a coming day shows only "Explore the moves"; neither has a GO. A bout begun before midnight can still be finished. Week legend: "Missed".
+- Rest lock (D14): the first half of every rest shows "Resting… N" and can't be tapped; then "⏭ I'm ready".
+- Minimum rest (3 s) has one definition (`core/store.js`).
+- Tests: `core/test/rules.mjs`.
+- Valgus gate (D15): a week counts only with ≥ 5 graded Box Jump → Stick landings, all clean; it opens after 2 such weeks in a row (never while a grown-up has flagged the move). Grown-up card: "N of 2 clean weeks in a row · this week: X clean, Y wobbly". Re-lock resets the count. A gate already open stays open.
+- Consistency: every uppercase label's letter-spacing uses the design tokens (`--ls-label` 0.04em, `--ls-loud` 0.08em for ring words) instead of 7 hand-typed values; the MOVES label is tracked like the others.

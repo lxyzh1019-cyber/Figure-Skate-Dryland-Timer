@@ -100,6 +100,8 @@ export const COPY = {
    gated jump, and the jump-fatigue tier-drop it feeds, are this app's. */
 export const FEATURES = {
   landingCheck: true,
+  // Skater Jump, Rotational Jump and Lateral Bound wait behind the gate (D15).
+  valgusGate: true,
   /* No WebP twins shipped yet: the screens ask for the PNGs alone. */
   webp: false
 };
