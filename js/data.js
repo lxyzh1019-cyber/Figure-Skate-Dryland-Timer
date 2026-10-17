@@ -322,7 +322,7 @@ export const REFLECT_NEXT = ["Slow down", "Stand taller", "Knee over toe", "Keep
 const FINISHER = () => [
   X({ name: "Copenhagen Plank", block: "finisher", driver: "time", work: 35, eachSide: true,
       dose: "15–20s/side", reset: "Switch sides only.",
-      cue: "Adductors actively working — edge control, not just hanging.",
+      cue: "Inner thigh working hard — edge control, not just hanging.",
       skateTransfer: "Edge / adductor control", searchableName: "copenhagen plank adductor" })
 ];
 
@@ -358,7 +358,7 @@ const SKATESKILL_B = () => [
       cue: "Hold the leg up with your OWN quad/hip-flexor — no hands pulling.",
       skateTransfer: "Active flexibility", searchableName: "active straight leg raise hamstring" }),
   X({ name: "Half-Kneeling Hip-Flexor Hold", block: "skateskill", driver: "time", work: 60, eachSide: true, dose: "30s/side",
-      reset: "Posterior tilt, tall.",
+      reset: "Tuck your tail under, stand tall.",
       cue: "Tuck the pelvis, stay tall — serves spiral + layback line.",
       skateTransfer: "Hip-flexor length", searchableName: "half kneeling hip flexor stretch" }),
   X({ name: "Axis Micro", block: "skateskill", driver: "time", work: 40, dose: "40s", note: "4 self-checks, then a short layback",
@@ -379,7 +379,7 @@ const SKATESKILL_SAT = () => [
 
 const SCAP_HANG = () => [
   X({ name: "Scap Pull-Up + Dead Hang", leadInSeconds: 5, block: "skateskill", driver: "time", work: 30, dose: "30s",
-      reset: "Hang tall, shoulders ready.", cue: "Shoulders slide DOWN, hang and decompress.",
+      reset: "Hang tall, shoulders ready.", cue: "Shoulders slide DOWN, then let your body hang long.",
       skateTransfer: "Shoulder control / decompression", searchableName: "scapular pull up dead hang" })
 ];
 
@@ -616,7 +616,7 @@ export const DAYS = {
             parentWatch: "Hip rotates", fix: "Wider stance.",
             skateTransfer: "Anti-rotation core", searchableName: "pallof press band" }),
         X({ name: "Copenhagen Plank", block: "finisher", driver: "time", work: 35, eachSide: true, dose: "15–20s/side",
-            reset: "Switch sides only.", cue: "Adductors actively working — edge control.",
+            reset: "Switch sides only.", cue: "Inner thigh working hard — edge control.",
             skateTransfer: "Edge / adductor control", searchableName: "copenhagen plank adductor" })
       ],
       skateskill: SKATESKILL_B()
@@ -749,17 +749,17 @@ export const DAYS = {
     equipment: ["Foam roller", "Massage gun (parent-operated)", "Mat"],
     safety: "Foam roll slow (2–3 cm/sec), pause 20s on tender spots. NEVER roll the lower-back spine or neck — parent-guided. Massage gun is PARENT-OPERATED only, lowest speed, big muscles only — never on bones, joints, spine, neck, or growth plates.",
     recovery: [
-      { name: "Calves — foam roller", block: "recovery", area: 15, dose: "60s/side", why: "Jump rope + landing volume lands here." },
-      { name: "Quads — roller or gun", block: "recovery", area: 8, dose: "60s/side", why: "Power days (Wed/Sat)." },
-      { name: "Glutes — foam roller", block: "recovery", area: 13, dose: "45s/side", why: "Drive + landing absorption." },
-      { name: "Lats / upper back — roller, arms overhead", block: "recovery", area: 11, dose: "60s", why: "Pull work + overhead range." },
-      { name: "Touch-up — massage gun (parent)", block: "recovery", work: 120, dose: "30–45s/muscle", why: "Lowest speed, comfort not pain. No spine/neck." }
+      { name: "Calves — foam roller", block: "recovery", area: 15, dose: "60s/side", cue: "Roll ankle to knee, slow. Stop on tight spots, breathe.", why: "Jump rope + landing volume lands here." },
+      { name: "Quads — roller or gun", block: "recovery", area: 8, dose: "60s/side", cue: "Roll hip to knee, slow. Stop on tight spots, breathe.", why: "Power days (Wed/Sat)." },
+      { name: "Glutes — foam roller", block: "recovery", area: 13, dose: "45s/side", cue: "Sit on it, ankle on knee, lean that way, roll slowly.", why: "Drive + landing absorption." },
+      { name: "Lats / upper back — roller, arms overhead", block: "recovery", area: 11, dose: "60s", cue: "Arms overhead, roll slowly. Never on the low back.", why: "Pull work + overhead range." },
+      { name: "Touch-up — massage gun (parent)", block: "recovery", work: 120, dose: "30–45s/muscle", cue: "Lowest speed, comfort not pain. No spine or neck.", why: "Lowest speed, comfort not pain. No spine/neck." }
     ],
     recoveryHolds: [
       X({ name: "Hip CARs", area: 7, prescription: { reps: 3, sides: 2, dirs: 2 }, block: "skateskill", driver: "reps", repsDetail: "3/dir each side", dose: "3/dir", cue: "Gentle, controlled rotations." }),
-      X({ name: "Superman", area: 11, prescription: { reps: 3, holdSeconds: 8 }, block: "skateskill", driver: "reps", repsDetail: "3×8s", dose: "3×8s", cue: "Thoracic extension — length, not crunch.", searchableName: "superman thoracic extension hold" }),
+      X({ name: "Superman", area: 11, prescription: { reps: 3, holdSeconds: 8 }, block: "skateskill", driver: "reps", repsDetail: "3×8s", dose: "3×8s", cue: "Lift your chest, long not crunched.", searchableName: "superman thoracic extension hold" }),
       X({ name: "Active Split Slide", area: 14, block: "skateskill", driver: "time", work: 60, eachSide: true, dose: "30s/side", note: "about 3 slides of 20–30s each side", cue: "Own end-range, hips square — never passive over-split.", searchableName: "active split flexibility drill" }),
-      X({ name: "Half-Kneeling Hip-Flexor Hold", area: 7, block: "skateskill", driver: "time", work: 60, eachSide: true, dose: "30s/side", cue: "Posterior tilt, tall — spiral + layback line.", searchableName: "half kneeling hip flexor stretch" })
+      X({ name: "Half-Kneeling Hip-Flexor Hold", area: 7, block: "skateskill", driver: "time", work: 60, eachSide: true, dose: "30s/side", cue: "Tuck your tail under, stand tall — spiral + layback line.", searchableName: "half kneeling hip flexor stretch" })
     ],
     blocks: { warmup: [], coordination: [], main: [], finisher: [], skateskill: [] },
     prepMenu: []
@@ -768,7 +768,7 @@ export const DAYS = {
 
 export const STANDING_RULES = [
   "No-Debt / Stop: a missed day is never doubled. Quality over quantity.",
-  "Valgus gate: jumps stay at Box Jump → Stick until landings are clean — left-knee tracks over the toe.",
+  "Valgus gate: jumps stay at Box Jump → Stick until 2 weeks in a row with at least 5 graded landings each, all clean — left knee tracks over the toe.",
   "Jump fatigue gate: 2 poor landings in a row → drop one round tier (🟢→🟡→🔴).",
   "Spin dizziness stop: dizzy >30–45s, nausea, headache, or balance worse after → stop the spin block.",
   "Pull Series: 2× heavy / 1–2× scap / NEVER to failure. Kip or swing → dead-hang only.",
@@ -826,7 +826,6 @@ export function needsSetup(ex) {
   return SETUP_NAME.test(String(ex.name || ""));
 }
 
-export const MIN_REST = 3;
 /* Re-exported from the core so the constant has exactly one definition. */
 export { SIDE_SWITCH_BUFFER } from "../core/util.js";
 export const ROUND_REST = 25;   // flat all weeks (settings can override)
