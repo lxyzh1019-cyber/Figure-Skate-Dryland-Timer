@@ -466,3 +466,6 @@ Approved in chat 2026-10-17: D11 A (dose text 60s), D12 A (new tips), D13 (only 
 | Plan | Streamline Hold "20s each side" ran one 40 s timer; Butt Kicks/Ankle Dribbles "15s" ran 60 s | eachSide; text 60s | dose check all days |
 Tests changed to the new rules: session.mjs (side guard, early rest tap), actions.mjs (GO is for today), design.mjs (Add-them-back fixture), smoke.mjs (gate rule, swim only).
 | C-1 | Big LEFT word used the display font (the only uppercase display-font word in the app); 7 letter-spacing values on labels; MOVES untracked | Label style + `--ls-label` / `--ls-loud` tokens | computed-style audit: 0 uppercase display-font words; design.mjs |
+
+## Round 2026-11-04 — Prize pick lock (shared core)
+Plan and the week side check live in the swim record (Swimming-Dryland-Timer WORKING_RECORD.md, Round 2026-11-04). Same `core/` change here on branch `claude/sides-prize-lock`; sw.js v32 → v33. No skate move data changed.
