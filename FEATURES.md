@@ -174,3 +174,7 @@ One care-day verdict, read by every screen; Sunday (spa) and a weekday whose lig
 - Tests: `core/test/rules.mjs`.
 - Valgus gate (D15): a week counts only with ≥ 5 graded Box Jump → Stick landings, all clean; it opens after 2 such weeks in a row (never while a grown-up has flagged the move). Grown-up card: "N of 2 clean weeks in a row · this week: X clean, Y wobbly". Re-lock resets the count. A gate already open stays open.
 - Consistency: every uppercase label's letter-spacing uses the design tokens (`--ls-label` 0.04em, `--ls-loud` 0.08em for ring words) instead of 7 hand-typed values; the MOVES label is tracked like the others.
+
+## Prize pick lock (2026-11-04, shared core)
+- Prize draw: one pick per level. Once she opens an envelope the ✕ is gone; only "Add to my prizes ⭐" is left. The envelopes and the pick are saved per athlete on the device until the prize is claimed, so closing the pop-up or the app brings back the same pick. The "waiting for your other device" message keeps its ✕.
+- Tests: `core/test/actions.mjs` (pick kept across close, app close and a second tap), `core/test/design.mjs` (no ✕ after a pick).
